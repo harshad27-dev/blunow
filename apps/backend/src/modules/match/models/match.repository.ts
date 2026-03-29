@@ -5,8 +5,8 @@ export class MatchRepository {
     return prisma.matchRequest.create({
       data,
       include: {
-        sender: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
-        receiver: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        sender: { include: { profile: { select: { username: true, avatarUrl: true } } } },
+        receiver: { include: { profile: { select: { username: true, avatarUrl: true } } } },
       },
     });
   }

@@ -60,4 +60,23 @@ export class PostsController {
       res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
     }
   };
+
+  savePost = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const { collectionId } = req.body;
+      await this.postsService.savePost(req.params.id, req.user!.id, collectionId);
+      res.status(200).json({ success: true, message: 'Post saved' });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
+  unsavePost = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      await this.postsService.unsavePost(req.params.id, req.user!.id);
+      res.status(200).json({ success: true, message: 'Post unsaved' });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
 }

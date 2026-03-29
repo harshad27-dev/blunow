@@ -37,4 +37,16 @@ export class PostsService {
     await this.postsRepository.delete(id);
     eventBus.emit(EVENTS.POST.DELETED, { postId: id, authorId: userId });
   }
+
+  async savePost(id: string, userId: string, collectionId?: string) {
+    const post = await this.postsRepository.findById(id);
+    if (!post) throw new AppError('Post not found', 404);
+    return this.postsRepository.savePost(id, userId, collectionId);
+  }
+
+  async unsavePost(id: string, userId: string) {
+    const post = await this.postsRepository.findById(id);
+    if (!post) throw new AppError('Post not found', 404);
+    return this.postsRepository.unsavePost(id, userId);
+  }
 }

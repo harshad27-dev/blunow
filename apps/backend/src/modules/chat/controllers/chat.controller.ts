@@ -44,4 +44,14 @@ export class ChatController {
       res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
     }
   };
+
+  updateChatSettings = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const { muted, archived } = req.body;
+      const result = await this.chatService.updateChatSettings(req.params.chatId, req.user!.id, { muted, archived });
+      res.status(200).json({ success: true, conversationId: req.params.chatId, ...result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
 }

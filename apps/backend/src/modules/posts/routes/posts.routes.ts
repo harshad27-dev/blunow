@@ -20,6 +20,10 @@ router.delete('/:id', postsController.deletePost);
 router.post('/:id/like', postsController.likePost);
 router.delete('/:id/like', postsController.unlikePost);
 
+// Saves (Bookmarks)
+router.post('/:id/save', postsController.savePost);
+router.delete('/:id/save', postsController.unsavePost);
+
 // Comments
 router.get('/:id/comments', commentsController.getComments);
 router.post('/:id/comments', commentsController.createComment);

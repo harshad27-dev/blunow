@@ -19,6 +19,19 @@ export class RoomsController {
     }
   };
 
+  getRecommendedRooms = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      // In MVP, recommended rooms is just fetching top rooms
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 5;
+      const type = req.query.type as any;
+      const rooms = await this.roomsService.getRooms({ page, limit, type });
+      res.status(200).json({ success: true, text: "Recommendations", data: rooms });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
   createRoom = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const room = await this.roomsService.createRoom(req.user!.id, req.body);

@@ -7,7 +7,7 @@ export class ProfileService {
   private usersRepository = new UsersRepository();
 
   async updateProfile(userId: string, data: {
-    displayName?: string;
+    username?: string;
     bio?: string;
     location?: string;
     avatarUrl?: string;

@@ -19,6 +19,8 @@ import confessionsRoutes from './modules/confessions/routes/confessions.routes';
 import notificationsRoutes from './modules/notifications/routes/notifications.routes';
 import mediaRoutes from './modules/media/routes/media.routes';
 import moderationRoutes from './modules/moderation/routes/moderation.routes';
+import adminModerationRoutes from './modules/moderation/routes/admin-moderation.routes';
+import searchRoutes, { trendingRouter } from './modules/search/routes/search.routes';
 
 const app: Application = express();
 
@@ -48,6 +50,9 @@ app.use('/api/confessions', confessionsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/moderation', moderationRoutes);
+app.use('/api/admin/moderation', adminModerationRoutes);
+app.use('/api', searchRoutes);
+app.use('/api/trending', trendingRouter);
 
 // ─── Error Handling ────────────────────────────────────────────────────────────
 app.use(notFoundHandler);

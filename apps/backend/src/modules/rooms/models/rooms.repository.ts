@@ -52,7 +52,7 @@ export class RoomsRepository {
   async findMembers(roomId: string) {
     return prisma.roomMembership.findMany({
       where: { roomId },
-      include: { user: { include: { profile: { select: { displayName: true, avatarUrl: true } } } } },
+      include: { user: { include: { profile: { select: { username: true, avatarUrl: true } } } } },
     });
   }
 }

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 
 const updateProfileSchema = z.object({
-  displayName: z.string().min(2).max(50).optional(),
+  username: z.string().min(3).max(20).regex(/^[a-z0-9]+([._]?[a-z0-9]+)*$/, 'Invalid username format').optional(),
   bio: z.string().max(500).optional(),
   location: z.string().optional(),
   avatarUrl: z.string().url().optional(),

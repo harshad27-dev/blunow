@@ -1,22 +1,27 @@
 import { Router } from 'express';
 import { ChatController } from '../controllers/chat.controller';
+import { RealtimeController } from '../controllers/realtime.controller';
 import { authenticate } from '../../../common/middleware/auth.middleware';
 
 const router = Router();
 const controller = new ChatController();
+const rtController = new RealtimeController();
 
 router.use(authenticate);
 
-// GET /api/chat — list all chats for current user
+// List chats with unread count
+router.get('/conversations', controller.getChats); // Alias to match prompt spec
 router.get('/', controller.getChats);
 
-// GET /api/chat/:chatId — get single chat details
+router.patch('/conversations/:chatId', controller.updateChatSettings);
+
 router.get('/:chatId', controller.getChat);
-
-// GET /api/chat/:chatId/messages — paginated messages
 router.get('/:chatId/messages', controller.getMessages);
-
-// DELETE /api/chat/:chatId — delete/leave chat
 router.delete('/:chatId', controller.deleteChat);
+
+// Realtime Endpoints
+router.post('/:conversationId/typing', rtController.setTyping);
+router.patch('/messages/:messageId/read', rtController.markMessageRead);
+router.patch('/conversations/:conversationId/read', rtController.markConversationRead);
 
 export default router;

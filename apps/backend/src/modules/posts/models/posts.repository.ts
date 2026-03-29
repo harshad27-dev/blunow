@@ -11,7 +11,7 @@ export class PostsRepository {
     return prisma.post.create({
       data,
       include: {
-        author: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
         _count: { select: { likes: true, comments: true } },
       },
     });
@@ -21,7 +21,7 @@ export class PostsRepository {
     return prisma.post.findUnique({
       where: { id },
       include: {
-        author: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
         _count: { select: { likes: true, comments: true } },
       },
     });
@@ -45,5 +45,18 @@ export class PostsRepository {
 
   async removeLike(postId: string, userId: string) {
     return prisma.postLike.deleteMany({ where: { postId, userId } });
+  }
+
+  async savePost(postId: string, userId: string, collectionId?: string) {
+    // Note: Schema currently has PostSave model where userId and postId are unique
+    return prisma.postSave.upsert({
+      where: { userId_postId: { userId, postId } },
+      create: { postId, userId },
+      update: {},
+    });
+  }
+
+  async unsavePost(postId: string, userId: string) {
+    return prisma.postSave.deleteMany({ where: { postId, userId } });
   }
 }

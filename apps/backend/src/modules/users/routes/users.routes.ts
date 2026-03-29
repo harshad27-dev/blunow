@@ -1,27 +1,36 @@
 import { Router } from 'express';
 import { UsersController } from '../controllers/users.controller';
+import { RealtimeController } from '../../chat/controllers/realtime.controller';
+import { SocialController } from '../controllers/social.controller';
 import { authenticate } from '../../../common/middleware/auth.middleware';
 import { validateUpdateProfile, validateUpdatePreferences, validateUpdateInterests } from '../middleware/users.validate.middleware';
 
 const router = Router();
 const controller = new UsersController();
+const rtController = new RealtimeController();
+const socialController = new SocialController();
 
-// All users routes require authentication
 router.use(authenticate);
 
-// GET  /api/users/:id — get user profile
+// Priority static routes
+router.get('/batch-status', rtController.getBatchOnlineStatus);
+router.post('/me/verification', socialController.verifyProfile);
+
+// Social endpoints
+router.post('/:id/follow', socialController.followUser);
+router.delete('/:id/follow', socialController.unfollowUser);
+router.get('/:id/followers', socialController.getFollowers);
+router.get('/:id/following', socialController.getFollowing);
+router.get('/:userId/stats', socialController.getStats);
+
+// Online status route
+router.get('/:userId/online-status', rtController.getOnlineStatus);
+
+// Regular endpoints
 router.get('/:id', controller.getUser);
-
-// PATCH /api/users/me/profile — update own profile
 router.patch('/me/profile', validateUpdateProfile, controller.updateProfile);
-
-// PATCH /api/users/me/preferences — update discovery preferences
 router.patch('/me/preferences', validateUpdatePreferences, controller.updatePreferences);
-
-// PATCH /api/users/me/interests — update interest tags
 router.patch('/me/interests', validateUpdateInterests, controller.updateInterests);
-
-// DELETE /api/users/me — deactivate account
 router.delete('/me', controller.deactivateAccount);
 
 export default router;

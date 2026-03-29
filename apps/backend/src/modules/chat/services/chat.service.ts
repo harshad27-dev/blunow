@@ -25,4 +25,13 @@ export class ChatService {
     }
     await this.chatRepository.delete(chatId);
   }
+
+  async updateChatSettings(chatId: string, userId: string, settings: { muted?: boolean; archived?: boolean }) {
+    const chat = await this.chatRepository.findById(chatId);
+    if (!chat) throw new AppError('Chat not found', 404);
+    if (chat.user1Id !== userId && chat.user2Id !== userId) {
+      throw new AppError('Forbidden', 403);
+    }
+    return this.chatRepository.updateSettings(chatId, chat.user1Id, chat.user2Id, userId, settings);
+  }
 }

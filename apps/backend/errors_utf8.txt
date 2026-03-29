@@ -1,0 +1,6 @@
+﻿src/modules/moderation/models/moderation.repository.ts(5,35): error TS2322: Type '{ reporterId: string; reportedId: string; reason: any; description?: string; }' is not assignable to type '(Without<ReportCreateInput, ReportUncheckedCreateInput> & ReportUncheckedCreateInput) | (Without<...> & ReportCreateInput)'.
+  Type '{ reporterId: string; reportedId: string; reason: any; description?: string; }' is not assignable to type 'Without<ReportUncheckedCreateInput, ReportCreateInput> & ReportCreateInput'.
+    Type '{ reporterId: string; reportedId: string; reason: any; description?: string; }' is not assignable to type 'Without<ReportUncheckedCreateInput, ReportCreateInput>'.
+      Types of property 'reporterId' are incompatible.
+        Type 'string' is not assignable to type 'never'.
+src/modules/moderation/models/moderation.repository.ts(25,23): error TS2561: Object literal may only specify known properties, but 'resolvedBy' does not exist in type '(Without<ReportUpdateInput, ReportUncheckedUpdateInput> & ReportUncheckedUpdateInput) | (Without<...> & ReportUpdateInput)'. Did you mean to write 'resolvedAt'?

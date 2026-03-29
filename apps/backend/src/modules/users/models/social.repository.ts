@@ -1,0 +1,84 @@
+import { prisma } from '../../../prisma/prisma';
+
+export class SocialRepository {
+  async getStats(userId: string) {
+    const stats = await prisma.userStat.findUnique({ where: { userId } });
+    if (stats) return stats;
+    
+    // Lazy initialize stats if they don't exist
+    return prisma.userStat.create({ data: { userId } });
+  }
+
+  async verifyProfile(userId: string, idPhotoUrl: string, faceVideoUrl: string) {
+    return prisma.userVerification.create({
+      data: {
+        userId,
+        idDocumentUrl: idPhotoUrl,
+        selfieUrl: faceVideoUrl,
+        status: 'PENDING'
+      }
+    });
+  }
+
+  async followUser(followerId: string, followingId: string) {
+    try {
+      const follow = await prisma.userFollow.create({
+        data: { followerId, followingId }
+      });
+      // Increment stats conceptually
+      await prisma.userStat.updateMany({
+        where: { userId: followingId },
+        data: { followerCount: { increment: 1 } }
+      });
+      await prisma.userStat.updateMany({
+        where: { userId: followerId },
+        data: { followingCount: { increment: 1 } }
+      });
+      return follow;
+    } catch (e: any) {
+      if (e.code === 'P2002') throw new Error('Already following');
+      throw e;
+    }
+  }
+
+  async unfollowUser(followerId: string, followingId: string) {
+    const res = await prisma.userFollow.deleteMany({
+      where: { followerId, followingId }
+    });
+    if (res.count > 0) {
+      await prisma.userStat.updateMany({
+        where: { userId: followingId },
+        data: { followerCount: { decrement: 1 } }
+      });
+      await prisma.userStat.updateMany({
+        where: { userId: followerId },
+        data: { followingCount: { decrement: 1 } }
+      });
+    }
+    return res;
+  }
+
+  async getFollowers(userId: string, limit: number, offset: number) {
+    const follows = await prisma.userFollow.findMany({
+      where: { followingId: userId },
+      include: { follower: { include: { profile: { select: { username: true, avatarUrl: true } } } } },
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' }
+    });
+    const total = await prisma.userFollow.count({ where: { followingId: userId } });
+    return { followers: follows.map(f => ({ userId: f.followerId, username: f.follower.profile?.username, avatarUrl: f.follower.profile?.avatarUrl, followedAt: f.createdAt })), total };
+  }
+
+  async getFollowing(userId: string, limit: number, offset: number) {
+    const follows = await prisma.userFollow.findMany({
+      where: { followerId: userId },
+      include: { following: { include: { profile: { select: { username: true, avatarUrl: true } } } } },
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' }
+    });
+    const total = await prisma.userFollow.count({ where: { followerId: userId } });
+    return { following: follows.map(f => ({ userId: f.followingId, username: f.following.profile?.username, avatarUrl: f.following.profile?.avatarUrl, followedAt: f.createdAt })), total };
+  }
+}

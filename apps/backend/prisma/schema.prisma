@@ -25,6 +25,14 @@ enum Gender {
   OTHER
 }
 
+enum Sexuality {
+  STRAIGHT
+  GAY
+  LESBIAN
+  BI
+  ASEXUAL
+}
+
 enum MatchStatus {
   PENDING
   ACCEPTED
@@ -67,11 +75,20 @@ enum BanType {
   PERMANENT
 }
 
+enum BanStatus {
+  NONE
+  WARNED
+  TEMP_BANNED
+  PERM_BANNED
+}
+
 enum ReportStatus {
+  PENDING
   OPEN
   UNDER_REVIEW
   RESOLVED
   DISMISSED
+  ESCALATED
 }
 
 enum ReportReason {
@@ -81,6 +98,44 @@ enum ReportReason {
   FAKE_PROFILE
   HATE_SPEECH
   OTHER
+}
+
+enum ContentType {
+  POST
+  STORY
+  MESSAGE
+  CONFESSION
+  USER
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum AutoFlagType {
+  NUDITY
+  VIOLENCE
+  TOXICITY
+  SPAM
+  EXPLICIT
+}
+
+enum AutoAction {
+  HOLD_FOR_REVIEW
+  AUTO_REMOVE
+}
+
+enum ReportResolution {
+  APPROVED
+  REJECTED
+  DISMISSED
+}
+
+enum FlagStatus {
+  QUEUED_FOR_REVIEW
+  AUTO_REMOVED
 }
 
 // ─── Models ───────────────────────────────────────────────────────────────────
@@ -93,16 +148,27 @@ model User {
   role            Role     @default(USER)
   isActive        Boolean  @default(true)
   isVerified      Boolean  @default(false)
+  strikeCount     Int      @default(0)
+  banStatus       BanStatus @default(NONE)
+  banExpiresAt    DateTime?
   fcmToken        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  sexuality       Sexuality @default(STRAIGHT)
 
   profile         Profile?
+  stats           UserStat?
+  verification    UserVerification?
+  
+  followers       UserFollow[] @relation("UserFollowers")
+  following       UserFollow[] @relation("UserFollowing")
+  
   sentRequests    MatchRequest[]   @relation("SentRequests")
   receivedRequests MatchRequest[]  @relation("ReceivedRequests")
   matchesAsUser1  Match[]          @relation("MatchUser1")
   matchesAsUser2  Match[]          @relation("MatchUser2")
   posts           Post[]
+  savedPosts      PostSave[]
   stories         Story[]
   chatsAsUser1    Chat[]           @relation("ChatUser1")
   chatsAsUser2    Chat[]           @relation("ChatUser2")
@@ -111,13 +177,16 @@ model User {
   confessions     Confession[]
   notifications   Notification[]
   mediaFiles      Media[]
+  
   reportsCreated  Report[]         @relation("ReporterUser")
   reportsAbout    Report[]         @relation("ReportedUser")
   bans            Ban[]
+  violations      UserViolation[]
   refreshTokens   RefreshToken[]
   postLikes       PostLike[]
   comments        Comment[]
   storyViews      StoryView[]
+  readReceipts    MessageReadReceipt[]
 
   @@map("users")
 }
@@ -125,7 +194,7 @@ model User {
 model Profile {
   id          String    @id @default(uuid())
   userId      String    @unique
-  displayName String
+  username    String    @unique
   bio         String?
   birthDate   DateTime
   gender      Gender
@@ -146,6 +215,49 @@ model Profile {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profiles")
+}
+
+model UserStat {
+  userId             String   @id
+  followerCount      Int      @default(0)
+  followingCount     Int      @default(0)
+  postsCount         Int      @default(0)
+  matchCount         Int      @default(0)
+  storiesCount       Int      @default(0)
+  averageEngagementRate Float @default(0.0)
+  lastUpdated        DateTime @default(now())
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_stats")
+}
+
+model UserFollow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@map("user_follows")
+}
+
+model UserVerification {
+  id             String             @id @default(uuid())
+  userId         String             @unique
+  status         VerificationStatus @default(PENDING)
+  selfieUrl      String
+  idDocumentUrl  String?
+  submittedAt    DateTime           @default(now())
+  verifiedAt     DateTime?
+  approvedBy     String?
+  rejectionReason String?
+
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_verifications")
 }
 
 model RefreshToken {
@@ -197,12 +309,14 @@ model Post {
   mediaUrls   String[]
   mediaTypes  MediaType[]
   isPublic    Boolean    @default(true)
+  isDeleted   Boolean    @default(false)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
   likes       PostLike[]
   comments    Comment[]
+  saves       PostSave[]
 
   @@map("posts")
 }
@@ -218,6 +332,19 @@ model PostLike {
 
   @@unique([postId, userId])
   @@map("post_likes")
+}
+
+model PostSave {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("post_saves")
 }
 
 model Comment {
@@ -241,6 +368,7 @@ model Story {
   mediaType  MediaType
   caption    String?
   expiresAt  DateTime
+  isDeleted  Boolean     @default(false)
   createdAt  DateTime    @default(now())
 
   author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
@@ -263,16 +391,25 @@ model StoryView {
 }
 
 model Chat {
-  id        String    @id @default(uuid())
-  matchId   String    @unique
-  user1Id   String
-  user2Id   String
-  createdAt DateTime  @default(now())
+  id                String    @id @default(uuid())
+  matchId           String    @unique
+  user1Id           String
+  user2Id           String
+  lastMessageId     String?
+  lastMessageAt     DateTime?
+  lastMessageContent String?
+  unreadCount       Int       @default(0)
+  mutedBy1          Boolean   @default(false)
+  mutedBy2          Boolean   @default(false)
+  archivedBy1       Boolean   @default(false)
+  archivedBy2       Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  user1     User      @relation("ChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2     User      @relation("ChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
-  messages  Message[]
+  match             Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user1             User      @relation("ChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2             User      @relation("ChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages          Message[]
 
   @@map("chats")
 }
@@ -285,12 +422,27 @@ model Message {
   content     String?
   mediaUrl    String?
   isRead      Boolean     @default(false)
+  deliveredAt DateTime?
+  isDeleted   Boolean     @default(false)
   createdAt   DateTime    @default(now())
 
   chat        Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
   sender      User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  readReceipts MessageReadReceipt[]
 
   @@map("messages")
+}
+
+model MessageReadReceipt {
+  messageId     String
+  readByUserId  String
+  readAt        DateTime @default(now())
+
+  message       Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [readByUserId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, readByUserId])
+  @@map("message_read_receipts")
 }
 
 model Room {
@@ -330,6 +482,7 @@ model Confession {
   content     String
   isAnonymous Boolean   @default(true)
   isRevealed  Boolean   @default(false)
+  isDeleted   Boolean   @default(false)
   revealedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -371,21 +524,55 @@ model Media {
 }
 
 model Report {
-  id           String       @id @default(uuid())
-  reporterId   String
-  reportedId   String
-  reason       ReportReason
-  description  String?
-  status       ReportStatus @default(OPEN)
-  resolvedBy   String?
-  resolvedAt   DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id                       String       @id @default(uuid())
+  contentId                String
+  contentType              ContentType
+  reporterId               String
+  reportedId               String?
+  reason                   ReportReason
+  description              String?
+  status                   ReportStatus @default(PENDING)
+  resolution               ReportResolution?
+  moderatorId              String?
+  moderatorNotes           String?
+  autoModerationStatus     String?
+  autoModerationConfidence Float?
+  resolvedAt               DateTime?
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
 
-  reporter     User         @relation("ReporterUser", fields: [reporterId], references: [id], onDelete: Cascade)
-  reported     User         @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+  reporter                 User         @relation("ReporterUser", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported                 User?        @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: SetNull)
 
+  @@index([status, contentType, createdAt(sort: Desc)])
   @@map("reports")
+}
+
+model AutoFlag {
+  id          String       @id @default(uuid())
+  contentId   String
+  contentType ContentType
+  flagType    AutoFlagType
+  confidence  Float
+  details     Json?
+  autoAction  AutoAction
+  status      FlagStatus   @default(QUEUED_FOR_REVIEW)
+  createdAt   DateTime     @default(now())
+
+  @@map("auto_flags")
+}
+
+model UserViolation {
+  id           String    @id @default(uuid())
+  userId       String
+  reportId     String
+  strikeNumber Int
+  banDuration  String?
+  createdAt    DateTime  @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_violations")
 }
 
 model Ban {

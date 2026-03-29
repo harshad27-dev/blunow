@@ -22,7 +22,7 @@ async function main() {
           isVerified: true,
           profile: {
             create: {
-              displayName: 'Blunow Admin',
+              username: 'Blunow Admin',
               bio: 'System Administrator',
               birthDate: new Date('1990-01-01'),
               gender: 'OTHER',

@@ -11,6 +11,7 @@ router.use(authenticate);
 // Rooms CRUD
 router.get('/', controller.getRooms);
 router.post('/', validateCreateRoom, controller.createRoom);
+router.get('/recommended', controller.getRecommendedRooms);
 router.get('/:id', controller.getRoom);
 router.patch('/:id', controller.updateRoom);
 router.delete('/:id', controller.deleteRoom);

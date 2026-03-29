@@ -9,7 +9,7 @@ export class CommentsService {
     return prisma.comment.findMany({
       where: { postId },
       include: {
-        author: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -22,7 +22,7 @@ export class CommentsService {
     const comment = await prisma.comment.create({
       data: { postId, authorId, content },
       include: {
-        author: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
       },
     });
     eventBus.emit(EVENTS.POST.COMMENTED, { postId, commentId: comment.id, authorId });

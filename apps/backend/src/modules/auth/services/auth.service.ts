@@ -12,7 +12,7 @@ export class AuthService {
   async register(dto: {
     email: string;
     password: string;
-    displayName: string;
+    username: string;
     birthDate: string;
     gender: string;
   }) {
@@ -26,7 +26,7 @@ export class AuthService {
     const user = await this.authRepository.createUser({
       email: dto.email,
       passwordHash,
-      displayName: dto.displayName,
+      username: dto.username,
       birthDate: new Date(dto.birthDate),
       gender: dto.gender as any,
     });

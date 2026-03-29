@@ -4,7 +4,7 @@ export class AuthRepository {
   async createUser(data: {
     email: string;
     passwordHash: string;
-    displayName: string;
+    username: string;
     birthDate: Date;
     gender: any;
   }) {
@@ -14,7 +14,7 @@ export class AuthRepository {
         passwordHash: data.passwordHash,
         profile: {
           create: {
-            displayName: data.displayName,
+            username: data.username,
             birthDate: data.birthDate,
             gender: data.gender,
           },

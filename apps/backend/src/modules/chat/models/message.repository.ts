@@ -11,7 +11,7 @@ export class MessageRepository {
     return prisma.message.create({
       data,
       include: {
-        sender: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        sender: { include: { profile: { select: { username: true, avatarUrl: true } } } },
       },
     });
   }
@@ -21,7 +21,7 @@ export class MessageRepository {
     return prisma.message.findMany({
       where: { chatId },
       include: {
-        sender: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        sender: { include: { profile: { select: { username: true, avatarUrl: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       skip,

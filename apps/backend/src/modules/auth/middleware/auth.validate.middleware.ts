@@ -4,7 +4,7 @@ import { z } from 'zod';
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  displayName: z.string().min(2).max(50),
+  username: z.string().min(3).max(20).regex(/^[a-z0-9]+([._]?[a-z0-9]+)*$/, 'Invalid username format'),
   birthDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   gender: z.enum(['MALE', 'FEMALE', 'NON_BINARY', 'OTHER']),
 });

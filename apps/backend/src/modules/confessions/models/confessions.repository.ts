@@ -9,7 +9,7 @@ export class ConfessionsRepository {
     const skip = (pagination.page - 1) * pagination.limit;
     return prisma.confession.findMany({
       include: {
-        author: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       skip,

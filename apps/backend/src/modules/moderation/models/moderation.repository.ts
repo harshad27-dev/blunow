@@ -1,7 +1,7 @@
 import { prisma } from '../../../prisma/prisma';
 
 export class ModerationRepository {
-  async createReport(data: { reporterId: string; reportedId: string; reason: any; description?: string }) {
+  async createReport(data: any) {
     return prisma.report.create({ data });
   }
 
@@ -10,8 +10,8 @@ export class ModerationRepository {
     return prisma.report.findMany({
       where: filters.status ? { status: filters.status } : {},
       include: {
-        reporter: { include: { profile: { select: { displayName: true } } } },
-        reported: { include: { profile: { select: { displayName: true } } } },
+        reporter: { include: { profile: { select: { username: true } } } },
+        reported: { include: { profile: { select: { username: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -22,7 +22,7 @@ export class ModerationRepository {
   async updateReportStatus(id: string, status: any, resolvedBy: string) {
     return prisma.report.update({
       where: { id },
-      data: { status, resolvedBy, resolvedAt: new Date() },
+      data: { status, moderatorId: resolvedBy, resolvedAt: new Date() } as any,
     });
   }
 
@@ -38,7 +38,7 @@ export class ModerationRepository {
     const skip = (pagination.page - 1) * pagination.limit;
     return prisma.ban.findMany({
       include: {
-        user: { include: { profile: { select: { displayName: true } } } },
+        user: { include: { profile: { select: { username: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       skip,

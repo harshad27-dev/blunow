@@ -10,7 +10,7 @@ export class StoriesRepository {
   }) {
     return prisma.story.create({
       data,
-      include: { author: { include: { profile: { select: { displayName: true, avatarUrl: true } } } } },
+      include: { author: { include: { profile: { select: { username: true, avatarUrl: true } } } } },
     });
   }
 
@@ -18,7 +18,7 @@ export class StoriesRepository {
     return prisma.story.findUnique({
       where: { id },
       include: {
-        author: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
         _count: { select: { views: true } },
       },
     });
@@ -31,7 +31,7 @@ export class StoriesRepository {
         authorId: { not: userId },
       },
       include: {
-        author: { include: { profile: { select: { displayName: true, avatarUrl: true } } } },
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
         _count: { select: { views: true } },
       },
       orderBy: { createdAt: 'desc' },
