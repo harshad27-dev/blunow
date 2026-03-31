@@ -1,0 +1,35 @@
+export type Gender = 'MALE' | 'FEMALE' | 'NON_BINARY' | 'OTHER';
+
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  username: string;
+  birthDate: string; // ISO 8601 e.g. "2000-01-01"
+  gender: Gender;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  username: string;
+  profile?: {
+    bio: string | null;
+    avatarUrl: string | null;
+  };
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken?: string;
+}
+
+export interface AuthResponse {
+  user: AuthUser;
+  accessToken: string;
+  refreshToken?: string;
+}
