@@ -24,7 +24,9 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Skip retry for auth routes to prevent infinite logout loop
+    const isAuthRoute = originalRequest.url?.includes('/auth/');
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRoute) {
       originalRequest._retry = true;
       try {
         const refreshToken = await storage.get(Config.REFRESH_TOKEN_KEY);

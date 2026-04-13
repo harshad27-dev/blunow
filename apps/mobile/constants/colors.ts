@@ -1,42 +1,42 @@
-// Blunow Design System — Color Tokens
+// Blunow Design System — Black & White Color Tokens
 export const Colors = {
-  // Brand
-  primary: '#7C3AED',       // violet-600
-  primaryLight: '#A78BFA',  // violet-400
-  primaryDark: '#5B21B6',   // violet-800
-  secondary: '#EC4899',     // pink-500
-  secondaryLight: '#F9A8D4',// pink-300
-  accent: '#06B6D4',        // cyan-500
+  // Brand (monochrome — white as the accent)
+  primary: '#FFFFFF',           // pure white (primary accent)
+  primaryLight: '#E0E0E0',      // light gray
+  primaryDark: '#A0A0A0',       // mid gray
+  secondary: '#C0C0C0',         // silver
+  secondaryLight: '#D8D8D8',    // soft silver
+  accent: '#888888',            // medium gray
 
-  // Backgrounds
-  bg: '#0D0D14',            // deep near-black
-  bgCard: '#16161F',        // card bg
-  bgElevated: '#1E1E2C',    // elevated surfaces
-  bgInput: '#1A1A28',       // input fields
+  // Backgrounds — very dark, more black
+  bg: '#050505',                // near-pure black
+  bgCard: '#0F0F0F',            // card bg
+  bgElevated: '#1A1A1A',        // elevated surfaces
+  bgInput: '#111111',           // input fields
 
   // Text
-  textPrimary: '#F2F2FF',
-  textSecondary: '#9898B8',
-  textMuted: '#5A5A7A',
-  textInverse: '#0D0D14',
+  textPrimary: '#F5F5F5',       // off-white
+  textSecondary: '#888888',     // medium gray
+  textMuted: '#444444',         // dim gray
+  textInverse: '#050505',       // black (for white backgrounds)
 
   // Borders
-  border: '#2A2A3E',
-  borderFocus: '#7C3AED',
+  border: '#222222',            // dark gray border
+  borderFocus: '#FFFFFF',       // white focus ring
 
-  // Status
-  success: '#10B981',
-  error: '#EF4444',
-  warning: '#F59E0B',
+  // Status (desaturated to fit mono theme)
+  success: '#6FBF8A',           // muted green
+  error: '#CF6679',             // muted red
+  warning: '#C8A86B',           // muted amber
 
-  // Gradients (as array for LinearGradient)
-  gradientPrimary: ['#7C3AED', '#EC4899'] as const,
-  gradientBg: ['#0D0D14', '#16161F'] as const,
-  gradientCard: ['#1E1E2C', '#16161F'] as const,
+  // Gradients
+  gradientPrimary: ['#FFFFFF', '#888888'] as const,   // white → gray
+  gradientBg: ['#050505', '#0F0F0F'] as const,         // black → card
+  gradientCard: ['#1A1A1A', '#0F0F0F'] as const,       // elevated → card
 
   // Misc
   white: '#FFFFFF',
   black: '#000000',
   transparent: 'transparent',
-  overlay: 'rgba(0,0,0,0.6)',
+  overlay: 'rgba(0,0,0,0.75)',
 };

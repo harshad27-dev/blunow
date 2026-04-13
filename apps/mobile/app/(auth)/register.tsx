@@ -13,45 +13,13 @@ import {
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useState } from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
+import { registerSchema, type RegisterFormData } from '@/zod/registerSchema';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
 import { Spacing, Radius } from '@/constants/spacing';
 import type { Gender } from '@/types/auth.types';
-
-// ── Validation ─────────────────────────────────────────────────────
-const schema = z
-  .object({
-    username: z
-      .string()
-      .min(3, 'Username must be at least 3 characters')
-      .max(24, 'Username is too long')
-      .regex(/^[a-zA-Z0-9_]+$/, 'Only letters, numbers, and underscores'),
-    email: z.string().email('Enter a valid email'),
-    password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Must contain an uppercase letter')
-      .regex(/[0-9]/, 'Must contain a number'),
-    confirmPassword: z.string(),
-    birthDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD')
-      .refine((d) => {
-        const age = (Date.now() - new Date(d).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-        return age >= 18;
-      }, 'You must be at least 18 years old'),
-    gender: z.enum(['MALE', 'FEMALE', 'NON_BINARY', 'OTHER']),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  });
-
-type FormData = z.infer<typeof schema>;
 
 const GENDERS: { label: string; value: Gender }[] = [
   { label: 'Man', value: 'MALE' },
@@ -71,12 +39,12 @@ export default function RegisterScreen() {
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
     defaultValues: { gender: 'MALE' },
   });
 
-  const onSubmit = async (values: FormData) => {
+  const onSubmit = async (values: RegisterFormData) => {
     setServerError('');
     try {
       await register({
@@ -104,28 +72,15 @@ export default function RegisterScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Background orb ── */}
-        <View style={styles.orbContainer} pointerEvents="none">
-          <LinearGradient
-            colors={['#EC489955', '#7C3AED00']}
-            style={styles.orb}
-          />
-        </View>
-
         {/* ── Header ── */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
           <View style={styles.brand}>
-            <LinearGradient
-              colors={Colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.logoCircle}
-            >
+            <View style={styles.logoCircle}>
               <Text style={styles.logoLetter}>B</Text>
-            </LinearGradient>
+            </View>
           </View>
           <Text style={styles.heading}>Create account</Text>
           <Text style={styles.subheading}>Join the blunow community</Text>
@@ -295,18 +250,11 @@ export default function RegisterScreen() {
             disabled={isSubmitting}
             activeOpacity={0.88}
           >
-            <LinearGradient
-              colors={Colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.submitGradient}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.submitText}>Create Account</Text>
-              )}
-            </LinearGradient>
+            {isSubmitting ? (
+              <ActivityIndicator color={Colors.black} />
+            ) : (
+              <Text style={styles.submitText}>Create Account</Text>
+            )}
           </TouchableOpacity>
 
           {/* Terms */}
@@ -356,29 +304,27 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flexGrow: 1, paddingHorizontal: Spacing.md, paddingBottom: Spacing['2xl'] },
 
-  orbContainer: { position: 'absolute', top: -60, right: -80, zIndex: 0 },
-  orb: { width: 280, height: 280, borderRadius: 140 },
-
   header: { marginTop: 56, marginBottom: Spacing.lg },
   backBtn: { marginBottom: Spacing.lg },
   backText: {
     fontSize: FontSize.base,
     fontFamily: FontFamily.medium,
-    color: Colors.primaryLight,
+    color: Colors.white,
   },
   brand: { alignItems: 'center', marginBottom: Spacing.md },
   logoCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.lg,
+    width: 64,
+    height: 64,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoLetter: { fontSize: 28, fontFamily: FontFamily.bold, color: Colors.white },
+  logoLetter: { fontSize: 32, fontFamily: FontFamily.bold, color: Colors.black },
   heading: {
     fontSize: FontSize.xl,
     fontFamily: FontFamily.bold,
-    color: Colors.textPrimary,
+    color: Colors.white,
     marginBottom: 4,
     textAlign: 'center',
   },
@@ -413,7 +359,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: FontSize.base,
     fontFamily: FontFamily.regular,
-    color: Colors.textPrimary,
+    color: Colors.white,
   },
   inputError: { borderColor: Colors.error },
   fieldError: {
@@ -444,18 +390,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgInput,
   },
   genderChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}33`,
+    borderColor: Colors.white,
+    backgroundColor: Colors.white,
   },
   genderChipText: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.medium,
     color: Colors.textSecondary,
   },
-  genderChipTextActive: { color: Colors.primaryLight },
+  genderChipTextActive: { color: Colors.black },
 
   errorBanner: {
-    backgroundColor: '#EF444420',
+    backgroundColor: '#330000',
     borderWidth: 1,
     borderColor: Colors.error,
     borderRadius: Radius.sm,
@@ -468,16 +414,19 @@ const styles = StyleSheet.create({
     color: Colors.error,
   },
 
-  submitBtn: { borderRadius: Radius.md, overflow: 'hidden', marginBottom: Spacing.md },
-  submitGradient: {
-    paddingVertical: 15,
+  submitBtn: { 
+    backgroundColor: Colors.white,
+    borderRadius: Radius.full,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.md,
+    marginTop: Spacing.sm,
   },
   submitText: {
     fontSize: FontSize.md,
-    fontFamily: FontFamily.semiBold,
-    color: Colors.white,
+    fontFamily: FontFamily.bold,
+    color: Colors.black,
     letterSpacing: 0.3,
   },
 
@@ -489,7 +438,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     lineHeight: 18,
   },
-  termsLink: { color: Colors.primaryLight, fontFamily: FontFamily.medium },
+  termsLink: { color: Colors.white, fontFamily: FontFamily.bold },
 
   loginBtn: { alignItems: 'center' },
   loginText: {
@@ -497,5 +446,5 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
   },
-  loginLink: { fontFamily: FontFamily.semiBold, color: Colors.primaryLight },
+  loginLink: { fontFamily: FontFamily.bold, color: Colors.white },
 });

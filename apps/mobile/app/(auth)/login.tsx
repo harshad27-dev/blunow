@@ -15,7 +15,6 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState } from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
@@ -63,24 +62,11 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero gradient orb ── */}
-        <View style={styles.orbContainer} pointerEvents="none">
-          <LinearGradient
-            colors={['#7C3AED55', '#EC489900']}
-            style={styles.orb}
-          />
-        </View>
-
         {/* ── Logo / brand ── */}
         <View style={styles.brand}>
-          <LinearGradient
-            colors={Colors.gradientPrimary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.logoCircle}
-          >
+          <View style={styles.logoCircle}>
             <Text style={styles.logoLetter}>B</Text>
-          </LinearGradient>
+          </View>
           <Text style={styles.appName}>blunow</Text>
           <Text style={styles.tagline}>Connect. Vibe. Match.</Text>
         </View>
@@ -174,18 +160,11 @@ export default function LoginScreen() {
             disabled={isSubmitting}
             activeOpacity={0.88}
           >
-            <LinearGradient
-              colors={Colors.gradientPrimary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.submitGradient}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.submitText}>Sign In</Text>
-              )}
-            </LinearGradient>
+            {isSubmitting ? (
+              <ActivityIndicator color={Colors.black} />
+            ) : (
+              <Text style={styles.submitText}>Sign In</Text>
+            )}
           </TouchableOpacity>
 
           {/* Divider */}
@@ -217,14 +196,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flexGrow: 1, paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
 
-  orbContainer: { position: 'absolute', top: -80, left: -80, zIndex: 0 },
-  orb: { width: 300, height: 300, borderRadius: 150 },
-
-  brand: { alignItems: 'center', marginTop: 80, marginBottom: Spacing.xl },
+  brand: { alignItems: 'center', marginTop: 100, marginBottom: Spacing.xl },
   logoCircle: {
     width: 72,
     height: 72,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.sm,
@@ -232,18 +209,18 @@ const styles = StyleSheet.create({
   logoLetter: {
     fontSize: 38,
     fontFamily: FontFamily.bold,
-    color: Colors.white,
+    color: Colors.black,
   },
   appName: {
     fontSize: FontSize['2xl'],
     fontFamily: FontFamily.bold,
-    color: Colors.textPrimary,
+    color: Colors.white,
     letterSpacing: 1.5,
   },
   tagline: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.regular,
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     marginTop: 4,
     letterSpacing: 0.5,
   },
@@ -258,7 +235,7 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: FontSize.xl,
     fontFamily: FontFamily.bold,
-    color: Colors.textPrimary,
+    color: Colors.white,
     marginBottom: 4,
   },
   subheading: {
@@ -284,7 +261,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: FontSize.base,
     fontFamily: FontFamily.regular,
-    color: Colors.textPrimary,
+    color: Colors.white,
   },
   inputError: { borderColor: Colors.error },
   fieldError: {
@@ -309,11 +286,11 @@ const styles = StyleSheet.create({
   forgotText: {
     fontSize: FontSize.sm,
     fontFamily: FontFamily.medium,
-    color: Colors.primaryLight,
+    color: Colors.white,
   },
 
   errorBanner: {
-    backgroundColor: '#EF444420',
+    backgroundColor: '#330000',
     borderWidth: 1,
     borderColor: Colors.error,
     borderRadius: Radius.sm,
@@ -326,16 +303,19 @@ const styles = StyleSheet.create({
     color: Colors.error,
   },
 
-  submitBtn: { borderRadius: Radius.md, overflow: 'hidden', marginBottom: Spacing.md },
-  submitGradient: {
-    paddingVertical: 15,
+  submitBtn: { 
+    backgroundColor: Colors.white,
+    borderRadius: Radius.full, 
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.md,
+    marginTop: Spacing.sm,
   },
   submitText: {
     fontSize: FontSize.md,
-    fontFamily: FontFamily.semiBold,
-    color: Colors.white,
+    fontFamily: FontFamily.bold,
+    color: Colors.black,
     letterSpacing: 0.3,
   },
 
@@ -355,7 +335,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   registerLink: {
-    fontFamily: FontFamily.semiBold,
-    color: Colors.primaryLight,
+    fontFamily: FontFamily.bold,
+    color: Colors.white,
   },
 });

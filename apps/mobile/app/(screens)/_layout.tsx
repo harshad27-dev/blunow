@@ -7,7 +7,7 @@ export default function ScreensLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: Colors.bg },
-        animation: 'slide_from_right',
+        animation: 'none',
       }}
     />
   );

@@ -36,6 +36,7 @@ export class FeedService {
           distance: p.distance ? Math.round(p.distance) : null
         },
         createdAt: p.createdAt,
+        mediaUrls: p.mediaUrls || [],
       })),
       total: feed.length,
       hasMore: feed.length === params.limit

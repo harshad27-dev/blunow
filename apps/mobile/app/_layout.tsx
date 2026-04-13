@@ -1,4 +1,8 @@
+import "../global.css";
 import { useEffect } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
+import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts,
@@ -56,14 +60,16 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <>
-      <AuthGuard />
-      <StatusBar style="light" backgroundColor={Colors.bg} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg } }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(screens)" />
-      </Stack>
-    </>
+    <QueryClientProvider client={queryClient}>
+      <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+        <AuthGuard />
+        <StatusBar style="light" backgroundColor={Colors.bg} />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'none' }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(screens)" />
+        </Stack>
+      </View>
+    </QueryClientProvider>
   );
 }
