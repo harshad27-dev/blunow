@@ -59,4 +59,15 @@ export class PostsRepository {
   async unsavePost(postId: string, userId: string) {
     return prisma.postSave.deleteMany({ where: { postId, userId } });
   }
+
+  async findByAuthorId(authorId: string) {
+    return prisma.post.findMany({
+      where: { authorId, isDeleted: false },
+      include: {
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
+        _count: { select: { likes: true, comments: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }

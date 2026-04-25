@@ -33,5 +33,10 @@ export const postService = {
   createPost: async (payload: CreatePostPayload) => {
     const response = await api.post('/posts', payload);
     return response.data;
+  },
+
+  getUserPosts: async (userId: string) => {
+    const response = await api.get(`/posts/user/${userId}`);
+    return response.data;
   }
 };

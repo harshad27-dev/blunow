@@ -13,6 +13,7 @@ router.use(authenticate);
 // Posts
 router.post('/', validateCreatePost, postsController.createPost);
 router.get('/:id', postsController.getPost);
+router.get('/user/:id', postsController.getUserPosts);
 router.patch('/:id', validateUpdatePost, postsController.updatePost);
 router.delete('/:id', postsController.deletePost);
 

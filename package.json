@@ -3,13 +3,14 @@
   "private": true,
   "workspaces": [
     "apps/backend",
-    "apps/admin",
     "packages/*"
   ],
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "npm run dev:admin",
+    "dev:all": "turbo run dev",
     "dev:backend": "turbo run dev --filter=@blunow/backend",
+    "dev:admin": "npm run dev --prefix apps/admin",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo run clean && rm -rf node_modules"

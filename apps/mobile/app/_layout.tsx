@@ -37,6 +37,8 @@ function AuthGuard() {
   return null;
 }
 
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
 export default function RootLayout() {
   const { rehydrate } = useAuthStore();
 
@@ -60,16 +62,18 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <View style={{ flex: 1, backgroundColor: Colors.bg }}>
-        <AuthGuard />
-        <StatusBar style="light" backgroundColor={Colors.bg} />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'none' }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(screens)" />
-        </Stack>
-      </View>
-    </QueryClientProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+          <AuthGuard />
+          <StatusBar style="light" backgroundColor={Colors.bg} />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'none' }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(screens)" />
+          </Stack>
+        </View>
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

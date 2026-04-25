@@ -49,4 +49,8 @@ export class PostsService {
     if (!post) throw new AppError('Post not found', 404);
     return this.postsRepository.unsavePost(id, userId);
   }
+
+  async getUserPosts(userId: string) {
+    return this.postsRepository.findByAuthorId(userId);
+  }
 }

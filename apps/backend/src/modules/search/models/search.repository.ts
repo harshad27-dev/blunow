@@ -8,7 +8,7 @@ export class SearchRepository {
     let users = [];
     if (type === 'all' || type === 'users') {
       const u = await prisma.$queryRawUnsafe(`
-        SELECT u.id, prof.username, prof."avatarUrl"
+        SELECT u.id, prof.username, prof."avatarUrl", prof.bio, prof."birthDate", prof.interests, prof.location
         FROM "users" u
         JOIN "profiles" prof ON u.id = prof."userId"
         WHERE to_tsvector('english', prof.username || ' ' || COALESCE(prof.bio, '')) @@ plainto_tsquery('english', $1)
