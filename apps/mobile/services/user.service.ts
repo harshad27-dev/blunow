@@ -1,9 +1,27 @@
-import { api } from './api';
+import { api } from "./api";
 
 export interface UpdateProfilePayload {
   username?: string;
   bio?: string;
+  bioPrompt1?: string;
+  bioPrompt2?: string;
+  age?: number;
+  location?: string;
+  gender?: string;
+  sexuality?: string;
   avatarUrl?: string;
+  bannerUrl?: string;
+  interests?: string[];
+  interestedIn?: string[];
+  lookingFor?: string[];
+  minAge?: number;
+  maxAge?: number;
+  maxDistance?: number;
+  drinking?: string;
+  smoking?: string;
+  workout?: string;
+  pets?: string;
+  zodiac?: string;
 }
 
 export const userService = {
@@ -13,12 +31,12 @@ export const userService = {
   },
 
   updateProfile: async (payload: UpdateProfilePayload) => {
-    const response = await api.patch('/users/me/profile', payload);
+    const response = await api.patch("/users/me/profile", payload);
     return response.data;
   },
 
   getProfile: async (userId: string) => {
     const response = await api.get(`/users/${userId}`);
     return response.data;
-  }
+  },
 };

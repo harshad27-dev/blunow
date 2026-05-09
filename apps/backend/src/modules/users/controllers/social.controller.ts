@@ -17,7 +17,16 @@ export class SocialController {
     try {
       const userId = req.params.userId || req.user!.id; // fallback to current user if not provided in some context
       const stats = await this.repo.getStats(userId);
-      res.status(200).json({ success: true, stats: { followers: stats.followerCount, following: stats.followingCount, postsCount: stats.postsCount } });
+      res.status(200).json({
+        success: true,
+        stats: {
+          followers: stats.followerCount,
+          following: stats.followingCount,
+          postsCount: stats.postsCount,
+          matchCount: stats.matchCount,
+          storiesCount: stats.storiesCount,
+        },
+      });
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
   };
 

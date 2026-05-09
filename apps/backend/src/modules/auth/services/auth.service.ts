@@ -46,10 +46,13 @@ export class AuthService {
 
   async requestLoginOtp(dto: { email: string }) {
     const user = await this.authRepository.findByEmail(dto.email);
-    const response = { message: 'If an account exists, an OTP has been sent.' };
 
-    if (!user || !user.isActive) {
-      return response;
+    if (!user) {
+      throw new AppError('Email not found. Please create an account first.', 404);
+    }
+
+    if (!user.isActive) {
+      throw new AppError('Account has been deactivated', 403);
     }
 
     const otp = randomInt(100000, 1000000).toString();
@@ -76,7 +79,10 @@ export class AuthService {
       console.log(`[Auth OTP] ${dto.email}: ${otp}`);
     }
 
-    return response;
+    return {
+      message: 'OTP sent. Check your email and enter the code below.',
+      ...(process.env.NODE_ENV !== 'production' && { devOtp: otp }),
+    };
   }
 
   async login(dto: { email: string; otp: string }) {

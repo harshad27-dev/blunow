@@ -2,6 +2,7 @@ import { api } from './api';
 import type {
   LoginPayload,
   RequestLoginOtpPayload,
+  RequestLoginOtpResponse,
   RegisterPayload,
   AuthResponse,
 } from '@/types/auth.types';
@@ -12,8 +13,14 @@ interface ApiWrapper<T> {
 }
 
 export const authService = {
-  requestLoginOtp: async (payload: RequestLoginOtpPayload): Promise<void> => {
-    await api.post('/auth/login/otp', payload);
+  requestLoginOtp: async (
+    payload: RequestLoginOtpPayload,
+  ): Promise<RequestLoginOtpResponse> => {
+    const { data } = await api.post<ApiWrapper<RequestLoginOtpResponse>>(
+      '/auth/login/otp',
+      payload,
+    );
+    return data.data;
   },
 
   login: async (payload: LoginPayload): Promise<AuthResponse> => {

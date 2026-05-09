@@ -7,6 +7,7 @@ import type {
   LoginPayload,
   RegisterPayload,
   RequestLoginOtpPayload,
+  RequestLoginOtpResponse,
 } from '@/types/auth.types';
 
 interface AuthState {
@@ -16,7 +17,9 @@ interface AuthState {
   isLoading: boolean;
 
   // Actions
-  requestLoginOtp: (payload: RequestLoginOtpPayload) => Promise<void>;
+  requestLoginOtp: (
+    payload: RequestLoginOtpPayload,
+  ) => Promise<RequestLoginOtpResponse>;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
@@ -30,7 +33,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   requestLoginOtp: async (payload) => {
-    await authService.requestLoginOtp(payload);
+    return authService.requestLoginOtp(payload);
   },
 
   login: async (payload) => {

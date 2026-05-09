@@ -56,8 +56,12 @@ export default function LoginScreen() {
 
     setIsRequestingOtp(true);
     try {
-      await requestLoginOtp({ email: getValues('email') });
-      setOtpNotice('OTP sent. Check your email and enter the code below.');
+      const response = await requestLoginOtp({ email: getValues('email') });
+      setOtpNotice(
+        response.devOtp
+          ? `${response.message} Dev OTP: ${response.devOtp}`
+          : response.message,
+      );
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ?? 'Unable to send OTP. Please try again.';

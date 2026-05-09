@@ -69,12 +69,20 @@ export const useUserStatsQuery = (userId?: string) => {
       if (!userId) return null;
       const data = await userService.getStats(userId);
       if (!data?.success || !data?.stats) {
-        return { followers: 0, following: 0, postsCount: 0 };
+        return {
+          followers: 0,
+          following: 0,
+          postsCount: 0,
+          matchCount: 0,
+          storiesCount: 0,
+        };
       }
       return {
         followers: data.stats.followers || 0,
         following: data.stats.following || 0,
         postsCount: data.stats.postsCount || 0,
+        matchCount: data.stats.matchCount || 0,
+        storiesCount: data.stats.storiesCount || 0,
       };
     },
     enabled: !!userId,

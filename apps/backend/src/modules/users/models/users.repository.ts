@@ -1,4 +1,4 @@
-import { prisma } from '../../../prisma/prisma';
+import { prisma } from "../../../prisma/prisma";
 
 export class UsersRepository {
   async findById(id: string) {
@@ -19,6 +19,26 @@ export class UsersRepository {
     return prisma.profile.update({
       where: { userId },
       data,
+    });
+  }
+
+  async updateProfileAndUser(
+    userId: string,
+    profileData: Record<string, any>,
+    userData: Record<string, any> = {},
+  ) {
+    return prisma.$transaction(async (tx) => {
+      if (Object.keys(userData).length > 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: userData,
+        });
+      }
+
+      return tx.profile.update({
+        where: { userId },
+        data: profileData,
+      });
     });
   }
 
