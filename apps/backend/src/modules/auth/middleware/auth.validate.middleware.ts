@@ -11,7 +11,11 @@ const registerSchema = z.object({
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
+  otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+});
+
+const requestLoginOtpSchema = z.object({
+  email: z.string().email(),
 });
 
 const refreshTokenSchema = z.object({
@@ -30,6 +34,16 @@ export const validateRegister = (req: Request, res: Response, next: NextFunction
 
 export const validateLogin = (req: Request, res: Response, next: NextFunction): void => {
   const result = loginSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ success: false, errors: result.error.flatten().fieldErrors });
+    return;
+  }
+  req.body = result.data;
+  next();
+};
+
+export const validateRequestLoginOtp = (req: Request, res: Response, next: NextFunction): void => {
+  const result = requestLoginOtpSchema.safeParse(req.body);
   if (!result.success) {
     res.status(400).json({ success: false, errors: result.error.flatten().fieldErrors });
     return;

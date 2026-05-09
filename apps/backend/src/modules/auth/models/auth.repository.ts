@@ -56,4 +56,31 @@ export class AuthRepository {
   async deleteAllRefreshTokens(userId: string) {
     return prisma.refreshToken.deleteMany({ where: { userId } });
   }
+
+  async upsertLoginOtp(data: { email: string; otpHash: string; expiresAt: Date }) {
+    return prisma.loginOtp.upsert({
+      where: { email: data.email },
+      update: {
+        otpHash: data.otpHash,
+        expiresAt: data.expiresAt,
+        attempts: 0,
+      },
+      create: data,
+    });
+  }
+
+  async findLoginOtpByEmail(email: string) {
+    return prisma.loginOtp.findUnique({ where: { email } });
+  }
+
+  async incrementLoginOtpAttempts(email: string) {
+    return prisma.loginOtp.update({
+      where: { email },
+      data: { attempts: { increment: 1 } },
+    });
+  }
+
+  async deleteLoginOtp(email: string) {
+    return prisma.loginOtp.deleteMany({ where: { email } });
+  }
 }

@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
+import { randomInt } from 'crypto';
 import { AuthRepository } from '../models/auth.repository';
 import { TokenService } from './token.service';
+import { MailService } from './mail.service';
 import { eventBus } from '../../../events/event-bus';
 import { EVENTS } from '../../../events/event-constants';
 import { AppError } from '../../../common/middleware/error.middleware';
@@ -8,6 +10,9 @@ import { AppError } from '../../../common/middleware/error.middleware';
 export class AuthService {
   private authRepository = new AuthRepository();
   private tokenService = new TokenService();
+  private mailService = new MailService();
+  private otpExpiresInMs = 10 * 60 * 1000;
+  private maxOtpAttempts = 5;
 
   async register(dto: {
     email: string;
@@ -39,21 +44,69 @@ export class AuthService {
     return { user: this.sanitizeUser(user), ...tokens };
   }
 
-  async login(dto: { email: string; password: string }) {
+  async requestLoginOtp(dto: { email: string }) {
     const user = await this.authRepository.findByEmail(dto.email);
-    if (!user || !user.passwordHash) {
-      throw new AppError('Invalid credentials', 401);
+    const response = { message: 'If an account exists, an OTP has been sent.' };
+
+    if (!user || !user.isActive) {
+      return response;
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new AppError('Invalid credentials', 401);
+    const otp = randomInt(100000, 1000000).toString();
+    const otpHash = await bcrypt.hash(otp, 12);
+    const expiresAt = new Date(Date.now() + this.otpExpiresInMs);
+
+    await this.authRepository.upsertLoginOtp({
+      email: dto.email,
+      otpHash,
+      expiresAt,
+    });
+
+    try {
+      await this.mailService.sendLoginOtp(dto.email, otp);
+    } catch (error) {
+      await this.authRepository.deleteLoginOtp(dto.email);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[Auth OTP] Failed to send email:', error);
+      }
+      throw new AppError('Unable to send OTP email. Check SMTP settings.', 500);
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Auth OTP] ${dto.email}: ${otp}`);
+    }
+
+    return response;
+  }
+
+  async login(dto: { email: string; otp: string }) {
+    const user = await this.authRepository.findByEmail(dto.email);
+    if (!user) {
+      throw new AppError('Invalid OTP', 401);
     }
 
     if (!user.isActive) {
       throw new AppError('Account has been deactivated', 403);
     }
 
+    const loginOtp = await this.authRepository.findLoginOtpByEmail(dto.email);
+    if (!loginOtp || loginOtp.expiresAt.getTime() < Date.now()) {
+      await this.authRepository.deleteLoginOtp(dto.email);
+      throw new AppError('OTP expired. Please request a new one.', 401);
+    }
+
+    if (loginOtp.attempts >= this.maxOtpAttempts) {
+      await this.authRepository.deleteLoginOtp(dto.email);
+      throw new AppError('Too many OTP attempts. Please request a new one.', 429);
+    }
+
+    const isOtpValid = await bcrypt.compare(dto.otp, loginOtp.otpHash);
+    if (!isOtpValid) {
+      await this.authRepository.incrementLoginOtpAttempts(dto.email);
+      throw new AppError('Invalid OTP', 401);
+    }
+
+    await this.authRepository.deleteLoginOtp(dto.email);
     const tokens = await this.tokenService.generateTokens(user);
     return { user: this.sanitizeUser(user), ...tokens };
   }

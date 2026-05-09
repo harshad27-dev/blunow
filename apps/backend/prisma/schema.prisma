@@ -130,6 +130,19 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model LoginOtp {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  otpHash   String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("login_otps")
+}
+
 model MatchRequest {
   id         String      @id @default(uuid())
   senderId   String

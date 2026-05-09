@@ -23,6 +23,15 @@ export class AuthController {
     }
   };
 
+  requestLoginOtp = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.authService.requestLoginOtp(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
   refreshToken = async (req: Request, res: Response): Promise<void> => {
     try {
       const result = await this.authService.refreshToken(req.body.refreshToken);

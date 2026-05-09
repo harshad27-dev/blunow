@@ -2,7 +2,12 @@ import { create } from 'zustand';
 import { authService } from '@/services/auth.service';
 import { storage } from '@/utils/storage';
 import { Config } from '@/constants/config';
-import type { AuthUser, LoginPayload, RegisterPayload } from '@/types/auth.types';
+import type {
+  AuthUser,
+  LoginPayload,
+  RegisterPayload,
+  RequestLoginOtpPayload,
+} from '@/types/auth.types';
 
 interface AuthState {
   user: AuthUser | null;
@@ -11,6 +16,7 @@ interface AuthState {
   isLoading: boolean;
 
   // Actions
+  requestLoginOtp: (payload: RequestLoginOtpPayload) => Promise<void>;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
@@ -22,6 +28,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   isAuthenticated: false,
   isLoading: true,
+
+  requestLoginOtp: async (payload) => {
+    await authService.requestLoginOtp(payload);
+  },
 
   login: async (payload) => {
     const response = await authService.login(payload);

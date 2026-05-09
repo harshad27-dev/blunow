@@ -8,7 +8,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
@@ -20,34 +19,63 @@ import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
 import { Spacing, Radius } from '@/constants/spacing';
 
-// ── Validation ─────────────────────────────────────────────────────
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  otp: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Enter the 6-digit OTP'),
 });
+
 type FormData = z.infer<typeof schema>;
 
-// ── Component ──────────────────────────────────────────────────────
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useAuthStore();
+  const { login, requestLoginOtp } = useAuthStore();
   const [serverError, setServerError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [otpNotice, setOtpNotice] = useState('');
+  const [isRequestingOtp, setIsRequestingOtp] = useState(false);
 
   const {
     control,
     handleSubmit,
+    getValues,
+    trigger,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: '', otp: '' },
+  });
+
+  const handleRequestOtp = async () => {
+    setServerError('');
+    setOtpNotice('');
+
+    const isEmailValid = await trigger('email');
+    if (!isEmailValid) return;
+
+    setIsRequestingOtp(true);
+    try {
+      await requestLoginOtp({ email: getValues('email') });
+      setOtpNotice('OTP sent. Check your email and enter the code below.');
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ?? 'Unable to send OTP. Please try again.';
+      setServerError(msg);
+    } finally {
+      setIsRequestingOtp(false);
+    }
+  };
 
   const onSubmit = async (values: FormData) => {
     setServerError('');
     try {
       await login(values);
-      // AuthGuard in _layout.tsx handles the redirect
+      // AuthGuard in _layout.tsx handles the redirect.
     } catch (err: any) {
       const msg =
-        err?.response?.data?.message ?? 'Login failed. Please try again.';
+        err?.response?.data?.message ??
+        'OTP verification failed. Please try again.';
       setServerError(msg);
     }
   };
@@ -62,7 +90,6 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Logo / brand ── */}
         <View style={styles.brand}>
           <View style={styles.logoCircle}>
             <Text style={styles.logoLetter}>B</Text>
@@ -71,12 +98,12 @@ export default function LoginScreen() {
           <Text style={styles.tagline}>Connect. Vibe. Match.</Text>
         </View>
 
-        {/* ── Card ── */}
         <View style={styles.card}>
           <Text style={styles.heading}>Welcome back</Text>
-          <Text style={styles.subheading}>Sign in to continue</Text>
+          <Text style={styles.subheading}>
+            Sign in with the OTP sent to your email.
+          </Text>
 
-          {/* Email */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Email</Text>
             <Controller
@@ -101,59 +128,62 @@ export default function LoginScreen() {
             )}
           </View>
 
-          {/* Password */}
+          <TouchableOpacity
+            style={styles.otpRequestBtn}
+            onPress={handleRequestOtp}
+            disabled={isRequestingOtp}
+            activeOpacity={0.8}
+          >
+            {isRequestingOtp ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.otpRequestText}>Send OTP</Text>
+            )}
+          </TouchableOpacity>
+
+          {otpNotice ? (
+            <Text style={styles.noticeText}>{otpNotice}</Text>
+          ) : null}
+
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordRow}>
-              <Controller
-                control={control}
-                name="password"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    style={[
-                      styles.input,
-                      styles.passwordInput,
-                      errors.password && styles.inputError,
-                    ]}
-                    placeholder="••••••••"
-                    placeholderTextColor={Colors.textMuted}
-                    secureTextEntry={!showPassword}
-                    returnKeyType="done"
-                    onBlur={onBlur}
-                    onChangeText={onChange}
-                    onSubmitEditing={handleSubmit(onSubmit)}
-                    value={value}
-                  />
-                )}
-              />
-              <Pressable
-                style={styles.eyeBtn}
-                onPress={() => setShowPassword((v) => !v)}
-              >
-                <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
-              </Pressable>
-            </View>
-            {errors.password && (
-              <Text style={styles.fieldError}>{errors.password.message}</Text>
+            <Text style={styles.label}>OTP</Text>
+            <Controller
+              control={control}
+              name="otp"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.otpInput,
+                    errors.otp && styles.inputError,
+                  ]}
+                  placeholder="123456"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  returnKeyType="done"
+                  onBlur={onBlur}
+                  onChangeText={(text) =>
+                    onChange(text.replace(/\D/g, '').slice(0, 6))
+                  }
+                  onSubmitEditing={handleSubmit(onSubmit)}
+                  value={value}
+                />
+              )}
+            />
+            {errors.otp && (
+              <Text style={styles.fieldError}>{errors.otp.message}</Text>
             )}
           </View>
 
-          {/* Forgot password */}
-          <TouchableOpacity
-            style={styles.forgotBtn}
-            onPress={() => router.push('/(auth)/forgot-password')}
-          >
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
-
-          {/* Server error */}
           {serverError ? (
             <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>⚠️ {serverError}</Text>
+              <Text style={styles.errorBannerText}>{serverError}</Text>
             </View>
           ) : null}
 
-          {/* Submit */}
           <TouchableOpacity
             style={styles.submitBtn}
             onPress={handleSubmit(onSubmit)}
@@ -163,25 +193,23 @@ export default function LoginScreen() {
             {isSubmitting ? (
               <ActivityIndicator color={Colors.black} />
             ) : (
-              <Text style={styles.submitText}>Sign In</Text>
+              <Text style={styles.submitText}>Verify OTP</Text>
             )}
           </TouchableOpacity>
 
-          {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Register CTA */}
           <TouchableOpacity
             style={styles.registerBtn}
             onPress={() => router.push('/(auth)/register')}
             activeOpacity={0.8}
           >
             <Text style={styles.registerText}>
-              Don't have an account?{' '}
+              No account yet?{' '}
               <Text style={styles.registerLink}>Create one</Text>
             </Text>
           </TouchableOpacity>
@@ -191,10 +219,13 @@ export default function LoginScreen() {
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bg },
-  scroll: { flexGrow: 1, paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.xl,
+  },
 
   brand: { alignItems: 'center', marginTop: 100, marginBottom: Spacing.xl },
   logoCircle: {
@@ -264,29 +295,36 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   inputError: { borderColor: Colors.error },
+  otpInput: {
+    fontFamily: FontFamily.bold,
+    letterSpacing: 6,
+    textAlign: 'center',
+  },
   fieldError: {
     fontSize: FontSize.xs,
     fontFamily: FontFamily.regular,
     color: Colors.error,
     marginTop: 4,
   },
-
-  passwordRow: { position: 'relative' },
-  passwordInput: { paddingRight: 52 },
-  eyeBtn: {
-    position: 'absolute',
-    right: 14,
-    top: 0,
-    bottom: 0,
+  otpRequestBtn: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    paddingVertical: 13,
+    alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.sm,
   },
-  eyeText: { fontSize: 18 },
-
-  forgotBtn: { alignSelf: 'flex-end', marginBottom: Spacing.md },
-  forgotText: {
+  otpRequestText: {
     fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
+    fontFamily: FontFamily.bold,
     color: Colors.white,
+  },
+  noticeText: {
+    fontSize: FontSize.sm,
+    fontFamily: FontFamily.regular,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
   },
 
   errorBanner: {
@@ -303,9 +341,9 @@ const styles = StyleSheet.create({
     color: Colors.error,
   },
 
-  submitBtn: { 
+  submitBtn: {
     backgroundColor: Colors.white,
-    borderRadius: Radius.full, 
+    borderRadius: Radius.full,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -319,7 +357,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: Spacing.md },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.md,
+  },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: {
     fontSize: FontSize.sm,
