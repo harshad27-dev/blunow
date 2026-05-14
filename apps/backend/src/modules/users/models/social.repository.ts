@@ -2,11 +2,66 @@ import { prisma } from '../../../prisma/prisma';
 
 export class SocialRepository {
   async getStats(userId: string) {
-    const stats = await prisma.userStat.findUnique({ where: { userId } });
-    if (stats) return stats;
-    
-    // Lazy initialize stats if they don't exist
-    return prisma.userStat.create({ data: { userId } });
+    const [
+      followerCount,
+      followingCount,
+      postsCount,
+      matchCount,
+      storiesCount,
+      likesReceived,
+      conversationsCount,
+      savedPostsCount,
+    ] = await prisma.$transaction([
+      prisma.userFollow.count({ where: { followingId: userId } }),
+      prisma.userFollow.count({ where: { followerId: userId } }),
+      prisma.post.count({ where: { authorId: userId, isDeleted: false } }),
+      prisma.match.count({
+        where: { OR: [{ user1Id: userId }, { user2Id: userId }] },
+      }),
+      prisma.story.count({
+        where: {
+          authorId: userId,
+          isDeleted: false,
+          expiresAt: { gt: new Date() },
+        },
+      }),
+      prisma.postLike.count({
+        where: { post: { authorId: userId, isDeleted: false } },
+      }),
+      prisma.chat.count({
+        where: { OR: [{ user1Id: userId }, { user2Id: userId }] },
+      }),
+      prisma.postSave.count({ where: { userId } }),
+    ]);
+
+    const stats = await prisma.userStat.upsert({
+      where: { userId },
+      create: {
+        userId,
+        followerCount,
+        followingCount,
+        postsCount,
+        matchCount,
+        storiesCount,
+        lastUpdated: new Date(),
+      },
+      update: {
+        followerCount,
+        followingCount,
+        postsCount,
+        matchCount,
+        storiesCount,
+        lastUpdated: new Date(),
+      },
+    });
+
+    return {
+      ...stats,
+      likesReceived,
+      conversationsCount,
+      savedPostsCount,
+      profileViews: 0,
+    };
   }
 
   async verifyProfile(userId: string, idPhotoUrl: string, faceVideoUrl: string) {

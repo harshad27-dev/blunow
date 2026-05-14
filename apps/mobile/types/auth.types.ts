@@ -30,8 +30,6 @@ export interface AuthUser {
   profile?: {
     username?: string | null;
     bio: string | null;
-    bioPrompt1?: string | null;
-    bioPrompt2?: string | null;
     avatarUrl: string | null;
     bannerUrl?: string | null;
     location?: string | null;
@@ -40,6 +38,7 @@ export interface AuthUser {
     interests?: string[];
     interestedIn?: string[];
     lookingFor?: string[];
+    relationship?: string | null;
     minAge?: number | null;
     maxAge?: number | null;
     maxDistance?: number | null;

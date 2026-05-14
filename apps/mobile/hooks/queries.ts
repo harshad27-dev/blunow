@@ -3,6 +3,8 @@ import { feedService } from '@/services/feed.service';
 import { postService, CreatePostPayload } from '@/services/post.service';
 import { userService } from '@/services/user.service';
 import { searchService } from '@/services/search.service';
+import { matchService } from '@/services/match.service';
+import { storyService } from '@/services/story.service';
 
 
 /**
@@ -55,6 +57,9 @@ export const useCreatePostMutation = () => {
     onSuccess: () => {
       // Invalidate feed query to refetch latest posts automatically
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['user-posts'] });
+      queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['saved-posts'] });
     },
   });
 };
@@ -75,6 +80,11 @@ export const useUserStatsQuery = (userId?: string) => {
           postsCount: 0,
           matchCount: 0,
           storiesCount: 0,
+          likesReceived: 0,
+          conversationsCount: 0,
+          savedPostsCount: 0,
+          profileViews: 0,
+          lastUpdated: null,
         };
       }
       return {
@@ -83,6 +93,11 @@ export const useUserStatsQuery = (userId?: string) => {
         postsCount: data.stats.postsCount || 0,
         matchCount: data.stats.matchCount || 0,
         storiesCount: data.stats.storiesCount || 0,
+        likesReceived: data.stats.likesReceived || 0,
+        conversationsCount: data.stats.conversationsCount || 0,
+        savedPostsCount: data.stats.savedPostsCount || 0,
+        profileViews: data.stats.profileViews || 0,
+        lastUpdated: data.stats.lastUpdated || null,
       };
     },
     enabled: !!userId,
@@ -112,6 +127,64 @@ export const useUserPostsQuery = (userId?: string) => {
 };
 
 /**
+ * Fetches saved posts for the current user
+ */
+export const useSavedPostsQuery = (enabled = true) => {
+  return useQuery({
+    queryKey: ['saved-posts'],
+    queryFn: async () => {
+      const response = await postService.getSavedPosts();
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+      return response.data.map((post: any) => ({
+        id: post.id,
+        thumbnailUrl: post.mediaUrls?.[0] || '',
+      }));
+    },
+    enabled,
+  });
+};
+
+/**
+ * Fetches active stories for a specific user
+ */
+export const useUserStoriesQuery = (userId?: string, enabled = true) => {
+  return useQuery({
+    queryKey: ['user-stories', userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const response = await storyService.getUserStories(userId);
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+      return response.data.map((story: any) => ({
+        id: story.id,
+        thumbnailUrl: story.mediaUrl || '',
+      }));
+    },
+    enabled: !!userId && enabled,
+  });
+};
+
+/**
+ * Fetches matches for the current user
+ */
+export const useMatchesQuery = (enabled = true) => {
+  return useQuery({
+    queryKey: ['matches'],
+    queryFn: async () => {
+      const response = await matchService.getMatches();
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+      return response.data;
+    },
+    enabled,
+  });
+};
+
+/**
  * Updates the user's profile information
  */
 export const useUpdateProfileMutation = () => {
@@ -124,6 +197,7 @@ export const useUpdateProfileMutation = () => {
     onSuccess: () => {
       // Invalidate user data to refetch fresh profile info
       queryClient.invalidateQueries({ queryKey: ['me'] });
+      queryClient.invalidateQueries({ queryKey: ['user-profile'] });
       queryClient.invalidateQueries({ queryKey: ['user-stats'] });
     },
   });

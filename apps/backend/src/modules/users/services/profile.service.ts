@@ -10,8 +10,6 @@ export class ProfileService {
     data: {
       username?: string;
       bio?: string;
-      bioPrompt1?: string;
-      bioPrompt2?: string;
       age?: number;
       birthDate?: string;
       gender?: string;
@@ -22,6 +20,7 @@ export class ProfileService {
       interests?: string[];
       interestedIn?: string[];
       lookingFor?: string[];
+      relationship?: string;
       minAge?: number;
       maxAge?: number;
       maxDistance?: number;

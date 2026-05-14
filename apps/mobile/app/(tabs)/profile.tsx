@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   RefreshControl,
   ScrollView,
+  Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,7 +25,14 @@ import type {
   ProfileTab,
 } from "@/components/ui/ProfileScreenUi";
 import { useAuthStore } from "@/store/authStore";
-import { useUserPostsQuery, useUserStatsQuery } from "@/hooks/queries";
+import {
+  useMatchesQuery,
+  useSavedPostsQuery,
+  useUserPostsQuery,
+  useUserProfileQuery,
+  useUserStatsQuery,
+  useUserStoriesQuery,
+} from "@/hooks/queries";
 
 const DEFAULT_COVER =
   "https://images.unsplash.com/photo-1518391846015-55a9cc003b25?q=80&w=1600&auto=format&fit=crop";
@@ -34,21 +44,30 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
 
+  const { data: liveUser } = useUserProfileQuery(user?.id);
   const { data: stats, isLoading: statsLoading } = useUserStatsQuery(user?.id);
   const { data: posts, isLoading: postsLoading } = useUserPostsQuery(user?.id);
+  const { data: stories, isLoading: storiesLoading } = useUserStoriesQuery(
+    user?.id,
+    activeTab === "stories",
+  );
+  const { data: savedPosts, isLoading: savedPostsLoading } =
+    useSavedPostsQuery(activeTab === "saved");
+  const { data: matches, isLoading: matchesLoading } = useMatchesQuery(
+    activeTab === "matches",
+  );
 
-  const profile = user?.profile;
-  const displayName = profile?.username || user?.username || "Your Name";
-  const handle = user?.username || profile?.username || "username";
+  const currentUser = liveUser || user;
+  const profile = currentUser?.profile;
+  const displayName = profile?.username || currentUser?.username || "Your Name";
+  const handle = currentUser?.username || profile?.username || "username";
   const city = profile?.location || "Add your city";
   const age = calculateAge(profile?.birthDate);
   const gender = formatLabel(
-    profile?.gender || user?.sexuality || "Add gender",
+    profile?.gender || currentUser?.sexuality || "Add gender",
   );
-  const sexuality = formatLabel(user?.sexuality || "STRAIGHT");
-  const interests = profile?.interests?.length
-    ? profile.interests
-    : ["Fitness", "Travel", "Music", "Coffee"];
+  const sexuality = formatLabel(currentUser?.sexuality || "STRAIGHT");
+  const interests = profile?.interests || [];
   const bio =
     profile?.bio ||
     "Based in your city. Add a short bio to help people know your vibe.";
@@ -67,14 +86,14 @@ export default function ProfileScreen() {
       icon: "eye-outline",
       color: "#FF4F7B",
       label: "Profile Views",
-      value: 128,
+      value: stats?.profileViews || 0,
       caption: "People viewed you",
     },
     {
       icon: "heart-half",
       color: "#8B5CF6",
       label: "Likes Received",
-      value: 34,
+      value: stats?.likesReceived || 0,
       caption: "You're liked by",
     },
     {
@@ -88,7 +107,7 @@ export default function ProfileScreen() {
       icon: "chatbubble-ellipses-outline",
       color: "#0EA5E9",
       label: "Conversations",
-      value: 8,
+      value: stats?.conversationsCount || 0,
       caption: "Active chats",
     },
   ];
@@ -98,6 +117,10 @@ export default function ProfileScreen() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["user-stats", user?.id] }),
       queryClient.invalidateQueries({ queryKey: ["user-posts", user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ["user-stories", user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ["saved-posts"] }),
+      queryClient.invalidateQueries({ queryKey: ["matches"] }),
+      queryClient.invalidateQueries({ queryKey: ["user-profile", user?.id] }),
       queryClient.invalidateQueries({ queryKey: ["me"] }),
     ]);
     setRefreshing(false);
@@ -133,29 +156,58 @@ export default function ProfileScreen() {
           onSettings={openSettings}
         />
 
-        <ProfileJourneyCard loading={statsLoading} metrics={journeyMetrics} />
+        <ProfileJourneyCard
+          loading={statsLoading}
+          metrics={journeyMetrics}
+          updatedAt={stats?.lastUpdated}
+        />
         <ProfileCompletionCard completion={completion} onPress={editProfile} />
-        <ProfileTabs activeTab={activeTab} onTabChange={setActiveTab} />
+        <ProfileTabs
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          counts={{
+            posts: stats?.postsCount || posts?.length || 0,
+            stories: stats?.storiesCount || stories?.length || 0,
+            saved: stats?.savedPostsCount || savedPosts?.length || 0,
+            matches: stats?.matchCount || matches?.length || 0,
+          }}
+        />
 
         <View className="mt-4">
-          {postsLoading && activeTab === "posts" ? (
+          {isTabLoading(
+            activeTab,
+            postsLoading,
+            storiesLoading,
+            savedPostsLoading,
+            matchesLoading,
+          ) ? (
             <View className="items-center py-12">
               <ActivityIndicator color={Colors.primary} size="large" />
             </View>
           ) : activeTab === "posts" ? (
             <ProfilePostGrid posts={posts || []} />
           ) : activeTab === "stories" ? (
-            <ProfileEmptyState
-              icon="radio-button-on-outline"
-              title="No stories yet"
-              subtitle="Stories you share will appear here."
-            />
+            stories?.length ? (
+              <ProfilePostGrid posts={stories} />
+            ) : (
+              <ProfileEmptyState
+                icon="radio-button-on-outline"
+                title="No stories yet"
+                subtitle="Stories you share will appear here."
+              />
+            )
           ) : activeTab === "saved" ? (
-            <ProfileEmptyState
-              icon="bookmark-outline"
-              title="No saved posts yet"
-              subtitle="Posts you save will show up here."
-            />
+            savedPosts?.length ? (
+              <ProfilePostGrid posts={savedPosts} />
+            ) : (
+              <ProfileEmptyState
+                icon="bookmark-outline"
+                title="No saved posts yet"
+                subtitle="Posts you save will show up here."
+              />
+            )
+          ) : matches?.length ? (
+            <ProfileMatchList currentUserId={user?.id} matches={matches} />
           ) : (
             <ProfileEmptyState
               icon="heart-outline"
@@ -168,6 +220,58 @@ export default function ProfileScreen() {
     </SafeAreaView>
   );
 }
+
+const isTabLoading = (
+  activeTab: ProfileTab,
+  postsLoading: boolean,
+  storiesLoading: boolean,
+  savedPostsLoading: boolean,
+  matchesLoading: boolean,
+) =>
+  (activeTab === "posts" && postsLoading) ||
+  (activeTab === "stories" && storiesLoading) ||
+  (activeTab === "saved" && savedPostsLoading) ||
+  (activeTab === "matches" && matchesLoading);
+
+const ProfileMatchList = ({
+  currentUserId,
+  matches,
+}: {
+  currentUserId?: string;
+  matches: any[];
+}) => (
+  <View className="px-5">
+    {matches.map((match) => {
+      const matchedUser =
+        match.user1Id === currentUserId ? match.user2 : match.user1;
+      const matchedProfile = matchedUser?.profile;
+      const name = matchedProfile?.username || matchedUser?.username || "Match";
+
+      return (
+        <TouchableOpacity
+          key={match.id}
+          activeOpacity={0.85}
+          className="mb-3 flex-row items-center rounded-2xl border border-[#232938] bg-[#080B11] p-4"
+        >
+          {matchedProfile?.avatarUrl ? (
+            <Image
+              source={{ uri: matchedProfile.avatarUrl }}
+              className="h-14 w-14 rounded-2xl bg-[#111111]"
+            />
+          ) : (
+            <View className="h-14 w-14 rounded-2xl bg-[#15151D]" />
+          )}
+          <View className="ml-4 flex-1">
+            <Text className="text-base font-bold text-[#F5F5F5]">{name}</Text>
+            <Text className="mt-1 text-sm text-[#A6ACB8]">
+              Matched and ready to chat
+            </Text>
+          </View>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+);
 
 const calculateAge = (birthDate?: string | null) => {
   if (!birthDate) return null;

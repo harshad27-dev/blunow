@@ -6,9 +6,11 @@ import { FontFamily } from '@/constants/typography';
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 function tabIcon(focused: boolean, active: IoniconName, inactive: IoniconName) {
-  return ({ color, size }: { color: string; size: number }) => (
-    <Ionicons name={focused ? active : inactive} size={size} color={color} />
-  );
+  function TabBarIcon({ color, size }: { color: string; size: number }) {
+    return <Ionicons name={focused ? active : inactive} size={size} color={color} />;
+  }
+
+  return TabBarIcon;
 }
 
 export default function TabsLayout() {
@@ -46,6 +48,7 @@ export default function TabsLayout() {
         name="matches"
         options={{
           title: 'Matches',
+          tabBarStyle: { display: 'none' },
           tabBarIcon: ({ color, size, focused }) =>
             tabIcon(focused, 'heart', 'heart-outline')({ color, size }),
         }}

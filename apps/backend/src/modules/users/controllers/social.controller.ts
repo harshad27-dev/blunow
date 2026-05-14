@@ -25,6 +25,11 @@ export class SocialController {
           postsCount: stats.postsCount,
           matchCount: stats.matchCount,
           storiesCount: stats.storiesCount,
+          likesReceived: stats.likesReceived,
+          conversationsCount: stats.conversationsCount,
+          savedPostsCount: stats.savedPostsCount,
+          profileViews: stats.profileViews,
+          lastUpdated: stats.lastUpdated,
         },
       });
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }

@@ -14,6 +14,15 @@ export class StoriesController {
     }
   };
 
+  getUserStories = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const stories = await this.storiesService.getActiveStoriesByAuthorId(req.params.userId);
+      res.status(200).json({ success: true, data: stories });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 500).json({ success: false, message: error.message });
+    }
+  };
+
   createStory = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const story = await this.storiesService.createStory(req.user!.id, req.body);

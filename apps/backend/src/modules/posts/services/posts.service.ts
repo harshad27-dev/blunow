@@ -53,4 +53,8 @@ export class PostsService {
   async getUserPosts(userId: string) {
     return this.postsRepository.findByAuthorId(userId);
   }
+
+  async getSavedPosts(userId: string) {
+    return this.postsRepository.findSavedByUserId(userId);
+  }
 }

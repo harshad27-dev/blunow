@@ -59,8 +59,6 @@ model Profile {
   userId       String   @unique
   username     String   @unique
   bio          String?
-  bioPrompt1   String?
-  bioPrompt2   String?
   birthDate    DateTime
   gender       Gender
   avatarUrl    String?
@@ -71,6 +69,7 @@ model Profile {
   interests    String[]
   interestedIn String[]
   lookingFor   String[]
+  relationship String?
   drinking     String?
   smoking      String?
   workout      String?

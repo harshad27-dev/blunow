@@ -38,6 +38,21 @@ export class StoriesRepository {
     });
   }
 
+  async findActiveStoriesByAuthorId(authorId: string) {
+    return prisma.story.findMany({
+      where: {
+        authorId,
+        isDeleted: false,
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
+        _count: { select: { views: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async addView(storyId: string, viewerId: string) {
     return prisma.storyView.upsert({
       where: { storyId_viewerId: { storyId, viewerId } },

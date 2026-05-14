@@ -70,4 +70,21 @@ export class PostsRepository {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async findSavedByUserId(userId: string) {
+    const savedPosts = await prisma.postSave.findMany({
+      where: { userId, post: { isDeleted: false } },
+      include: {
+        post: {
+          include: {
+            author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
+            _count: { select: { likes: true, comments: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return savedPosts.map((savedPost) => savedPost.post);
+  }
 }

@@ -1,0 +1,3 @@
+ALTER TABLE "profiles"
+  DROP COLUMN IF EXISTS "bioPrompt1",
+  DROP COLUMN IF EXISTS "bioPrompt2";

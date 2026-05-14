@@ -33,6 +33,10 @@ export class StoriesService {
     return this.storiesRepository.findActiveStories(userId);
   }
 
+  async getActiveStoriesByAuthorId(authorId: string) {
+    return this.storiesRepository.findActiveStoriesByAuthorId(authorId);
+  }
+
   async getStoryById(id: string) {
     const story = await this.storiesRepository.findById(id);
     if (!story) throw new AppError('Story not found', 404);

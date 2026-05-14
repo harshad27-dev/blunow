@@ -1,14 +1,14 @@
-import { create } from 'zustand';
-import { authService } from '@/services/auth.service';
-import { storage } from '@/utils/storage';
-import { Config } from '@/constants/config';
+import { create } from "zustand";
+import { authService } from "@/services/auth.service";
+import { storage } from "@/utils/storage";
+import { Config } from "@/constants/config";
 import type {
   AuthUser,
   LoginPayload,
   RegisterPayload,
   RequestLoginOtpPayload,
   RequestLoginOtpResponse,
-} from '@/types/auth.types';
+} from "@/types/auth.types";
 
 interface AuthState {
   user: AuthUser | null;
@@ -42,7 +42,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (response.refreshToken) {
       await storage.set(Config.REFRESH_TOKEN_KEY, response.refreshToken);
     }
-    set({ user: response.user, token: response.accessToken, isAuthenticated: true });
+    set({
+      user: response.user,
+      token: response.accessToken,
+      isAuthenticated: true,
+    });
   },
 
   register: async (payload) => {
@@ -51,14 +55,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (response.refreshToken) {
       await storage.set(Config.REFRESH_TOKEN_KEY, response.refreshToken);
     }
-    set({ user: response.user, token: response.accessToken, isAuthenticated: true });
+    set({
+      user: response.user,
+      token: response.accessToken,
+      isAuthenticated: true,
+    });
   },
 
   logout: async () => {
     try {
       await authService.logout();
     } catch {
-      // swallow — always clear local state
+      // Always clear local state.
     }
     await storage.delete(Config.TOKEN_KEY);
     await storage.delete(Config.REFRESH_TOKEN_KEY);
@@ -67,13 +75,30 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   rehydrate: async () => {
     try {
-      const token = await storage.get(Config.TOKEN_KEY);
+      let token = await storage.get(Config.TOKEN_KEY);
+      const refreshToken = await storage.get(Config.REFRESH_TOKEN_KEY);
+
+      if (!token && refreshToken) {
+        const response = await authService.refresh(refreshToken);
+        token = response.accessToken;
+        await storage.set(Config.TOKEN_KEY, response.accessToken);
+        if (response.refreshToken) {
+          await storage.set(Config.REFRESH_TOKEN_KEY, response.refreshToken);
+        }
+      }
+
       if (!token) {
         set({ isLoading: false });
         return;
       }
       const user = await authService.me();
-      set({ user, token, isAuthenticated: true, isLoading: false });
+      const latestToken = (await storage.get(Config.TOKEN_KEY)) ?? token;
+      set({
+        user,
+        token: latestToken,
+        isAuthenticated: true,
+        isLoading: false,
+      });
     } catch {
       await storage.delete(Config.TOKEN_KEY);
       await storage.delete(Config.REFRESH_TOKEN_KEY);

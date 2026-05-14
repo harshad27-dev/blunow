@@ -12,8 +12,6 @@ const updateProfileSchema = z.object({
     .regex(/^[a-z0-9]+([._]?[a-z0-9]+)*$/, "Invalid username format")
     .optional(),
   bio: z.string().max(500).optional(),
-  bioPrompt1: z.string().max(160).optional(),
-  bioPrompt2: z.string().max(160).optional(),
   age: z.number().int().min(18).max(99).optional(),
   birthDate: z.string().datetime().optional(),
   gender: genderSchema.optional(),
@@ -24,6 +22,7 @@ const updateProfileSchema = z.object({
   interests: z.array(z.string()).max(20).optional(),
   interestedIn: z.array(z.string()).max(10).optional(),
   lookingFor: z.array(z.string()).max(10).optional(),
+  relationship: z.string().max(80).optional(),
   minAge: z.number().int().min(18).max(99).optional(),
   maxAge: z.number().int().min(18).max(99).optional(),
   maxDistance: z.number().int().min(1).max(500).optional(),

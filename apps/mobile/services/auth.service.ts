@@ -1,11 +1,11 @@
-import { api } from './api';
+import { api } from "./api";
 import type {
   LoginPayload,
   RequestLoginOtpPayload,
   RequestLoginOtpResponse,
   RegisterPayload,
   AuthResponse,
-} from '@/types/auth.types';
+} from "@/types/auth.types";
 
 interface ApiWrapper<T> {
   success: boolean;
@@ -17,7 +17,7 @@ export const authService = {
     payload: RequestLoginOtpPayload,
   ): Promise<RequestLoginOtpResponse> => {
     const { data } = await api.post<ApiWrapper<RequestLoginOtpResponse>>(
-      '/auth/login/otp',
+      "/auth/login/otp",
       payload,
     );
     return data.data;
@@ -25,7 +25,7 @@ export const authService = {
 
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
     const { data } = await api.post<ApiWrapper<AuthResponse>>(
-      '/auth/login',
+      "/auth/login",
       payload,
     );
     return data.data;
@@ -33,20 +33,28 @@ export const authService = {
 
   register: async (payload: RegisterPayload): Promise<AuthResponse> => {
     const { data } = await api.post<ApiWrapper<AuthResponse>>(
-      '/auth/register',
+      "/auth/register",
       payload,
     );
     return data.data;
   },
 
   logout: async (): Promise<void> => {
-    await api.post('/auth/logout');
+    await api.post("/auth/logout");
   },
 
-  me: async (): Promise<AuthResponse['user']> => {
-    const { data } = await api.get<ApiWrapper<AuthResponse['user']>>(
-      '/auth/me',
-    );
+  refresh: async (
+    refreshToken: string,
+  ): Promise<Pick<AuthResponse, "accessToken" | "refreshToken">> => {
+    const { data } = await api.post<
+      ApiWrapper<Pick<AuthResponse, "accessToken" | "refreshToken">>
+    >("/auth/refresh", { refreshToken });
+    return data.data;
+  },
+
+  me: async (): Promise<AuthResponse["user"]> => {
+    const { data } =
+      await api.get<ApiWrapper<AuthResponse["user"]>>("/auth/me");
     return data.data;
   },
 };

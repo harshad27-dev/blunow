@@ -170,13 +170,30 @@ export const ProfileHero = ({
           className="mt-5"
           contentContainerClassName="gap-3 pr-4"
         >
-          {interests.map((interest, index) => (
-            <InterestChip
-              key={`${interest}-${index}`}
-              label={interest}
-              color={interestColors[index % interestColors.length]}
-            />
-          ))}
+          {interests.length ? (
+            interests.map((interest, index) => (
+              <InterestChip
+                key={`${interest}-${index}`}
+                label={interest}
+                color={interestColors[index % interestColors.length]}
+              />
+            ))
+          ) : (
+            <TouchableOpacity
+              className="h-12 flex-row items-center gap-2 rounded-2xl border border-[#2D3340] bg-[#10131A] px-4"
+              onPress={onEditProfile}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="sparkles-outline"
+                size={19}
+                color={Colors.textSecondary}
+              />
+              <Text className="text-sm font-semibold text-[#A6ACB8]">
+                Add interests
+              </Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             className="h-12 w-12 items-center justify-center rounded-2xl border border-[#2D3340] bg-[#10131A]"
             onPress={onEditProfile}
@@ -193,15 +210,19 @@ export const ProfileHero = ({
 export const ProfileJourneyCard = ({
   loading,
   metrics,
+  updatedAt,
 }: {
   loading: boolean;
   metrics: JourneyMetric[];
+  updatedAt?: string | null;
 }) => (
   <View className="mx-5 mt-6 rounded-[28px] border border-[#252A35] bg-[#0B0E14] p-5">
     <View className="mb-5 flex-row items-center justify-between">
       <Text className="text-xl font-bold text-[#F5F5F5]">Dating Journey</Text>
       <View className="rounded-full bg-[#172033] px-3 py-1">
-        <Text className="text-xs font-semibold text-[#A6ACB8]">Live</Text>
+        <Text className="text-xs font-semibold text-[#A6ACB8]">
+          {loading ? "Syncing" : getSyncLabel(updatedAt)}
+        </Text>
       </View>
     </View>
     {loading ? (
@@ -275,32 +296,38 @@ export const ProfileAccountActions = ({
 export const ProfileTabs = ({
   activeTab,
   onTabChange,
+  counts,
 }: {
   activeTab: ProfileTab;
   onTabChange: (tab: ProfileTab) => void;
+  counts?: Partial<Record<ProfileTab, number>>;
 }) => (
   <View className="mx-5 mt-7 flex-row border-b border-[#232938]">
     <ProfileTabButton
       icon="grid-outline"
       label="Posts"
+      count={counts?.posts}
       active={activeTab === "posts"}
       onPress={() => onTabChange("posts")}
     />
     <ProfileTabButton
       icon="radio-button-on-outline"
       label="Stories"
+      count={counts?.stories}
       active={activeTab === "stories"}
       onPress={() => onTabChange("stories")}
     />
     <ProfileTabButton
       icon="bookmark-outline"
       label="Saved"
+      count={counts?.saved}
       active={activeTab === "saved"}
       onPress={() => onTabChange("saved")}
     />
     <ProfileTabButton
       icon="heart-outline"
       label="Matches"
+      count={counts?.matches}
       active={activeTab === "matches"}
       onPress={() => onTabChange("matches")}
     />
@@ -416,11 +443,13 @@ const AccountAction = ({
 const ProfileTabButton = ({
   icon,
   label,
+  count,
   active,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
+  count?: number;
   active: boolean;
   onPress: () => void;
 }) => (
@@ -443,9 +472,40 @@ const ProfileTabButton = ({
       >
         {label}
       </Text>
+      {count !== undefined ? (
+        <View
+          className={`min-w-5 items-center rounded-full px-1.5 py-0.5 ${
+            active ? "bg-[#F5F5F5]" : "bg-[#202633]"
+          }`}
+        >
+          <Text
+            className={`text-[10px] font-bold ${
+              active ? "text-[#05070B]" : "text-[#A6ACB8]"
+            }`}
+          >
+            {count}
+          </Text>
+        </View>
+      ) : null}
     </View>
     {active ? (
       <View className="absolute bottom-0 h-[3px] w-10 rounded-full bg-[#F5F5F5]" />
     ) : null}
   </TouchableOpacity>
 );
+
+const getSyncLabel = (updatedAt?: string | null) => {
+  if (!updatedAt) return "Synced";
+
+  const updatedTime = new Date(updatedAt).getTime();
+  if (Number.isNaN(updatedTime)) return "Synced";
+
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - updatedTime) / 1000));
+  if (diffSeconds < 60) return "Just now";
+
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  return `${diffHours}h ago`;
+};

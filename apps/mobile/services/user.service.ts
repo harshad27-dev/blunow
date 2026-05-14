@@ -3,8 +3,6 @@ import { api } from "./api";
 export interface UpdateProfilePayload {
   username?: string;
   bio?: string;
-  bioPrompt1?: string;
-  bioPrompt2?: string;
   age?: number;
   location?: string;
   gender?: string;
@@ -14,6 +12,7 @@ export interface UpdateProfilePayload {
   interests?: string[];
   interestedIn?: string[];
   lookingFor?: string[];
+  relationship?: string;
   minAge?: number;
   maxAge?: number;
   maxDistance?: number;

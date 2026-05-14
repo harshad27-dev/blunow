@@ -88,4 +88,13 @@ export class PostsController {
       res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
     }
   };
+
+  getSavedPosts = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const posts = await this.postsService.getSavedPosts(req.user!.id);
+      res.status(200).json({ success: true, data: posts });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
 }
