@@ -4,6 +4,8 @@ export const FontFamily = {
   medium: 'Outfit_500Medium',
   semiBold: 'Outfit_600SemiBold',
   bold: 'Outfit_700Bold',
+  greatVibes: 'GreatVibes_400Regular',
+  darleston: 'Darleston_400Regular',
 };
 
 export const FontSize = {

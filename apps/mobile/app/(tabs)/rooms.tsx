@@ -1,12 +1,23 @@
-﻿import { View, Text, StyleSheet } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
+import { Screen } from '@/components/common/Screen';
+
 export default function PlaceholderScreen() {
   return (
-    <View style={styles.c}><Text style={styles.t}>Coming soon 🚀</Text></View>
+    <Screen padded>
+      <Text style={styles.text}>Coming soon</Text>
+    </Screen>
   );
 }
+
 const styles = StyleSheet.create({
-  c: { flex: 1, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' },
-  t: { fontFamily: FontFamily.medium, fontSize: FontSize.lg, color: Colors.textSecondary },
+  text: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.lg,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+  },
 });

@@ -11,6 +11,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Header from "@/components/Header";
 import FeedCard from "@/components/FeedCard";
+import { Screen } from "@/components/common/Screen";
+import { ScreenSpacing } from "@/constants/screen";
 import { useFeedQuery, useCreatePostMutation } from "@/hooks/queries";
 
 const getTimeAgo = (dateString: string) => {
@@ -105,7 +107,7 @@ export default function FeedScreen() {
   );
 
   return (
-    <View className="flex-1 bg-[#050505]">
+    <Screen edges={["left", "right"]}>
       <Header />
       {isLoading ? (
         <View className="flex-1 justify-center items-center">
@@ -134,9 +136,9 @@ export default function FeedScreen() {
               tintColor="#FFF"
             />
           }
-          contentContainerStyle={{ paddingBottom: 100 }} // Leave room for bottom tab bar
+          contentContainerStyle={{ paddingBottom: ScreenSpacing.bottomTab }}
         />
       )}
-    </View>
+    </Screen>
   );
 }

@@ -47,6 +47,7 @@ export default function RootLayout() {
     Outfit_500Medium,
     Outfit_600SemiBold,
     Outfit_700Bold,
+    Darleston_400Regular: require('../assets/fonts/Darleston.otf'),
   });
 
   useEffect(() => {
