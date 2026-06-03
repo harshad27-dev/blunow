@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   Animated,
   Image,
+  StyleSheet,
   StatusBar,
   Text,
   TouchableOpacity,
@@ -16,6 +17,8 @@ import { FontFamily } from "@/constants/typography";
 import { suggestedProfiles } from "@/data/matchProfiles";
 
 const bottomActionHeight = 94;
+const actionBackdropColor = "rgba(5, 5, 5, 0.92)";
+const matchOverlayBackdropColor = "rgba(0, 0, 0, 0.92)";
 
 export default function MatchesScreen() {
   const insets = useSafeAreaInsets();
@@ -101,17 +104,28 @@ export default function MatchesScreen() {
         ]}
         locations={[0, 0.28, 0.54, 1]}
         className="absolute inset-0"
+        style={StyleSheet.absoluteFillObject}
       />
 
       <SafeAreaView className="flex-1" edges={["top", "left", "right"]}>
         <View className="flex-row items-start justify-between px-[18px] pt-2">
-          <View>
-            <Text className="text-xs font-semibold uppercase text-white/70">
-              Daily deck
-            </Text>
-            <Text className="mt-0.5 text-[30px] font-bold leading-9 text-white">
-              Matches
-            </Text>
+          <View className="flex-row items-start">
+            <TouchableOpacity
+              className="mr-3 h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/45"
+              onPress={() => router.back()}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+
+            {/* <View>
+              <Text className="text-xs font-semibold uppercase text-white/70">
+                Daily deck
+              </Text>
+              <Text className="mt-0.5 text-[30px] font-bold leading-9 text-white">
+                Matches
+              </Text>
+            </View> */}
           </View>
 
           <View className="flex-row items-center gap-2.5">
@@ -131,11 +145,18 @@ export default function MatchesScreen() {
         </View>
 
         <View
-          className="flex-1 justify-end px-[18px]"
+          className="relative flex-1 justify-end px-[18px]"
           style={{
             paddingBottom: Math.max(insets.bottom + bottomActionHeight + 18, 126),
           }}
         >
+          <LinearGradient
+            pointerEvents="none"
+            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.78)", "rgba(0,0,0,0.98)"]}
+            locations={[0, 0.42, 1]}
+            style={styles.bottomContentShade}
+          />
+
           <View className="mb-3 flex-row items-center justify-between">
             <ProgressDots activeIndex={activeIndex} total={suggestedProfiles.length} />
             <View className="h-[42px] w-[72px] flex-row">
@@ -202,8 +223,9 @@ export default function MatchesScreen() {
         </View>
 
         <View
-          className="absolute left-[18px] right-[18px] h-[94px] flex-row items-center justify-between rounded-[30px] border border-white/10 bg-black/85 px-3.5 shadow-2xl"
+          className="absolute left-[18px] right-[18px] h-[94px] flex-row items-center justify-between rounded-[30px] border border-white/10 px-3.5 shadow-2xl"
           style={{
+            backgroundColor: actionBackdropColor,
             bottom: Math.max(insets.bottom + 12, 24),
           }}
         >
@@ -221,7 +243,10 @@ export default function MatchesScreen() {
       </SafeAreaView>
 
       {matchBanner ? (
-        <View className="absolute inset-0 z-20 items-center justify-center bg-black/90 px-7">
+        <View
+          className="absolute inset-0 z-20 items-center justify-center px-7"
+          style={{ backgroundColor: matchOverlayBackdropColor }}
+        >
           <LinearGradient
             colors={["#FFFFFF", "#A0A0A0"]}
             className="h-24 w-24 items-center justify-center rounded-full"
@@ -367,3 +392,13 @@ const HeartAction = ({ onPress }: { onPress: () => void }) => (
     <Text className="mt-1 text-[11px] font-bold text-white">Like</Text>
   </TouchableOpacity>
 );
+
+const styles = StyleSheet.create({
+  bottomContentShade: {
+    bottom: 0,
+    height: 420,
+    left: 0,
+    position: "absolute",
+    right: 0,
+  },
+});

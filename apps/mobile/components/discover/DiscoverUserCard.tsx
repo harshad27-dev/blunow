@@ -4,7 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
-import { Button } from '@/components/common/Button';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
@@ -14,65 +13,147 @@ interface DiscoverUser {
   username: string;
   age: number;
   distance: string;
-  avatarUrl: string;
+  avatarUrl?: string | null;
   bio: string;
   interests: string[];
+  isActive?: boolean;
+  isVerified?: boolean;
+  matchScore?: number;
+  isConnected?: boolean;
 }
 
 interface DiscoverUserCardProps {
   user: DiscoverUser;
   onPress?: () => void;
   onConnectPress?: () => void;
+  onDismissPress?: () => void;
+  onMessagePress?: () => void;
 }
 
 export const DiscoverUserCard: React.FC<DiscoverUserCardProps> = ({
   user,
   onPress,
   onConnectPress,
+  onDismissPress,
+  onMessagePress,
 }) => {
+  const displayName = user.username.replace(/[_]+/g, ' ');
+  const shownInterests = user.interests.slice(0, 3);
+  const hasAvatar = Boolean(user.avatarUrl);
+  const actionLabel = user.isConnected ? 'Connected' : 'Connect';
+  const actionIcon = user.isConnected ? 'checkmark' : 'heart';
+
   return (
-    <TouchableOpacity 
-      style={styles.container} 
+    <TouchableOpacity
+      style={styles.container}
       onPress={onPress}
-      activeOpacity={0.9}
+      activeOpacity={0.92}
     >
-      <Image source={{ uri: user.avatarUrl }} style={styles.image} />
-      
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
-        style={styles.gradient}
-      />
-      
-      <View style={styles.content}>
-        <View style={styles.topInfo}>
-          <Text style={styles.name}>{user.username}, {user.age}</Text>
-          <View style={styles.distanceBadge}>
-            <Ionicons name="location-sharp" size={12} color={Colors.textPrimary} />
-            <Text style={styles.distanceText}>{user.distance}</Text>
+      <View style={styles.avatarFrame}>
+        {hasAvatar ? (
+          <Image source={{ uri: user.avatarUrl! }} style={styles.image} />
+        ) : (
+          <View style={styles.avatarFallback}>
+            <Text style={styles.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
           </View>
+        )}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.72)']}
+          style={styles.avatarGradient}
+        />
+        {user.isActive ? (
+          <View style={styles.activeBadge}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.activeText}>Active</Text>
+          </View>
+        ) : null}
+        {typeof user.matchScore === 'number' ? (
+          <View style={styles.matchBadge}>
+            <Ionicons name="sparkles" size={11} color={Colors.black} />
+            <Text style={styles.matchText}>{user.matchScore}%</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.content}>
+        <View style={styles.headerRow}>
+          <View style={styles.titleBlock}>
+            <View style={styles.nameRow}>
+              <Text style={styles.name} numberOfLines={1}>
+                {displayName}, {user.age || '--'}
+              </Text>
+              {user.isVerified ? (
+                <View style={styles.verifiedBadge}>
+                  <Ionicons name="checkmark" size={11} color={Colors.black} />
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.metaRow}>
+              <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
+              <Text style={styles.distanceText} numberOfLines={1}>
+                {user.distance}
+              </Text>
+            </View>
+          </View>
+
+          {onDismissPress ? (
+            <TouchableOpacity
+              style={styles.iconAction}
+              activeOpacity={0.82}
+              onPress={(event) => {
+                event.stopPropagation();
+                onDismissPress();
+              }}
+            >
+              <Ionicons name="close" size={18} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
         </View>
-        
-        <Text style={styles.bio} numberOfLines={2}>{user.bio}</Text>
-        
+
+        <Text style={styles.bio} numberOfLines={2}>
+          {user.bio || 'Looking for people with a similar vibe nearby.'}
+        </Text>
+
         <View style={styles.interestsContainer}>
-          {user.interests.slice(0, 3).map((interest, index) => (
-            <View key={index} style={styles.interestTag}>
+          {shownInterests.map((interest) => (
+            <View key={interest} style={styles.interestTag}>
               <Text style={styles.interestText}>{interest}</Text>
             </View>
           ))}
           {user.interests.length > 3 && (
-            <Text style={styles.moreText}>+{user.interests.length - 3} more</Text>
+            <View style={styles.moreTag}>
+              <Text style={styles.moreText}>+{user.interests.length - 3}</Text>
+            </View>
           )}
         </View>
-        
-        <Button 
-          title="Connect" 
-          onPress={onConnectPress || (() => {})} 
-          variant="primary"
-          size="sm"
-          style={styles.connectButton}
-          icon={<Ionicons name="heart" size={18} color={Colors.black} />}
-        />
+
+        <View style={styles.actions}>
+          {onMessagePress ? (
+            <TouchableOpacity
+              style={styles.messageButton}
+              activeOpacity={0.86}
+              onPress={(event) => {
+                event.stopPropagation();
+                onMessagePress();
+              }}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.connectButton, user.isConnected && styles.connectedButton]}
+            activeOpacity={0.88}
+            onPress={(event) => {
+              event.stopPropagation();
+              onConnectPress?.();
+            }}
+          >
+            <Ionicons name={actionIcon} size={18} color={Colors.black} />
+            <Text style={styles.connectText}>{actionLabel}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -80,92 +161,215 @@ export const DiscoverUserCard: React.FC<DiscoverUserCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: CARD_WIDTH,
-    height: CARD_WIDTH * 1.2,
-    borderRadius: 24,
-    overflow: 'hidden',
+    alignItems: 'stretch',
     backgroundColor: Colors.bgCard,
-    marginBottom: 20,
-    marginHorizontal: 20,
-    borderWidth: 1,
     borderColor: Colors.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginBottom: 16,
+    marginHorizontal: 20,
+    minHeight: 176,
+    overflow: 'hidden',
+    padding: 10,
+    width: CARD_WIDTH,
+  },
+  avatarFrame: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 20,
+    height: 156,
+    overflow: 'hidden',
+    width: 112,
   },
   image: {
-    width: '100%',
     height: '100%',
-    position: 'absolute',
+    width: '100%',
   },
-  gradient: {
+  avatarFallback: {
+    alignItems: 'center',
+    backgroundColor: Colors.bgElevated,
+    height: '100%',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  avatarInitial: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize['2xl'],
+    textTransform: 'uppercase',
+  },
+  avatarGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  content: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
+  onlineDot: {
+    backgroundColor: Colors.success,
+    borderRadius: 4,
+    height: 8,
+    marginRight: 7,
+    width: 8,
   },
-  topInfo: {
-    flexDirection: 'row',
+  activeBadge: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  name: {
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.xl,
-    color: Colors.white,
-  },
-  distanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    bottom: 8,
+    flexDirection: 'row',
+    left: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    position: 'absolute',
   },
-  distanceText: {
-    fontFamily: FontFamily.medium,
+  activeText: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.semiBold,
     fontSize: FontSize.xs,
-    color: Colors.white,
+  },
+  matchBadge: {
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 13,
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    position: 'absolute',
+    right: 8,
+    top: 8,
+  },
+  matchText: {
+    color: Colors.black,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
     marginLeft: 4,
   },
+  content: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingBottom: 2,
+    paddingLeft: 14,
+    paddingTop: 2,
+  },
+  headerRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+  },
+  titleBlock: {
+    flex: 1,
+    marginRight: 8,
+  },
+  nameRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  name: {
+    color: Colors.white,
+    flex: 1,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.md,
+    letterSpacing: 0,
+    textTransform: 'capitalize',
+  },
+  verifiedBadge: {
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 9,
+    height: 18,
+    justifyContent: 'center',
+    marginLeft: 6,
+    width: 18,
+  },
+  metaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  distanceText: {
+    color: Colors.textSecondary,
+    flex: 1,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.xs,
+    marginLeft: 5,
+  },
+  iconAction: {
+    alignItems: 'center',
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
   bio: {
+    color: Colors.textSecondary,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 16,
     lineHeight: 20,
+    marginTop: 10,
   },
   interestsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
     flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
   },
   interestTag: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginRight: 8,
-    marginBottom: 4,
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
   },
   interestText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 11,
-    color: Colors.white,
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.xs,
+  },
+  moreTag: {
+    backgroundColor: Colors.bgInput,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
   },
   moreText: {
-    fontFamily: FontFamily.regular,
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.72)',
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.xs,
+  },
+  actions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  messageButton: {
+    alignItems: 'center',
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: 20,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: 'center',
+    width: 44,
   },
   connectButton: {
-    width: '100%',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    flex: 1,
+    flexDirection: 'row',
+    height: 40,
+    justifyContent: 'center',
+  },
+  connectedButton: {
+    backgroundColor: Colors.primaryLight,
+  },
+  connectText: {
+    color: Colors.black,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.base,
+    marginLeft: 8,
   },
 });

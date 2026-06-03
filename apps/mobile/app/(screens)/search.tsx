@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/colors';
 import { Input } from '@/components/common/Input';
 import { DiscoverUserCard } from '@/components/discover/DiscoverUserCard';
 import { useSearchQuery } from '@/hooks/queries';
@@ -50,11 +49,15 @@ export default function SearchScreen() {
   const users = data?.users?.map((user: any) => ({
     id: user.id,
     username: user.username,
-    avatarUrl: user.avatarUrl,
+    avatarUrl: user.avatarUrl || user.profile?.avatarUrl,
     bio: user.bio || '',
     age: calculateAge(user.birthDate),
     distance: user.location || 'Nearby',
     interests: user.interests || [],
+    isActive: Boolean(user.isActive || user.online),
+    isVerified: Boolean(user.isVerified || user.verified),
+    matchScore: user.matchScore,
+    isConnected: Boolean(user.isConnected),
   })) || [];
 
   return (
@@ -134,7 +137,7 @@ export default function SearchScreen() {
                 <View className="flex-1 items-center justify-center pt-20">
                   <ActivityIndicator size="large" color="#FFFFFF" />
                   <Text className="text-[#888888] font-medium text-base mt-4 text-center">
-                    Searching for "{searchQuery}"...
+                    {`Searching for "${searchQuery}"...`}
                   </Text>
                 </View>
               ) : (
@@ -148,6 +151,7 @@ export default function SearchScreen() {
                         user={item} 
                         onPress={() => router.push(`/(screens)/user/${item.id}`)}
                         onConnectPress={() => console.log(`Connect with ${item.username}`)}
+                        onMessagePress={() => router.push('/(screens)/chat' as any)}
                       />
                     </View>
                   )}
@@ -155,7 +159,7 @@ export default function SearchScreen() {
                     <View className="flex-1 items-center justify-center pt-20">
                       <Ionicons name="search-outline" size={48} color="#444" />
                       <Text className="text-[#444] font-medium text-base mt-4 text-center">
-                        No results found for "{searchQuery}"
+                        {`No results found for "${searchQuery}"`}
                       </Text>
                     </View>
                   )}
