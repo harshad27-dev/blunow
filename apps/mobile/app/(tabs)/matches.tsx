@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import {
   Animated,
+  ActivityIndicator,
   Image,
   StyleSheet,
   StatusBar,
@@ -14,11 +15,14 @@ import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { FontFamily } from "@/constants/typography";
-import { suggestedProfiles } from "@/data/matchProfiles";
+import { MatchProfile } from "@/data/matchProfiles";
+import { useMatchRecommendationsQuery, useSendMatchRequestMutation } from "@/hooks/queries";
 
 const bottomActionHeight = 94;
 const actionBackdropColor = "rgba(5, 5, 5, 0.92)";
 const matchOverlayBackdropColor = "rgba(0, 0, 0, 0.92)";
+const fallbackProfileImage =
+  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
 
 export default function MatchesScreen() {
   const insets = useSafeAreaInsets();
@@ -26,22 +30,32 @@ export default function MatchesScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [matchBanner, setMatchBanner] = useState<string | null>(null);
   const fade = useRef(new Animated.Value(1)).current;
-  const profile = suggestedProfiles[activeIndex];
+  const { data: profiles = [], isLoading } = useMatchRecommendationsQuery();
+  const sendMatchRequest = useSendMatchRequestMutation();
+  const profile = profiles[activeIndex] as MatchProfile | undefined;
   const nextProfiles = useMemo(
     () =>
-      suggestedProfiles
-        .filter((item) => item.id !== profile.id)
+      profiles
+        .filter((item: MatchProfile) => item.id !== profile?.id)
         .slice(0, 2),
-    [profile.id],
+    [profile?.id, profiles],
   );
 
+  React.useEffect(() => {
+    if (profiles.length > 0 && activeIndex >= profiles.length) {
+      setActiveIndex(0);
+    }
+  }, [activeIndex, profiles.length]);
+
   const moveToNextCard = () => {
+    if (profiles.length === 0) return;
+
     Animated.timing(fade, {
       toValue: 0,
       duration: 150,
       useNativeDriver: true,
     }).start(() => {
-      setActiveIndex((current) => (current + 1) % suggestedProfiles.length);
+      setActiveIndex((current) => (current + 1) % profiles.length);
       Animated.timing(fade, {
         toValue: 1,
         duration: 220,
@@ -51,36 +65,107 @@ export default function MatchesScreen() {
   };
 
   const handleLike = () => {
-    // Backend target: POST /match/request, then create Match + Conversation when mutual.
+    if (!profile) return;
+
     if (profile.alreadyLikedMe) {
       setMatchBanner(`${profile.name} ${profile.lastName}`);
       return;
     }
 
-    moveToNextCard();
+    sendMatchRequest.mutate(
+      { receiverId: profile.id },
+      {
+        onSuccess: moveToNextCard,
+        onError: moveToNextCard,
+      },
+    );
   };
 
   const handleChatRequest = () => {
-    // Backend target: create ChatRequest for the selected profile.
-    moveToNextCard();
+    if (!profile) return;
+    openChat(profile);
   };
 
   const handleMatchRequest = () => {
-    // Backend target: create MatchRequest for stronger intent.
-    moveToNextCard();
+    if (!profile) return;
+
+    sendMatchRequest.mutate(
+      { receiverId: profile.id, message: "I would like to connect with you." },
+      {
+        onSuccess: moveToNextCard,
+        onError: moveToNextCard,
+      },
+    );
   };
 
   const handleSkip = () => {
-    // Backend target: hideRecommendation(profile.id), then preload the next profile.
     moveToNextCard();
   };
 
   const openProfileDetail = () => {
+    if (!profile) return;
+
     router.push({
-      pathname: "/(screens)/match-detail/[profileId]",
-      params: { profileId: profile.id },
+      pathname: "/(screens)/user/[userId]",
+      params: { userId: profile.id },
     });
   };
+
+  const openChat = (selectedProfile: MatchProfile) => {
+    router.push({
+      pathname: "/(screens)/chat/[roomId]",
+      params: {
+        roomId: selectedProfile.id,
+        userId: selectedProfile.id,
+        name: `${selectedProfile.name} ${selectedProfile.lastName}`,
+        avatarUrl: selectedProfile.imageUrl || fallbackProfileImage,
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#050505]">
+        <ActivityIndicator color="#FFFFFF" size="large" />
+        <Text className="mt-4 text-sm font-semibold text-[#888]">Finding real profiles...</Text>
+      </View>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#050505]" edges={["top", "left", "right"]}>
+        <View className="flex-row items-center justify-between px-[18px] pt-2">
+          <TouchableOpacity
+            className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/45"
+            onPress={() => router.back()}
+            activeOpacity={0.82}
+          >
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+        <View className="flex-1 items-center justify-center px-7">
+          <View className="h-20 w-20 items-center justify-center rounded-full border border-[#222] bg-[#111]">
+            <Ionicons name="people-outline" size={34} color="#888" />
+          </View>
+          <Text className="mt-5 text-center text-2xl font-bold text-white">No profiles yet</Text>
+          <Text className="mt-2 text-center text-sm leading-5 text-[#888]">
+            Real users will appear here after they create an account and complete their profile.
+          </Text>
+          <TouchableOpacity
+            className="mt-6 h-12 flex-row items-center rounded-full bg-white px-5"
+            onPress={() => router.push("/(screens)/edit-profile")}
+            activeOpacity={0.84}
+          >
+            <Ionicons name="person-circle-outline" size={20} color={Colors.black} />
+            <Text className="ml-2 text-sm font-bold text-black">Complete profile</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const profileImage = profile.imageUrl || fallbackProfileImage;
 
   return (
     <View className="flex-1 bg-[#050505]">
@@ -89,7 +174,7 @@ export default function MatchesScreen() {
       <Animated.View className="absolute inset-0" style={{ opacity: fade }}>
         <Image
           key={profile.id}
-          source={{ uri: profile.imageUrl }}
+          source={{ uri: profileImage }}
           className="h-full w-full"
           resizeMode="cover"
         />
@@ -132,7 +217,7 @@ export default function MatchesScreen() {
             <View className="h-9 flex-row items-center rounded-full bg-white px-3">
               <Ionicons name="people" size={15} color={Colors.black} />
               <Text className="ml-1.5 text-xs font-bold text-black">
-                {suggestedProfiles.length} profiles
+                {profiles.length} profiles
               </Text>
             </View>
             <TouchableOpacity
@@ -158,12 +243,12 @@ export default function MatchesScreen() {
           />
 
           <View className="mb-3 flex-row items-center justify-between">
-            <ProgressDots activeIndex={activeIndex} total={suggestedProfiles.length} />
+            <ProgressDots activeIndex={activeIndex} total={profiles.length} />
             <View className="h-[42px] w-[72px] flex-row">
-              {nextProfiles.map((item, index) => (
+              {nextProfiles.map((item: MatchProfile, index: number) => (
                 <Image
                   key={item.id}
-                  source={{ uri: item.imageUrl }}
+                  source={{ uri: item.imageUrl || fallbackProfileImage }}
                   className={`absolute h-[42px] w-[42px] rounded-[15px] border-2 border-white/80 ${
                     index === 0 ? "right-[26px] z-10" : "right-0"
                   }`}
@@ -264,7 +349,7 @@ export default function MatchesScreen() {
               className="h-[54px] flex-row items-center rounded-full bg-white px-5"
               onPress={() => {
                 setMatchBanner(null);
-                moveToNextCard();
+                openChat(profile);
               }}
               activeOpacity={0.86}
             >

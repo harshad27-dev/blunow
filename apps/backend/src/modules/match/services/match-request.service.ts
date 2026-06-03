@@ -1,10 +1,12 @@
 import { MatchRepository } from '../models/match.repository';
+import { ChatRepository } from '../../chat/models/chat.repository';
 import { eventBus } from '../../../events/event-bus';
 import { EVENTS } from '../../../events/event-constants';
 import { AppError } from '../../../common/middleware/error.middleware';
 
 export class MatchRequestService {
   private matchRepository = new MatchRepository();
+  private chatRepository = new ChatRepository();
 
   async sendRequest(senderId: string, dto: { receiverId: string; message?: string }) {
     if (senderId === dto.receiverId) {
@@ -13,6 +15,27 @@ export class MatchRequestService {
 
     const existing = await this.matchRepository.findRequest(senderId, dto.receiverId);
     if (existing) throw new AppError('Match request already sent', 409);
+
+    const incoming = await this.matchRepository.findRequest(dto.receiverId, senderId);
+    if (incoming?.status === 'PENDING') {
+      await this.matchRepository.updateRequestStatus(incoming.id, 'ACCEPTED');
+      const match = await this.matchRepository.createMatch(dto.receiverId, senderId);
+      const chat = await this.chatRepository.create(match.id, dto.receiverId, senderId);
+
+      eventBus.emit(EVENTS.MATCH.MATCHED, {
+        matchId: match.id,
+        user1Id: dto.receiverId,
+        user2Id: senderId,
+      });
+      eventBus.emit(EVENTS.CHAT.CHAT_CREATED, {
+        chatId: chat.id,
+        matchId: match.id,
+        user1Id: dto.receiverId,
+        user2Id: senderId,
+      });
+
+      return { ...match, chat };
+    }
 
     const request = await this.matchRepository.createRequest({
       senderId,
@@ -41,12 +64,19 @@ export class MatchRequestService {
 
     if (status === 'ACCEPTED') {
       const match = await this.matchRepository.createMatch(request.senderId, request.receiverId);
+      const chat = await this.chatRepository.create(match.id, request.senderId, request.receiverId);
       eventBus.emit(EVENTS.MATCH.MATCHED, {
         matchId: match.id,
         user1Id: request.senderId,
         user2Id: request.receiverId,
       });
-      return match;
+      eventBus.emit(EVENTS.CHAT.CHAT_CREATED, {
+        chatId: chat.id,
+        matchId: match.id,
+        user1Id: request.senderId,
+        user2Id: request.receiverId,
+      });
+      return { ...match, chat };
     }
 
     eventBus.emit(EVENTS.MATCH.REQUEST_REJECTED, { requestId, receiverId: userId });

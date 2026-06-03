@@ -13,6 +13,7 @@ router.post('/request', matchRateLimitMiddleware, validateMatchRequest, controll
 router.get('/requests/incoming', controller.getIncomingRequests);
 router.get('/requests/outgoing', controller.getOutgoingRequests);
 router.patch('/requests/:id', validateRespondRequest, controller.respondToRequest);
+router.get('/recommendations', controller.getRecommendations);
 router.get('/', controller.getMatches);
 router.delete('/:id', controller.unmatch);
 

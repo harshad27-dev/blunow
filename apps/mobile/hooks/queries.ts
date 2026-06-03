@@ -185,6 +185,39 @@ export const useMatchesQuery = (enabled = true) => {
 };
 
 /**
+ * Fetches real user recommendations for the matches deck
+ */
+export const useMatchRecommendationsQuery = () => {
+  return useQuery({
+    queryKey: ['match-recommendations'],
+    queryFn: async () => {
+      const response = await matchService.getRecommendations();
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+      return response.data;
+    },
+  });
+};
+
+/**
+ * Sends a match request to another user
+ */
+export const useSendMatchRequestMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ receiverId, message }: { receiverId: string; message?: string }) => {
+      return matchService.sendRequest(receiverId, message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['match-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+    },
+  });
+};
+
+/**
  * Updates the user's profile information
  */
 export const useUpdateProfileMutation = () => {

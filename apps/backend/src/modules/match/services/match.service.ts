@@ -10,6 +10,10 @@ export class MatchService {
     return this.matchRepository.findMatchesByUser(userId);
   }
 
+  async getRecommendations(userId: string, limit?: number) {
+    return this.matchRepository.findRecommendationsForUser(userId, limit);
+  }
+
   async unmatch(matchId: string, userId: string) {
     const match = await this.matchRepository.findMatchById(matchId);
     if (!match) throw new AppError('Match not found', 404);

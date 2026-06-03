@@ -52,6 +52,16 @@ export class MatchController {
     }
   };
 
+  getRecommendations = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const recommendations = await this.matchService.getRecommendations(req.user!.id, limit);
+      res.status(200).json({ success: true, data: recommendations });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
   unmatch = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       await this.matchService.unmatch(req.params.id, req.user!.id);
