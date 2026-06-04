@@ -9,31 +9,40 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
-import { registerSchema, type RegisterFormData } from '@/zod/registerSchema';
-import { useAuthStore } from '@/store/authStore';
-import { Colors } from '@/constants/colors';
-import { FontFamily, FontSize } from '@/constants/typography';
-import { Spacing, Radius } from '@/constants/spacing';
-import type { Gender } from '@/types/auth.types';
+} from "react-native";
+import { useRouter } from "expo-router";
+import * as Location from "expo-location";
+import { Ionicons } from "@expo/vector-icons";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { registerSchema, type RegisterFormData } from "@/zod/registerSchema";
+import { useAuthStore } from "@/store/authStore";
+import { Colors } from "@/constants/colors";
+import { FontFamily, FontSize } from "@/constants/typography";
+import { Spacing, Radius } from "@/constants/spacing";
+import type { Gender } from "@/types/auth.types";
 
 const GENDERS: { label: string; value: Gender }[] = [
-  { label: 'Man', value: 'MALE' },
-  { label: 'Woman', value: 'FEMALE' },
-  { label: 'Non-binary', value: 'NON_BINARY' },
-  { label: 'Other', value: 'OTHER' },
+  { label: "Man", value: "MALE" },
+  { label: "Woman", value: "FEMALE" },
+  { label: "Non-binary", value: "NON_BINARY" },
+  { label: "Other", value: "OTHER" },
 ];
 
 // ── Component ──────────────────────────────────────────────────────
 export default function RegisterScreen() {
   const router = useRouter();
   const { register } = useAuthStore();
-  const [serverError, setServerError] = useState('');
+  const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
+  const [currentLocation, setCurrentLocation] = useState<{
+    label: string;
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   const {
     control,
@@ -41,11 +50,11 @@ export default function RegisterScreen() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { gender: 'MALE' },
+    defaultValues: { gender: "MALE" },
   });
 
   const onSubmit = async (values: RegisterFormData) => {
-    setServerError('');
+    setServerError("");
     try {
       await register({
         email: values.email,
@@ -53,19 +62,57 @@ export default function RegisterScreen() {
         username: values.username,
         birthDate: values.birthDate,
         gender: values.gender,
+        location: currentLocation?.label,
+        latitude: currentLocation?.latitude,
+        longitude: currentLocation?.longitude,
       });
       // AuthGuard in _layout.tsx handles redirect
     } catch (err: any) {
       const msg =
-        err?.response?.data?.message ?? 'Registration failed. Please try again.';
+        err?.response?.data?.message ??
+        "Registration failed. Please try again.";
       setServerError(Array.isArray(msg) ? msg[0] : msg);
+    }
+  };
+
+  const useCurrentLocation = async () => {
+    setLocationError("");
+    setIsLocating(true);
+
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== Location.PermissionStatus.GRANTED) {
+        setLocationError(
+          "Location permission is required to use your current location.",
+        );
+        return;
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const { latitude, longitude } = position.coords;
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
+
+      setCurrentLocation({
+        latitude,
+        longitude,
+        label: formatLocationLabel(place) || "Current location",
+      });
+    } catch {
+      setLocationError("Unable to detect your location. Please try again.");
+    } finally {
+      setIsLocating(false);
     }
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -74,7 +121,10 @@ export default function RegisterScreen() {
       >
         {/* ── Header ── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backBtn}
+          >
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
           <View style={styles.brand}>
@@ -88,7 +138,6 @@ export default function RegisterScreen() {
 
         {/* ── Card ── */}
         <View style={styles.card}>
-
           {/* Username */}
           <FieldWrapper label="Username" error={errors.username?.message}>
             <Controller
@@ -158,19 +207,25 @@ export default function RegisterScreen() {
                 style={styles.eyeBtn}
                 onPress={() => setShowPassword((v) => !v)}
               >
-                <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+                <Text style={styles.eyeText}>{showPassword ? "🙈" : "👁️"}</Text>
               </Pressable>
             </View>
           </FieldWrapper>
 
           {/* Confirm password */}
-          <FieldWrapper label="Confirm Password" error={errors.confirmPassword?.message}>
+          <FieldWrapper
+            label="Confirm Password"
+            error={errors.confirmPassword?.message}
+          >
             <Controller
               control={control}
               name="confirmPassword"
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
-                  style={[styles.input, errors.confirmPassword && styles.inputError]}
+                  style={[
+                    styles.input,
+                    errors.confirmPassword && styles.inputError,
+                  ]}
                   placeholder="Repeat your password"
                   placeholderTextColor={Colors.textMuted}
                   secureTextEntry={!showPassword}
@@ -236,6 +291,42 @@ export default function RegisterScreen() {
             />
           </FieldWrapper>
 
+          <FieldWrapper label="Current location" error={locationError}>
+            <TouchableOpacity
+              style={styles.locationButton}
+              onPress={useCurrentLocation}
+              disabled={isLocating}
+              activeOpacity={0.84}
+            >
+              <View style={styles.locationIconBox}>
+                <Ionicons
+                  name="location-outline"
+                  size={20}
+                  color={Colors.white}
+                />
+              </View>
+              <View style={styles.locationTextWrap}>
+                <Text style={styles.locationTitle}>
+                  {currentLocation
+                    ? currentLocation.label
+                    : "Use my current location"}
+                </Text>
+                <Text style={styles.locationSubtitle}>
+                  {currentLocation
+                    ? "Location saved for nearby matches"
+                    : "Helps show people and rooms around you"}
+                </Text>
+              </View>
+              {isLocating ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Text style={styles.locationAction}>
+                  {currentLocation ? "Update" : "Detect"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </FieldWrapper>
+
           {/* Server error */}
           {serverError ? (
             <View style={styles.errorBanner}>
@@ -259,18 +350,18 @@ export default function RegisterScreen() {
 
           {/* Terms */}
           <Text style={styles.terms}>
-            By creating an account you agree to our{' '}
-            <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+            By creating an account you agree to our{" "}
+            <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
             <Text style={styles.termsLink}>Privacy Policy</Text>.
           </Text>
 
           {/* Login CTA */}
           <TouchableOpacity
             style={styles.loginBtn}
-            onPress={() => router.push('/(auth)/login')}
+            onPress={() => router.push("/(auth)/login")}
           >
             <Text style={styles.loginText}>
-              Already have an account?{' '}
+              Already have an account?{" "}
               <Text style={styles.loginLink}>Sign in</Text>
             </Text>
           </TouchableOpacity>
@@ -300,9 +391,18 @@ function FieldWrapper({
 }
 
 // ── Styles ─────────────────────────────────────────────────────────
+const formatLocationLabel = (place?: Location.LocationGeocodedAddress) =>
+  [place?.city || place?.district || place?.region, place?.country]
+    .filter(Boolean)
+    .join(", ");
+
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.bg },
-  scroll: { flexGrow: 1, paddingHorizontal: Spacing.md, paddingBottom: Spacing['2xl'] },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing["2xl"],
+  },
 
   header: { marginTop: 56, marginBottom: Spacing.lg },
   backBtn: { marginBottom: Spacing.lg },
@@ -311,28 +411,32 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     color: Colors.white,
   },
-  brand: { alignItems: 'center', marginBottom: Spacing.md },
+  brand: { alignItems: "center", marginBottom: Spacing.md },
   logoCircle: {
     width: 64,
     height: 64,
     borderRadius: Radius.full,
     backgroundColor: Colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  logoLetter: { fontSize: 32, fontFamily: FontFamily.bold, color: Colors.black },
+  logoLetter: {
+    fontSize: 32,
+    fontFamily: FontFamily.bold,
+    color: Colors.black,
+  },
   heading: {
     fontSize: FontSize.xl,
     fontFamily: FontFamily.bold,
     color: Colors.white,
     marginBottom: 4,
-    textAlign: 'center',
+    textAlign: "center",
   },
   subheading: {
     fontSize: FontSize.base,
     fontFamily: FontFamily.regular,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   card: {
@@ -369,18 +473,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  passwordRow: { position: 'relative' },
+  passwordRow: { position: "relative" },
   passwordInput: { paddingRight: 52 },
   eyeBtn: {
-    position: 'absolute',
+    position: "absolute",
     right: 14,
     top: 0,
     bottom: 0,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   eyeText: { fontSize: 18 },
 
-  genderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  genderRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
   genderChip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: 9,
@@ -400,8 +504,52 @@ const styles = StyleSheet.create({
   },
   genderChipTextActive: { color: Colors.black },
 
+  locationButton: {
+    alignItems: "center",
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 66,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+  },
+  locationIconBox: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: "center",
+    marginRight: 12,
+    width: 40,
+  },
+  locationTextWrap: {
+    flex: 1,
+    marginRight: 12,
+  },
+  locationTitle: {
+    color: Colors.white,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+  },
+  locationSubtitle: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.xs,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  locationAction: {
+    color: Colors.white,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
+  },
+
   errorBanner: {
-    backgroundColor: '#330000',
+    backgroundColor: "#330000",
     borderWidth: 1,
     borderColor: Colors.error,
     borderRadius: Radius.sm,
@@ -414,12 +562,12 @@ const styles = StyleSheet.create({
     color: Colors.error,
   },
 
-  submitBtn: { 
+  submitBtn: {
     backgroundColor: Colors.white,
     borderRadius: Radius.full,
     paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: Spacing.md,
     marginTop: Spacing.sm,
   },
@@ -434,13 +582,13 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     fontFamily: FontFamily.regular,
     color: Colors.textMuted,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: Spacing.md,
     lineHeight: 18,
   },
   termsLink: { color: Colors.white, fontFamily: FontFamily.bold },
 
-  loginBtn: { alignItems: 'center' },
+  loginBtn: { alignItems: "center" },
   loginText: {
     fontSize: FontSize.base,
     fontFamily: FontFamily.regular,

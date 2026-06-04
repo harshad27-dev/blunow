@@ -1,4 +1,4 @@
-import { prisma } from '../../../prisma/prisma';
+import { prisma } from "../../../prisma/prisma";
 
 export class MessageRepository {
   async create(data: {
@@ -8,22 +8,46 @@ export class MessageRepository {
     content?: string;
     mediaUrl?: string;
   }) {
-    return prisma.message.create({
-      data,
-      include: {
-        sender: { include: { profile: { select: { username: true, avatarUrl: true } } } },
-      },
+    return prisma.$transaction(async (tx) => {
+      const message = await tx.message.create({
+        data,
+        include: {
+          sender: {
+            include: {
+              profile: { select: { username: true, avatarUrl: true } },
+            },
+          },
+        },
+      });
+
+      await tx.chat.update({
+        where: { id: data.chatId },
+        data: {
+          lastMessageAt: message.createdAt,
+          lastMessageContent:
+            data.content || (data.mediaUrl ? "Shared media" : null),
+          lastMessageId: message.id,
+          unreadCount: { increment: 1 },
+        },
+      });
+
+      return message;
     });
   }
 
-  async findByChatId(chatId: string, pagination: { page: number; limit: number }) {
+  async findByChatId(
+    chatId: string,
+    pagination: { page: number; limit: number },
+  ) {
     const skip = (pagination.page - 1) * pagination.limit;
     return prisma.message.findMany({
       where: { chatId },
       include: {
-        sender: { include: { profile: { select: { username: true, avatarUrl: true } } } },
+        sender: {
+          include: { profile: { select: { username: true, avatarUrl: true } } },
+        },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       skip,
       take: pagination.limit,
     });

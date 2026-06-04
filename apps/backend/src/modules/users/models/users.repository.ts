@@ -1,4 +1,16 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../../prisma/prisma";
+
+const profileFieldNames = new Set(
+  Prisma.dmmf.datamodel.models
+    .find((model) => model.name === "Profile")
+    ?.fields.map((field) => field.name) ?? [],
+);
+
+const pickProfileFields = (data: Record<string, any>) =>
+  Object.fromEntries(
+    Object.entries(data).filter(([key]) => profileFieldNames.has(key)),
+  );
 
 export class UsersRepository {
   async findById(id: string) {
@@ -18,7 +30,7 @@ export class UsersRepository {
   async updateProfile(userId: string, data: Record<string, any>) {
     return prisma.profile.update({
       where: { userId },
-      data,
+      data: pickProfileFields(data),
     });
   }
 
@@ -37,7 +49,7 @@ export class UsersRepository {
 
       return tx.profile.update({
         where: { userId },
-        data: profileData,
+        data: pickProfileFields(profileData),
       });
     });
   }

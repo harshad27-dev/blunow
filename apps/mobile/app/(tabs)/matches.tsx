@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   Animated,
   ActivityIndicator,
+  Alert,
   Image,
   StyleSheet,
   StatusBar,
@@ -12,11 +13,17 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { FontFamily } from "@/constants/typography";
 import { MatchProfile } from "@/data/matchProfiles";
-import { useMatchRecommendationsQuery, useSendMatchRequestMutation } from "@/hooks/queries";
+import {
+  useMatchRecommendationsQuery,
+  useSendMatchRequestMutation,
+} from "@/hooks/queries";
 
 const bottomActionHeight = 94;
 const actionBackdropColor = "rgba(5, 5, 5, 0.92)";
@@ -28,7 +35,11 @@ export default function MatchesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
-  const [matchBanner, setMatchBanner] = useState<string | null>(null);
+  const [matchBanner, setMatchBanner] = useState<{
+    name: string;
+    chatId: string;
+    profile: MatchProfile;
+  } | null>(null);
   const fade = useRef(new Animated.Value(1)).current;
   const { data: profiles = [], isLoading } = useMatchRecommendationsQuery();
   const sendMatchRequest = useSendMatchRequestMutation();
@@ -68,7 +79,29 @@ export default function MatchesScreen() {
     if (!profile) return;
 
     if (profile.alreadyLikedMe) {
-      setMatchBanner(`${profile.name} ${profile.lastName}`);
+      sendMatchRequest.mutate(
+        { receiverId: profile.id },
+        {
+          onSuccess: (response: any) => {
+            const chatId = response?.data?.chat?.id;
+            if (!chatId) {
+              Alert.alert(
+                "Chat not ready",
+                "Match created, but chat is not ready yet.",
+              );
+              moveToNextCard();
+              return;
+            }
+
+            setMatchBanner({
+              name: `${profile.name} ${profile.lastName}`,
+              chatId,
+              profile,
+            });
+          },
+          onError: moveToNextCard,
+        },
+      );
       return;
     }
 
@@ -83,7 +116,26 @@ export default function MatchesScreen() {
 
   const handleChatRequest = () => {
     if (!profile) return;
-    openChat(profile);
+
+    sendMatchRequest.mutate(
+      { receiverId: profile.id, message: "Hi, I would like to chat with you." },
+      {
+        onSuccess: (response: any) => {
+          const chatId = response?.data?.chat?.id;
+          if (chatId) {
+            openChat(profile, chatId);
+            return;
+          }
+
+          Alert.alert(
+            "Request sent",
+            "They need to accept your request before chat opens.",
+          );
+          moveToNextCard();
+        },
+        onError: moveToNextCard,
+      },
+    );
   };
 
   const handleMatchRequest = () => {
@@ -111,11 +163,11 @@ export default function MatchesScreen() {
     });
   };
 
-  const openChat = (selectedProfile: MatchProfile) => {
+  const openChat = (selectedProfile: MatchProfile, chatId: string) => {
     router.push({
       pathname: "/(screens)/chat/[roomId]",
       params: {
-        roomId: selectedProfile.id,
+        roomId: chatId,
         userId: selectedProfile.id,
         name: `${selectedProfile.name} ${selectedProfile.lastName}`,
         avatarUrl: selectedProfile.imageUrl || fallbackProfileImage,
@@ -127,14 +179,19 @@ export default function MatchesScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-[#050505]">
         <ActivityIndicator color="#FFFFFF" size="large" />
-        <Text className="mt-4 text-sm font-semibold text-[#888]">Finding real profiles...</Text>
+        <Text className="mt-4 text-sm font-semibold text-[#888]">
+          Finding real profiles...
+        </Text>
       </View>
     );
   }
 
   if (!profile) {
     return (
-      <SafeAreaView className="flex-1 bg-[#050505]" edges={["top", "left", "right"]}>
+      <SafeAreaView
+        className="flex-1 bg-[#050505]"
+        edges={["top", "left", "right"]}
+      >
         <View className="flex-row items-center justify-between px-[18px] pt-2">
           <TouchableOpacity
             className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/45"
@@ -148,17 +205,26 @@ export default function MatchesScreen() {
           <View className="h-20 w-20 items-center justify-center rounded-full border border-[#222] bg-[#111]">
             <Ionicons name="people-outline" size={34} color="#888" />
           </View>
-          <Text className="mt-5 text-center text-2xl font-bold text-white">No profiles yet</Text>
+          <Text className="mt-5 text-center text-2xl font-bold text-white">
+            No profiles yet
+          </Text>
           <Text className="mt-2 text-center text-sm leading-5 text-[#888]">
-            Real users will appear here after they create an account and complete their profile.
+            Real users will appear here after they create an account and
+            complete their profile.
           </Text>
           <TouchableOpacity
             className="mt-6 h-12 flex-row items-center rounded-full bg-white px-5"
             onPress={() => router.push("/(screens)/edit-profile")}
             activeOpacity={0.84}
           >
-            <Ionicons name="person-circle-outline" size={20} color={Colors.black} />
-            <Text className="ml-2 text-sm font-bold text-black">Complete profile</Text>
+            <Ionicons
+              name="person-circle-outline"
+              size={20}
+              color={Colors.black}
+            />
+            <Text className="ml-2 text-sm font-bold text-black">
+              Complete profile
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -169,7 +235,11 @@ export default function MatchesScreen() {
 
   return (
     <View className="flex-1 bg-[#050505]">
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
       <Animated.View className="absolute inset-0" style={{ opacity: fade }}>
         <Image
@@ -224,7 +294,11 @@ export default function MatchesScreen() {
               className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/45"
               activeOpacity={0.82}
             >
-              <Ionicons name="options-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons
+                name="options-outline"
+                size={20}
+                color={Colors.textPrimary}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -232,7 +306,10 @@ export default function MatchesScreen() {
         <View
           className="relative flex-1 justify-end px-[18px]"
           style={{
-            paddingBottom: Math.max(insets.bottom + bottomActionHeight + 18, 126),
+            paddingBottom: Math.max(
+              insets.bottom + bottomActionHeight + 18,
+              126,
+            ),
           }}
         >
           <LinearGradient
@@ -278,7 +355,9 @@ export default function MatchesScreen() {
                 {profile.name}
               </Text>
               <View className="ml-3 flex-row items-center rounded-full bg-white/15 px-3 py-2">
-                <Text className="text-base font-bold text-white">{profile.age}</Text>
+                <Text className="text-base font-bold text-white">
+                  {profile.age}
+                </Text>
                 {profile.verified ? (
                   <View className="ml-1.5 h-[18px] w-[18px] items-center justify-center rounded-full bg-white">
                     <Ionicons name="checkmark" size={11} color={Colors.black} />
@@ -287,13 +366,24 @@ export default function MatchesScreen() {
               </View>
             </View>
 
-            <Text className="-mt-1 text-sm font-semibold text-white/75" numberOfLines={1}>
+            <Text
+              className="-mt-1 text-sm font-semibold text-white/75"
+              numberOfLines={1}
+            >
               {profile.name} {profile.lastName}
             </Text>
 
             <View className="mt-4 gap-2">
-              <ProfileInfo icon="location-outline" label="Location" value={profile.city} />
-              <ProfileInfo icon="navigate-outline" label="Distance" value={profile.distance} />
+              <ProfileInfo
+                icon="location-outline"
+                label="Location"
+                value={profile.city}
+              />
+              <ProfileInfo
+                icon="navigate-outline"
+                label="Distance"
+                value={profile.distance}
+              />
             </View>
 
             <TouchableOpacity
@@ -301,7 +391,9 @@ export default function MatchesScreen() {
               onPress={openProfileDetail}
               activeOpacity={0.84}
             >
-              <Text className="mr-2 text-sm font-bold text-black">View profile</Text>
+              <Text className="mr-2 text-sm font-bold text-black">
+                View profile
+              </Text>
               <Ionicons name="arrow-forward" size={16} color={Colors.black} />
             </TouchableOpacity>
           </Animated.View>
@@ -314,7 +406,12 @@ export default function MatchesScreen() {
             bottom: Math.max(insets.bottom + 12, 24),
           }}
         >
-          <RoundAction icon="close" label="Pass" tone="muted" onPress={handleSkip} />
+          <RoundAction
+            icon="close"
+            label="Pass"
+            tone="muted"
+            onPress={handleSkip}
+          />
           <RoundAction
             icon="chatbubble-ellipses"
             label="Chat"
@@ -323,7 +420,12 @@ export default function MatchesScreen() {
             onPress={handleChatRequest}
           />
           <HeartAction onPress={handleLike} />
-          <RoundAction icon="flash" label="Boost" tone="boost" onPress={handleMatchRequest} />
+          <RoundAction
+            icon="flash"
+            label="Boost"
+            tone="boost"
+            onPress={handleMatchRequest}
+          />
         </View>
       </SafeAreaView>
 
@@ -342,19 +444,22 @@ export default function MatchesScreen() {
             {"It's a Match!"}
           </Text>
           <Text className="mt-3 text-center text-base leading-[23px] text-[#BDBDBD]">
-            {matchBanner} already liked you. Chat is ready to open.
+            {matchBanner.name} already liked you. Chat is ready to open.
           </Text>
           <View className="mt-7 flex-row gap-2.5">
             <TouchableOpacity
               className="h-[54px] flex-row items-center rounded-full bg-white px-5"
               onPress={() => {
+                const matched = matchBanner;
                 setMatchBanner(null);
-                openChat(profile);
+                openChat(matched.profile, matched.chatId);
               }}
               activeOpacity={0.86}
             >
               <Ionicons name="chatbubble" size={20} color="#050505" />
-              <Text className="ml-2 text-base font-bold text-black">Open Chat</Text>
+              <Text className="ml-2 text-base font-bold text-black">
+                Open Chat
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               className="h-[54px] items-center justify-center rounded-full border border-[#222] bg-[#111] px-[18px]"
@@ -364,7 +469,9 @@ export default function MatchesScreen() {
               }}
               activeOpacity={0.86}
             >
-              <Text className="text-base font-bold text-white">Keep Matching</Text>
+              <Text className="text-base font-bold text-white">
+                Keep Matching
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -373,7 +480,13 @@ export default function MatchesScreen() {
   );
 }
 
-const ProgressDots = ({ activeIndex, total }: { activeIndex: number; total: number }) => (
+const ProgressDots = ({
+  activeIndex,
+  total,
+}: {
+  activeIndex: number;
+  total: number;
+}) => (
   <View className="h-8 flex-row items-center gap-1.5 rounded-full border border-white/10 bg-black/50 px-3">
     {Array.from({ length: total }).map((_, index) => (
       <View
@@ -391,7 +504,9 @@ const StatusPill = ({ online }: { online: boolean }) => (
     <View
       className={`mr-2 h-2 w-2 rounded-full ${online ? "bg-[#6FBF8A]" : "bg-[#888888]"}`}
     />
-    <Text className="text-xs font-bold text-white">{online ? "Online now" : "Away"}</Text>
+    <Text className="text-xs font-bold text-white">
+      {online ? "Online now" : "Away"}
+    </Text>
   </View>
 );
 
@@ -439,7 +554,8 @@ const RoundAction = ({
   badge?: number;
   tone: "muted" | "chat" | "boost";
 }) => {
-  const color = tone === "chat" ? "#38BDF8" : tone === "boost" ? "#FBBF24" : "#FFFFFF";
+  const color =
+    tone === "chat" ? "#38BDF8" : tone === "boost" ? "#FBBF24" : "#FFFFFF";
 
   return (
     <TouchableOpacity
@@ -451,7 +567,9 @@ const RoundAction = ({
         <Ionicons name={icon} size={23} color={color} />
         {badge ? (
           <View className="absolute -right-1 -top-1 min-w-5 items-center rounded-full bg-white px-1">
-            <Text className="text-[10px] font-bold leading-[18px] text-black">{badge}</Text>
+            <Text className="text-[10px] font-bold leading-[18px] text-black">
+              {badge}
+            </Text>
           </View>
         ) : null}
       </View>

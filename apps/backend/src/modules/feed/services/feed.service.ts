@@ -30,11 +30,12 @@ export class FeedService {
       feed: feed.map((p) => ({
         postId: p.id,
         caption: p.caption,
+        isAnonymous: Boolean(p.isAnonymous),
         author: {
-          userId: p.authorId,
-          username: p.username,
-          avatarUrl: p.avatarUrl,
-          sexuality: p.sexuality,
+          userId: p.isAnonymous ? null : p.authorId,
+          username: p.isAnonymous ? "Anonymous" : p.username,
+          avatarUrl: p.isAnonymous ? null : p.avatarUrl,
+          sexuality: p.isAnonymous ? null : p.sexuality,
           distance: p.distance ? Math.round(p.distance) : null,
         },
         createdAt: p.createdAt,

@@ -44,7 +44,13 @@
         }
       ],
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Blunow uses your location during signup to help show nearby people and rooms."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

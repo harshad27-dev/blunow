@@ -5,6 +5,7 @@ export interface CreatePostPayload {
   mediaUrls?: string[];
   mediaTypes?: ("IMAGE" | "VIDEO" | "AUDIO")[];
   isPublic?: boolean;
+  isAnonymous?: boolean;
 }
 
 export const postService = {
@@ -35,6 +36,11 @@ export const postService = {
 
   createPost: async (payload: CreatePostPayload) => {
     const response = await api.post("/posts", payload);
+    return response.data;
+  },
+
+  getPost: async (postId: string) => {
+    const response = await api.get(`/posts/${postId}`);
     return response.data;
   },
 

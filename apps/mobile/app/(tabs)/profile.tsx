@@ -51,8 +51,9 @@ export default function ProfileScreen() {
     user?.id,
     activeTab === "stories",
   );
-  const { data: savedPosts, isLoading: savedPostsLoading } =
-    useSavedPostsQuery(activeTab === "saved");
+  const { data: savedPosts, isLoading: savedPostsLoading } = useSavedPostsQuery(
+    activeTab === "saved",
+  );
   const { data: matches, isLoading: matchesLoading } = useMatchesQuery(
     activeTab === "matches",
   );
@@ -80,6 +81,16 @@ export default function ProfileScreen() {
   });
   const editProfile = () => router.push("/(screens)/edit-profile");
   const openSettings = () => router.push("/(screens)/settings");
+  const openPost = (postId: string) =>
+    router.push({
+      pathname: "/(screens)/post/[postId]",
+      params: { postId },
+    });
+  const openStory = (storyId: string) =>
+    router.push({
+      pathname: "/(screens)/story/[storyId]",
+      params: { storyId },
+    });
 
   const journeyMetrics: JourneyMetric[] = [
     {
@@ -185,10 +196,10 @@ export default function ProfileScreen() {
               <ActivityIndicator color={Colors.primary} size="large" />
             </View>
           ) : activeTab === "posts" ? (
-            <ProfilePostGrid posts={posts || []} />
+            <ProfilePostGrid posts={posts || []} onPostPress={openPost} />
           ) : activeTab === "stories" ? (
             stories?.length ? (
-              <ProfilePostGrid posts={stories} />
+              <ProfilePostGrid posts={stories} onPostPress={openStory} />
             ) : (
               <ProfileEmptyState
                 icon="radio-button-on-outline"
@@ -198,7 +209,7 @@ export default function ProfileScreen() {
             )
           ) : activeTab === "saved" ? (
             savedPosts?.length ? (
-              <ProfilePostGrid posts={savedPosts} />
+              <ProfilePostGrid posts={savedPosts} onPostPress={openPost} />
             ) : (
               <ProfileEmptyState
                 icon="bookmark-outline"

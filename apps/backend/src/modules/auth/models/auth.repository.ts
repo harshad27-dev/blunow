@@ -1,4 +1,4 @@
-import { prisma } from '../../../prisma/prisma';
+import { prisma } from "../../../prisma/prisma";
 
 export class AuthRepository {
   async createUser(data: {
@@ -7,6 +7,9 @@ export class AuthRepository {
     username: string;
     birthDate: Date;
     gender: any;
+    location?: string;
+    latitude?: number;
+    longitude?: number;
   }) {
     return prisma.user.create({
       data: {
@@ -17,6 +20,9 @@ export class AuthRepository {
             username: data.username,
             birthDate: data.birthDate,
             gender: data.gender,
+            location: data.location,
+            latitude: data.latitude,
+            longitude: data.longitude,
           },
         },
       },
@@ -38,7 +44,11 @@ export class AuthRepository {
     });
   }
 
-  async saveRefreshToken(data: { userId: string; token: string; expiresAt: Date }) {
+  async saveRefreshToken(data: {
+    userId: string;
+    token: string;
+    expiresAt: Date;
+  }) {
     return prisma.refreshToken.create({ data });
   }
 
@@ -57,7 +67,11 @@ export class AuthRepository {
     return prisma.refreshToken.deleteMany({ where: { userId } });
   }
 
-  async upsertLoginOtp(data: { email: string; otpHash: string; expiresAt: Date }) {
+  async upsertLoginOtp(data: {
+    email: string;
+    otpHash: string;
+    expiresAt: Date;
+  }) {
     return prisma.loginOtp.upsert({
       where: { email: data.email },
       update: {

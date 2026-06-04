@@ -6,6 +6,9 @@ export interface RegisterPayload {
   username: string;
   birthDate: string; // ISO 8601 e.g. "2000-01-01"
   gender: Gender;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface LoginPayload {
@@ -33,6 +36,8 @@ export interface AuthUser {
     avatarUrl: string | null;
     bannerUrl?: string | null;
     location?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
     birthDate?: string | null;
     gender?: string | null;
     interests?: string[];

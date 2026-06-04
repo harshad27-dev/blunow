@@ -1,11 +1,11 @@
-import bcrypt from 'bcryptjs';
-import { randomInt } from 'crypto';
-import { AuthRepository } from '../models/auth.repository';
-import { TokenService } from './token.service';
-import { MailService } from './mail.service';
-import { eventBus } from '../../../events/event-bus';
-import { EVENTS } from '../../../events/event-constants';
-import { AppError } from '../../../common/middleware/error.middleware';
+import bcrypt from "bcryptjs";
+import { randomInt } from "crypto";
+import { AuthRepository } from "../models/auth.repository";
+import { TokenService } from "./token.service";
+import { MailService } from "./mail.service";
+import { eventBus } from "../../../events/event-bus";
+import { EVENTS } from "../../../events/event-constants";
+import { AppError } from "../../../common/middleware/error.middleware";
 
 export class AuthService {
   private authRepository = new AuthRepository();
@@ -20,10 +20,13 @@ export class AuthService {
     username: string;
     birthDate: string;
     gender: string;
+    location?: string;
+    latitude?: number;
+    longitude?: number;
   }) {
     const existingUser = await this.authRepository.findByEmail(dto.email);
     if (existingUser) {
-      throw new AppError('Email already in use', 409);
+      throw new AppError("Email already in use", 409);
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
@@ -34,12 +37,18 @@ export class AuthService {
       username: dto.username,
       birthDate: new Date(dto.birthDate),
       gender: dto.gender as any,
+      location: dto.location,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
     });
 
     const tokens = await this.tokenService.generateTokens(user);
 
     // Emit event — notifications module listens to send welcome notification
-    eventBus.emit(EVENTS.AUTH.USER_REGISTERED, { userId: user.id, email: user.email });
+    eventBus.emit(EVENTS.AUTH.USER_REGISTERED, {
+      userId: user.id,
+      email: user.email,
+    });
 
     return { user: this.sanitizeUser(user), ...tokens };
   }
@@ -48,11 +57,14 @@ export class AuthService {
     const user = await this.authRepository.findByEmail(dto.email);
 
     if (!user) {
-      throw new AppError('Email not found. Please create an account first.', 404);
+      throw new AppError(
+        "Email not found. Please create an account first.",
+        404,
+      );
     }
 
     if (!user.isActive) {
-      throw new AppError('Account has been deactivated', 403);
+      throw new AppError("Account has been deactivated", 403);
     }
 
     const otp = randomInt(100000, 1000000).toString();
@@ -69,47 +81,50 @@ export class AuthService {
       await this.mailService.sendLoginOtp(dto.email, otp);
     } catch (error) {
       await this.authRepository.deleteLoginOtp(dto.email);
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('[Auth OTP] Failed to send email:', error);
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[Auth OTP] Failed to send email:", error);
       }
-      throw new AppError('Unable to send OTP email. Check SMTP settings.', 500);
+      throw new AppError("Unable to send OTP email. Check SMTP settings.", 500);
     }
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== "production") {
       console.log(`[Auth OTP] ${dto.email}: ${otp}`);
     }
 
     return {
-      message: 'OTP sent. Check your email and enter the code below.',
-      ...(process.env.NODE_ENV !== 'production' && { devOtp: otp }),
+      message: "OTP sent. Check your email and enter the code below.",
+      ...(process.env.NODE_ENV !== "production" && { devOtp: otp }),
     };
   }
 
   async login(dto: { email: string; otp: string }) {
     const user = await this.authRepository.findByEmail(dto.email);
     if (!user) {
-      throw new AppError('Invalid OTP', 401);
+      throw new AppError("Invalid OTP", 401);
     }
 
     if (!user.isActive) {
-      throw new AppError('Account has been deactivated', 403);
+      throw new AppError("Account has been deactivated", 403);
     }
 
     const loginOtp = await this.authRepository.findLoginOtpByEmail(dto.email);
     if (!loginOtp || loginOtp.expiresAt.getTime() < Date.now()) {
       await this.authRepository.deleteLoginOtp(dto.email);
-      throw new AppError('OTP expired. Please request a new one.', 401);
+      throw new AppError("OTP expired. Please request a new one.", 401);
     }
 
     if (loginOtp.attempts >= this.maxOtpAttempts) {
       await this.authRepository.deleteLoginOtp(dto.email);
-      throw new AppError('Too many OTP attempts. Please request a new one.', 429);
+      throw new AppError(
+        "Too many OTP attempts. Please request a new one.",
+        429,
+      );
     }
 
     const isOtpValid = await bcrypt.compare(dto.otp, loginOtp.otpHash);
     if (!isOtpValid) {
       await this.authRepository.incrementLoginOtpAttempts(dto.email);
-      throw new AppError('Invalid OTP', 401);
+      throw new AppError("Invalid OTP", 401);
     }
 
     await this.authRepository.deleteLoginOtp(dto.email);
@@ -131,7 +146,7 @@ export class AuthService {
 
   async getMe(userId: string) {
     const user = await this.authRepository.findById(userId);
-    if (!user) throw new AppError('User not found', 404);
+    if (!user) throw new AppError("User not found", 404);
     return this.sanitizeUser(user);
   }
 

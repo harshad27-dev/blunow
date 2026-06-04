@@ -5,6 +5,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -21,7 +23,9 @@ import { useUpdateProfileMutation } from "@/hooks/queries";
 import { postService } from "@/services/post.service";
 import { useAuthStore } from "@/store/authStore";
 
-const PINK = "#FF2D6F";
+const ACCENT = "#FF7A5C";
+const ACCENT_SOFT = "#FFC857";
+const INK = "#071011";
 
 const GENDER_OPTIONS = ["MALE", "FEMALE", "NON_BINARY", "OTHER"];
 const INTERESTED_IN_OPTIONS = ["Men", "Women", "Non-binary", "Everyone"];
@@ -300,41 +304,47 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-black">
-      <StatusBar style="light" backgroundColor="#000000" />
-      <View className="flex-1 bg-black">
-        <View className="flex-row items-center justify-between px-5 pb-4 pt-2">
+    <SafeAreaView className="flex-1 bg-[#071011]">
+      <StatusBar style="light" backgroundColor={INK} />
+      <LinearGradient
+        colors={["#071011", "#0B171A", "#101116"]}
+        style={styles.fill}
+      >
+        <View className="flex-row items-center justify-between px-5 pb-5 pt-2">
           <TouchableOpacity
-            className="h-11 w-11 items-center justify-center rounded-full border border-[#FF2D6F]/25 bg-[#FF2D6F]/10"
+            className="h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]"
             onPress={() => router.back()}
             activeOpacity={0.78}
           >
-            <Ionicons name="chevron-back" size={25} color={PINK} />
+            <Ionicons name="chevron-back" size={24} color="#F4FAF8" />
           </TouchableOpacity>
 
           <View className="items-center">
-            <Text className="text-2xl font-extrabold text-white">
+            <Text className="text-[22px] font-extrabold text-[#F4FAF8]">
               Edit profile
             </Text>
-            <View className="mt-2 flex-row items-center">
-              <Text className="text-sm font-bold text-[#FF2D6F]">Edit</Text>
-              <View className="mx-4 h-4 w-px bg-white/15" />
-              <Text className="text-sm font-semibold text-[#555B66]">
+            <View className="mt-2 flex-row items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
+              <View className="rounded-full bg-[#FF7A5C] px-3 py-1">
+                <Text className="text-xs font-extrabold text-[#130908]">
+                  Edit
+                </Text>
+              </View>
+              <Text className="px-3 text-xs font-semibold text-[#91A5A9]">
                 Preview
               </Text>
             </View>
           </View>
 
           <TouchableOpacity
-            className="h-10 min-w-[64px] items-center justify-center rounded-full border border-[#FF2D6F]/35 bg-[#FF2D6F]/15 px-4"
+            className="h-11 min-w-[68px] items-center justify-center rounded-2xl bg-[#F4FAF8] px-4"
             onPress={saveProfile}
             disabled={isUploading || updateProfileMutation.isPending}
             activeOpacity={0.78}
           >
             {isUploading || updateProfileMutation.isPending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color="#071011" />
             ) : (
-              <Text className="text-sm font-extrabold text-[#FF2D6F]">
+              <Text className="text-sm font-extrabold text-[#071011]">
                 Done
               </Text>
             )}
@@ -346,26 +356,32 @@ export default function EditProfileScreen() {
           contentContainerClassName="px-5 pb-10"
           showsVerticalScrollIndicator={false}
         >
-          <View className="mt-2 overflow-hidden rounded-[32px] border border-white/10 bg-[#0F1115] shadow-2xl">
+          <View className="overflow-hidden rounded-[30px] border border-white/10 bg-[#0D1B1E] shadow-2xl">
             <TouchableOpacity
-              className="relative h-[168px] bg-[#151821]"
+              className="relative h-[178px] bg-[#12262A]"
               onPress={() => pickPhoto("cover")}
               activeOpacity={0.88}
             >
               {coverUri ? (
                 <Image source={{ uri: coverUri }} className="h-full w-full" />
               ) : (
-                <View className="h-full w-full bg-[#151821]" />
+                <LinearGradient
+                  colors={["#164E53", "#213036", "#31233A"]}
+                  style={styles.coverPlaceholder}
+                />
               )}
-              <View className="absolute inset-0 bg-black/25" />
-              <View className="absolute bottom-4 right-4 h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/60">
-                <Ionicons name="camera-outline" size={17} color="#FFFFFF" />
+              <LinearGradient
+                colors={["rgba(7,16,17,0.05)", "rgba(7,16,17,0.72)"]}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <View className="absolute bottom-4 right-4 h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-[#071011]/75">
+                <Ionicons name="camera-outline" size={18} color="#F4FAF8" />
               </View>
             </TouchableOpacity>
 
-            <View className="px-5 pb-5">
+            <View className="px-5 pb-6">
               <TouchableOpacity
-                className="-mt-12 h-24 w-24 rounded-[30px] border border-white/15 bg-black p-1"
+                className="-mt-12 h-24 w-24 rounded-[28px] border-2 border-[#0D1B1E] bg-[#071011] p-1"
                 onPress={() => pickPhoto("avatar")}
                 activeOpacity={0.88}
               >
@@ -375,26 +391,40 @@ export default function EditProfileScreen() {
                     className="h-full w-full rounded-[26px]"
                   />
                 ) : (
-                  <View className="h-full w-full items-center justify-center rounded-[26px] bg-[#151821]">
-                    <Ionicons name="person" size={42} color="#555B66" />
-                  </View>
+                  <LinearGradient
+                    colors={["#1E4144", "#182428"]}
+                    style={styles.avatarPlaceholder}
+                  >
+                    <Ionicons name="person" size={42} color="#91A5A9" />
+                  </LinearGradient>
                 )}
-                <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-full bg-[#FF2D6F] shadow-lg">
-                  <Ionicons name="add" size={18} color="#FFFFFF" />
+                <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-2xl bg-[#FF7A5C] shadow-lg">
+                  <Ionicons name="add" size={18} color="#130908" />
                 </View>
               </TouchableOpacity>
 
-              <Text className="mt-4 text-xl font-extrabold text-white">
+              <Text className="mt-4 text-xl font-extrabold text-[#F4FAF8]">
                 {username || "Your profile"}
               </Text>
-              <Text className="mt-1 text-sm font-medium leading-5 text-[#8F96A3]">
-                Only saved profile fields are shown here.
+              <Text className="mt-1 text-sm font-medium leading-5 text-[#91A5A9]">
+                Tune your profile details and dating preferences.
               </Text>
+              <View className="mt-4 flex-row flex-wrap gap-2">
+                <InfoPill
+                  icon="sparkles-outline"
+                  label={`${interests.length} interests`}
+                />
+                <InfoPill icon="navigate-outline" label={`${maxDistance} km`} />
+                <InfoPill
+                  icon="heart-outline"
+                  label={lookingFor[0] || "New friends"}
+                />
+              </View>
             </View>
           </View>
 
           <SectionTitle title="Profile" />
-          <View className="overflow-hidden rounded-[28px] border border-white/10 bg-[#0F1115] shadow-xl">
+          <View className="overflow-hidden rounded-[26px] border border-white/10 bg-[#0D1B1E] shadow-xl">
             {profileItems.map((item, index) => (
               <SettingRow
                 key={item.key}
@@ -406,7 +436,7 @@ export default function EditProfileScreen() {
           </View>
 
           <SectionTitle title="Dating Preferences" />
-          <View className="overflow-hidden rounded-[28px] border border-white/10 bg-[#0F1115] shadow-xl">
+          <View className="overflow-hidden rounded-[26px] border border-white/10 bg-[#0D1B1E] shadow-xl">
             {datingItems.map((item, index) => (
               <SettingRow
                 key={item.key}
@@ -417,7 +447,7 @@ export default function EditProfileScreen() {
             ))}
           </View>
         </ScrollView>
-      </View>
+      </LinearGradient>
 
       <EditDrawer
         activeSheet={activeSheet}
@@ -461,9 +491,22 @@ export default function EditProfileScreen() {
 }
 
 const SectionTitle = ({ title }: { title: string }) => (
-  <Text className="mb-3 ml-1 mt-7 text-lg font-extrabold text-white">
+  <Text className="mb-3 ml-1 mt-7 text-sm font-extrabold uppercase tracking-wider text-[#FFC857]">
     {title}
   </Text>
+);
+
+const InfoPill = ({
+  icon,
+  label,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+}) => (
+  <View className="flex-row items-center rounded-full border border-white/10 bg-white/[0.06] px-3 py-2">
+    <Ionicons name={icon} size={14} color={ACCENT_SOFT} />
+    <Text className="ml-1.5 text-xs font-bold text-[#DCE9E6]">{label}</Text>
+  </View>
 );
 
 const SettingRow = ({
@@ -482,19 +525,19 @@ const SettingRow = ({
     onPress={onPress}
     activeOpacity={0.78}
   >
-    <View className="h-11 w-11 items-center justify-center rounded-[18px] border border-[#FF2D6F]/20 bg-[#FF2D6F]/15">
-      <Ionicons name={item.icon} size={20} color={PINK} />
+    <View className="h-11 w-11 items-center justify-center rounded-[17px] border border-[#FF7A5C]/20 bg-[#FF7A5C]/10">
+      <Ionicons name={item.icon} size={20} color={ACCENT} />
     </View>
     <View className="flex-1">
-      <Text className="text-[15px] font-bold text-white">{item.title}</Text>
+      <Text className="text-[15px] font-bold text-[#F4FAF8]">{item.title}</Text>
       <Text
-        className="mt-1 text-sm font-medium text-[#8F96A3]"
+        className="mt-1 text-sm font-medium text-[#91A5A9]"
         numberOfLines={1}
       >
         {item.value}
       </Text>
     </View>
-    <Ionicons name="chevron-forward" size={20} color="#555B66" />
+    <Ionicons name="chevron-forward" size={20} color="#577074" />
   </TouchableOpacity>
 );
 
@@ -539,24 +582,24 @@ const EditDrawer = ({
     animationType="slide"
     onRequestClose={onClose}
   >
-    <Pressable className="flex-1 bg-black/75" onPress={onClose} />
-    <View className="absolute bottom-0 left-0 right-0 max-h-[72%] rounded-t-[34px] border border-white/15 bg-[#0F1115] pt-3 shadow-2xl">
-      <View className="mb-3 h-1.5 w-12 self-center rounded-full bg-[#343945]" />
+    <Pressable className="flex-1 bg-[#071011]/80" onPress={onClose} />
+    <View className="absolute bottom-0 left-0 right-0 max-h-[74%] rounded-t-[32px] border border-white/15 bg-[#0D1B1E] pt-3 shadow-2xl">
+      <View className="mb-3 h-1.5 w-12 self-center rounded-full bg-[#355155]" />
       <View className="flex-row items-center justify-between px-5 pb-3">
         <TouchableOpacity
-          className="h-10 w-10 items-center justify-center rounded-full bg-[#151821]"
+          className="h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]"
           onPress={onClose}
         >
-          <Ionicons name="close" size={22} color="#FFFFFF" />
+          <Ionicons name="close" size={22} color="#F4FAF8" />
         </TouchableOpacity>
-        <Text className="flex-1 text-center text-lg font-extrabold text-white">
+        <Text className="flex-1 text-center text-lg font-extrabold text-[#F4FAF8]">
           {getSheetTitle(activeSheet)}
         </Text>
         <TouchableOpacity
-          className="h-9 min-w-[58px] items-center justify-center rounded-full bg-[#FF2D6F]/15 px-4"
+          className="h-10 min-w-[62px] items-center justify-center rounded-2xl bg-[#FF7A5C] px-4"
           onPress={onClose}
         >
-          <Text className="text-sm font-extrabold text-[#FF2D6F]">Done</Text>
+          <Text className="text-sm font-extrabold text-[#130908]">Done</Text>
         </TouchableOpacity>
       </View>
 
@@ -671,10 +714,10 @@ const ProfileInput = ({
     value={value}
     onChangeText={onChangeText}
     placeholder={placeholder}
-    placeholderTextColor="#555B66"
+    placeholderTextColor="#577074"
     multiline={multiline}
     autoCapitalize={autoCapitalize}
-    className={`rounded-[24px] border border-white/10 bg-[#151821] px-5 py-4 text-base font-semibold text-white ${
+    className={`rounded-[22px] border border-white/10 bg-[#12262A] px-5 py-4 text-base font-semibold text-[#F4FAF8] ${
       multiline ? "min-h-[140px]" : "h-[58px]"
     }`}
     textAlignVertical={multiline ? "top" : "center"}
@@ -690,25 +733,17 @@ const ChipGrid = ({
   selected: string[];
   onToggle: (value: string) => void;
 }) => (
-  <View className="flex-row flex-wrap gap-2.5">
+  <View style={styles.chipGrid}>
     {options.map((option) => {
       const active = selected.includes(option);
       return (
         <TouchableOpacity
           key={option}
-          className={`min-h-11 justify-center rounded-full border px-4 ${
-            active
-              ? "border-[#FF2D6F] bg-[#FF2D6F]/15 shadow-lg"
-              : "border-white/15 bg-white/[0.03]"
-          }`}
+          style={[styles.chipButton, active && styles.chipButtonActive]}
           onPress={() => onToggle(option)}
           activeOpacity={0.78}
         >
-          <Text
-            className={`text-sm font-bold ${
-              active ? "text-white" : "text-[#8F96A3]"
-            }`}
-          >
+          <Text style={[styles.chipText, active && styles.chipTextActive]}>
             {option}
           </Text>
         </TouchableOpacity>
@@ -728,29 +763,23 @@ const ListSelector = ({
   onSelect: (value: string) => void;
   formatLabel?: (value: string) => string;
 }) => (
-  <View className="gap-2.5">
+  <View style={styles.selectorList}>
     {options.map((option) => {
       const active = selected === option;
       return (
         <TouchableOpacity
           key={option}
-          className={`min-h-[58px] flex-row items-center justify-between rounded-[22px] border px-4 ${
-            active
-              ? "border-[#FF2D6F] bg-[#FF2D6F]/15"
-              : "border-white/10 bg-white/[0.03]"
-          }`}
+          style={[styles.selectorButton, active && styles.selectorButtonActive]}
           onPress={() => onSelect(option)}
           activeOpacity={0.78}
         >
           <Text
-            className={`text-[15px] font-bold ${
-              active ? "text-white" : "text-[#8F96A3]"
-            }`}
+            style={[styles.selectorText, active && styles.selectorTextActive]}
           >
             {formatLabel(option)}
           </Text>
           {active ? (
-            <Ionicons name="checkmark-circle" size={21} color={PINK} />
+            <Ionicons name="checkmark-circle" size={21} color={ACCENT} />
           ) : null}
         </TouchableOpacity>
       );
@@ -786,3 +815,76 @@ const getSheetTitle = (field: SheetField | null) => {
       return "";
   }
 };
+
+const styles = StyleSheet.create({
+  avatarPlaceholder: {
+    alignItems: "center",
+    borderRadius: 24,
+    height: "100%",
+    justifyContent: "center",
+    width: "100%",
+  },
+  coverPlaceholder: {
+    height: "100%",
+    width: "100%",
+  },
+  fill: {
+    flex: 1,
+  },
+  chipButton: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.15)",
+    borderRadius: 16,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 16,
+  },
+  chipButtonActive: {
+    backgroundColor: "rgba(255,122,92,0.15)",
+    borderColor: ACCENT,
+    shadowColor: ACCENT,
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+  },
+  chipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  chipText: {
+    color: "#91A5A9",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  chipTextActive: {
+    color: "#F4FAF8",
+  },
+  selectorButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 58,
+    paddingHorizontal: 16,
+  },
+  selectorButtonActive: {
+    backgroundColor: "rgba(255,122,92,0.15)",
+    borderColor: ACCENT,
+  },
+  selectorList: {
+    gap: 10,
+  },
+  selectorText: {
+    color: "#91A5A9",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  selectorTextActive: {
+    color: "#F4FAF8",
+  },
+});

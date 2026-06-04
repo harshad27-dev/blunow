@@ -1,4 +1,13 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../../prisma/prisma";
+
+const postFieldNames = new Set(
+  Prisma.dmmf.datamodel.models
+    .find((model) => model.name === "Post")
+    ?.fields.map((field) => field.name) ?? [],
+);
+
+const supportsAnonymousPosts = postFieldNames.has("isAnonymous");
 
 export class FeedRepository {
   async getFilteredFeed(params: {
@@ -42,11 +51,16 @@ export class FeedRepository {
       },
     });
 
+    const anonymousById = await getAnonymousFlags(posts.map((post) => post.id));
+
     // Map Prisma objects back to the expected raw format for FeedService
     return posts.map((p) => ({
       id: p.id,
       caption: p.caption,
       mediaUrls: p.mediaUrls,
+      isAnonymous: supportsAnonymousPosts
+        ? Boolean((p as any).isAnonymous)
+        : Boolean(anonymousById.get(p.id)),
       authorId: p.authorId,
       username: p.author.profile?.username || "Unknown",
       avatarUrl: p.author.profile?.avatarUrl || null,
@@ -125,3 +139,14 @@ export class FeedRepository {
     return scored.slice(offset, offset + limit);
   }
 }
+
+const getAnonymousFlags = async (ids: string[]) => {
+  if (ids.length === 0 || supportsAnonymousPosts)
+    return new Map<string, boolean>();
+
+  const rows = await prisma.$queryRaw<
+    { id: string; isAnonymous: boolean }[]
+  >`SELECT "id", "isAnonymous" FROM "posts" WHERE "id" IN (${Prisma.join(ids)})`;
+
+  return new Map(rows.map((row) => [row.id, row.isAnonymous]));
+};

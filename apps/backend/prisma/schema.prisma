@@ -179,19 +179,20 @@ model Match {
 }
 
 model Post {
-  id         String      @id @default(uuid())
-  authorId   String
-  caption    String?
-  mediaUrls  String[]
-  mediaTypes MediaType[]
-  isPublic   Boolean     @default(true)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  isDeleted  Boolean     @default(false)
-  comments   Comment[]
-  likes      PostLike[]
-  saves      PostSave[]
-  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  id          String      @id @default(uuid())
+  authorId    String
+  caption     String?
+  mediaUrls   String[]
+  mediaTypes  MediaType[]
+  isPublic    Boolean     @default(true)
+  isAnonymous Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  isDeleted   Boolean     @default(false)
+  comments    Comment[]
+  likes       PostLike[]
+  saves       PostSave[]
+  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@map("posts")
 }
