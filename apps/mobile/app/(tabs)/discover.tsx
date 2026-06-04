@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -16,30 +18,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { FontFamily, FontSize } from "@/constants/typography";
+import {
+  useDiscoverPeopleQuery,
+  useSendMatchRequestMutation,
+} from "@/hooks/queries";
+import type { DiscoverProfile } from "@/types/match.types";
 
 const { width } = Dimensions.get("window");
 const screenPadding = 20;
 const heroWidth = width - screenPadding * 2;
+const fallbackProfileImage =
+  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
 
 type Category = {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
-};
-
-type DiscoveryProfile = {
-  id: string;
-  name: string;
-  username: string;
-  age: number;
-  city: string;
-  distance: string;
-  imageUrl: string;
-  online: boolean;
-  verified: boolean;
-  match: number;
-  intro: string;
-  prompt: string;
-  interests: string[];
 };
 
 const CATEGORIES: Category[] = [
@@ -52,83 +45,103 @@ const CATEGORIES: Category[] = [
   { label: "Coding", icon: "code-slash" },
 ];
 
-const DISCOVERY_PROFILES: DiscoveryProfile[] = [
-  {
-    id: "1",
-    name: "Alexa",
-    username: "alexa_design",
-    age: 24,
-    city: "Bengaluru",
-    distance: "2.5 km",
-    imageUrl:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=90",
-    online: true,
-    verified: true,
-    match: 94,
-    intro: "Product designer who saves good cafes and overthinks tiny details.",
-    prompt: "Ask me about minimalist spaces.",
-    interests: ["Design", "UI/UX", "Travel"],
-  },
-  {
-    id: "2",
-    name: "Marcus",
-    username: "marcus_dev",
-    age: 27,
-    city: "Hyderabad",
-    distance: "5.1 km",
-    imageUrl:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=90",
-    online: false,
-    verified: true,
-    match: 88,
-    intro: "Fullstack developer by day, city explorer after dark.",
-    prompt: "Currently hunting for the best cold brew.",
-    interests: ["Coding", "Gaming", "Coffee"],
-  },
-  {
-    id: "3",
-    name: "Sarah",
-    username: "sarah_art",
-    age: 22,
-    city: "Mumbai",
-    distance: "1.2 km",
-    imageUrl:
-      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=1200&q=90",
-    online: true,
-    verified: false,
-    match: 83,
-    intro: "Digital artist into surreal posters, galleries, and long walks.",
-    prompt: "Invite me to an opening night.",
-    interests: ["Art", "Museums", "Painting"],
-  },
-  {
-    id: "4",
-    name: "Maya",
-    username: "maya.wav",
-    age: 25,
-    city: "Pune",
-    distance: "3.8 km",
-    imageUrl:
-      "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=1200&q=90",
-    online: true,
-    verified: true,
-    match: 91,
-    intro: "Playlist maker, ramen loyalist, and weekend train-trip planner.",
-    prompt: "Send your best live music spot.",
-    interests: ["Music", "Food", "Travel"],
-  },
-];
-
 export default function DiscoverScreen() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0].label);
+  const { data: profiles = [], isLoading, refetch, isFetching } =
+    useDiscoverPeopleQuery();
+  const sendMatchRequest = useSendMatchRequestMutation();
 
-  const featuredProfile = DISCOVERY_PROFILES[0];
-  const nearbyProfiles = useMemo(() => DISCOVERY_PROFILES.slice(1), []);
+  const featuredProfile = profiles[0];
+  const nearbyProfiles = useMemo(() => profiles.slice(1), [profiles]);
 
   const openProfile = (id: string) => {
     router.push(`/(screens)/user/${id}`);
   };
+
+  const sendRequest = (
+    profile: DiscoverProfile,
+    message = "I would like to connect with you.",
+  ) => {
+    sendMatchRequest.mutate(
+      { receiverId: profile.id, message },
+      {
+        onSuccess: (response: any) => {
+          const chatId = response?.data?.chat?.id;
+          if (chatId) {
+            router.push({
+              pathname: "/(screens)/chat/[roomId]",
+              params: {
+                roomId: chatId,
+                userId: profile.id,
+                name: profile.name,
+                avatarUrl:
+                  profile.avatarUrl || profile.imageUrl || fallbackProfileImage,
+              },
+            });
+            return;
+          }
+
+          Alert.alert("Request sent", "They will see your connection request.");
+        },
+        onError: (error: any) => {
+          Alert.alert(
+            "Request failed",
+            error?.response?.data?.message || "Unable to send request.",
+          );
+        },
+      },
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centerState}>
+          <ActivityIndicator color={Colors.textPrimary} size="large" />
+          <Text style={styles.centerStateText}>Finding real profiles...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!featuredProfile) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.eyebrow}>Discover people</Text>
+            <Text style={styles.title}>Find your next real connection</Text>
+          </View>
+        </View>
+        <View style={styles.centerState}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="people-outline" size={34} color={Colors.textSecondary} />
+          </View>
+          <Text style={styles.emptyTitle}>No profiles yet</Text>
+          <Text style={styles.emptyText}>
+            Real users will appear here after they create an account and complete
+            their profile.
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => refetch()}
+            activeOpacity={0.84}
+          >
+            {isFetching ? (
+              <ActivityIndicator color={Colors.black} size="small" />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={18} color={Colors.black} />
+                <Text style={styles.retryText}>Refresh</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -145,8 +158,16 @@ export default function DiscoverScreen() {
             <Text style={styles.title}>Find your next real connection</Text>
           </View>
 
-          <TouchableOpacity style={styles.iconButton} activeOpacity={0.82}>
-            <Ionicons name="options-outline" size={22} color={Colors.textPrimary} />
+          <TouchableOpacity
+            style={styles.iconButton}
+            activeOpacity={0.82}
+            onPress={() => refetch()}
+          >
+            {isFetching ? (
+              <ActivityIndicator color={Colors.textPrimary} size="small" />
+            ) : (
+              <Ionicons name="refresh" size={22} color={Colors.textPrimary} />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -196,7 +217,7 @@ export default function DiscoverScreen() {
             <Text style={styles.sectionSubtitle}>Based on shared interests and activity</Text>
           </View>
           <View style={styles.countPill}>
-            <Text style={styles.countText}>{DISCOVERY_PROFILES.length} new</Text>
+            <Text style={styles.countText}>{profiles.length} new</Text>
           </View>
         </View>
 
@@ -205,7 +226,10 @@ export default function DiscoverScreen() {
           activeOpacity={0.92}
           onPress={() => openProfile(featuredProfile.id)}
         >
-          <Image source={{ uri: featuredProfile.imageUrl }} style={styles.heroImage} />
+          <Image
+            source={{ uri: featuredProfile.imageUrl || fallbackProfileImage }}
+            style={styles.heroImage}
+          />
           <LinearGradient
             colors={[
               "rgba(0,0,0,0.18)",
@@ -219,12 +243,19 @@ export default function DiscoverScreen() {
 
           <View style={styles.heroTopRow}>
             <View style={styles.livePill}>
-              <View style={styles.onlineDot} />
-              <Text style={styles.liveText}>Online now</Text>
+              <View
+                style={[
+                  styles.onlineDot,
+                  !featuredProfile.online && styles.offlineDot,
+                ]}
+              />
+              <Text style={styles.liveText}>
+                {featuredProfile.online ? "Online now" : "Recently active"}
+              </Text>
             </View>
             <View style={styles.matchPill}>
               <Ionicons name="sparkles" size={14} color={Colors.black} />
-              <Text style={styles.matchText}>{featuredProfile.match}% match</Text>
+              <Text style={styles.matchText}>{featuredProfile.matchScore}% match</Text>
             </View>
           </View>
 
@@ -243,12 +274,12 @@ export default function DiscoverScreen() {
             <View style={styles.metaRow}>
               <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
               <Text style={styles.metaText}>
-                {featuredProfile.city} · {featuredProfile.distance} away
+                {featuredProfile.city} - {featuredProfile.distance}
               </Text>
             </View>
 
             <Text style={styles.introText} numberOfLines={2}>
-              {featuredProfile.intro}
+              {featuredProfile.quote}
             </Text>
 
             <View style={styles.interestRow}>
@@ -261,14 +292,21 @@ export default function DiscoverScreen() {
               <TouchableOpacity
                 style={styles.secondaryAction}
                 activeOpacity={0.84}
-                onPress={(event) => event.stopPropagation()}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  refetch();
+                }}
               >
                 <Ionicons name="close" size={22} color={Colors.textPrimary} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.primaryAction}
                 activeOpacity={0.86}
-                onPress={(event) => event.stopPropagation()}
+                disabled={sendMatchRequest.isPending}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  sendRequest(featuredProfile);
+                }}
               >
                 <Ionicons name="heart" size={20} color={Colors.black} />
                 <Text style={styles.primaryActionText}>Connect</Text>
@@ -276,7 +314,11 @@ export default function DiscoverScreen() {
               <TouchableOpacity
                 style={styles.secondaryAction}
                 activeOpacity={0.84}
-                onPress={(event) => event.stopPropagation()}
+                disabled={sendMatchRequest.isPending}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  sendRequest(featuredProfile, "Hi, I would like to chat with you.");
+                }}
               >
                 <Ionicons name="chatbubble-ellipses" size={21} color={Colors.textPrimary} />
               </TouchableOpacity>
@@ -285,11 +327,19 @@ export default function DiscoverScreen() {
         </TouchableOpacity>
 
         <View style={styles.insightStrip}>
-          <InsightItem icon="people" value="18" label="Nearby" />
+          <InsightItem icon="people" value={`${profiles.length}`} label="Nearby" />
           <View style={styles.divider} />
-          <InsightItem icon="radio-button-on" value="7" label="Online" />
+          <InsightItem
+            icon="radio-button-on"
+            value={`${profiles.filter((profile) => profile.online).length}`}
+            label="Online"
+          />
           <View style={styles.divider} />
-          <InsightItem icon="heart" value="4" label="Liked you" />
+          <InsightItem
+            icon="heart"
+            value={`${profiles.filter((profile) => profile.isConnected).length}`}
+            label="Connected"
+          />
         </View>
 
         <View style={styles.sectionHeader}>
@@ -297,8 +347,8 @@ export default function DiscoverScreen() {
             <Text style={styles.sectionTitle}>Fresh nearby</Text>
             <Text style={styles.sectionSubtitle}>People active around your vibe</Text>
           </View>
-          <TouchableOpacity activeOpacity={0.8}>
-            <Text style={styles.seeAllText}>See all</Text>
+          <TouchableOpacity activeOpacity={0.8} onPress={() => refetch()}>
+            <Text style={styles.seeAllText}>Refresh</Text>
           </TouchableOpacity>
         </View>
 
@@ -308,6 +358,7 @@ export default function DiscoverScreen() {
               key={profile.id}
               profile={profile}
               onPress={() => openProfile(profile.id)}
+              onConnect={() => sendRequest(profile)}
             />
           ))}
         </View>
@@ -341,13 +392,18 @@ const InsightItem = ({
 const ProfileRow = ({
   profile,
   onPress,
+  onConnect,
 }: {
-  profile: DiscoveryProfile;
+  profile: DiscoverProfile;
   onPress: () => void;
+  onConnect: () => void;
 }) => (
   <TouchableOpacity style={styles.profileRow} onPress={onPress} activeOpacity={0.88}>
     <View style={styles.avatarWrap}>
-      <Image source={{ uri: profile.imageUrl }} style={styles.avatar} />
+      <Image
+        source={{ uri: profile.avatarUrl || profile.imageUrl || fallbackProfileImage }}
+        style={styles.avatar}
+      />
       {profile.online ? <View style={styles.avatarOnlineDot} /> : null}
     </View>
 
@@ -359,7 +415,7 @@ const ProfileRow = ({
         <Text style={styles.profileDistance}>{profile.distance}</Text>
       </View>
       <Text style={styles.profilePrompt} numberOfLines={1}>
-        {profile.prompt}
+        {profile.quote}
       </Text>
       <View style={styles.profileTags}>
         {profile.interests.slice(0, 2).map((interest) => (
@@ -371,7 +427,10 @@ const ProfileRow = ({
     <TouchableOpacity
       style={styles.rowAction}
       activeOpacity={0.82}
-      onPress={(event) => event.stopPropagation()}
+      onPress={(event) => {
+        event.stopPropagation();
+        onConnect();
+      }}
     >
       <Ionicons name="heart-outline" size={21} color={Colors.textPrimary} />
     </TouchableOpacity>
@@ -388,6 +447,59 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 36,
+  },
+  centerState: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+  centerStateText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.sm,
+    marginTop: 14,
+  },
+  emptyIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 28,
+    borderWidth: 1,
+    height: 82,
+    justifyContent: "center",
+    width: 82,
+  },
+  emptyTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xl,
+    marginTop: 18,
+  },
+  emptyText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
+    lineHeight: 21,
+    marginTop: 8,
+    maxWidth: 310,
+    textAlign: "center",
+  },
+  retryButton: {
+    alignItems: "center",
+    backgroundColor: Colors.white,
+    borderRadius: 22,
+    flexDirection: "row",
+    height: 44,
+    justifyContent: "center",
+    marginTop: 22,
+    paddingHorizontal: 18,
+  },
+  retryText: {
+    color: Colors.black,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+    marginLeft: 8,
   },
   header: {
     alignItems: "flex-start",
@@ -550,6 +662,9 @@ const styles = StyleSheet.create({
     height: 8,
     marginRight: 7,
     width: 8,
+  },
+  offlineDot: {
+    backgroundColor: Colors.textSecondary,
   },
   liveText: {
     color: Colors.white,

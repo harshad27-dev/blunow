@@ -2,6 +2,10 @@
 
 # dependencies
 node_modules/
+#config
+*.config.js
+*.config.ts
+
 
 # Expo
 .expo/

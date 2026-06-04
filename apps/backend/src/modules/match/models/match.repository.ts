@@ -42,11 +42,31 @@ export class MatchRepository {
   }
 
   async createMatch(user1Id: string, user2Id: string) {
+    const existing = await this.findMatchBetweenUsers(user1Id, user2Id);
+    if (existing) return existing;
+
     return prisma.match.create({
       data: { user1Id, user2Id },
       include: {
         user1: { include: { profile: true } },
         user2: { include: { profile: true } },
+        chat: true,
+      },
+    });
+  }
+
+  async findMatchBetweenUsers(user1Id: string, user2Id: string) {
+    return prisma.match.findFirst({
+      where: {
+        OR: [
+          { user1Id, user2Id },
+          { user1Id: user2Id, user2Id: user1Id },
+        ],
+      },
+      include: {
+        user1: { include: { profile: true } },
+        user2: { include: { profile: true } },
+        chat: true,
       },
     });
   }

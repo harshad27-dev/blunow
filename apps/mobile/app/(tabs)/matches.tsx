@@ -22,8 +22,11 @@ import { FontFamily } from "@/constants/typography";
 import { MatchProfile } from "@/data/matchProfiles";
 import {
   useMatchRecommendationsQuery,
+  useIncomingMatchRequestsQuery,
+  useRespondMatchRequestMutation,
   useSendMatchRequestMutation,
 } from "@/hooks/queries";
+import type { MatchRequest } from "@/types/match.types";
 
 const bottomActionHeight = 94;
 const actionBackdropColor = "rgba(5, 5, 5, 0.92)";
@@ -42,7 +45,9 @@ export default function MatchesScreen() {
   } | null>(null);
   const fade = useRef(new Animated.Value(1)).current;
   const { data: profiles = [], isLoading } = useMatchRecommendationsQuery();
+  const { data: incomingRequests = [] } = useIncomingMatchRequestsQuery();
   const sendMatchRequest = useSendMatchRequestMutation();
+  const respondMatchRequest = useRespondMatchRequestMutation();
   const profile = profiles[activeIndex] as MatchProfile | undefined;
   const nextProfiles = useMemo(
     () =>
@@ -175,6 +180,42 @@ export default function MatchesScreen() {
     });
   };
 
+  const respondToIncomingRequest = (
+    request: MatchRequest,
+    status: "ACCEPTED" | "REJECTED",
+  ) => {
+    respondMatchRequest.mutate(
+      { requestId: request.id, status },
+      {
+        onSuccess: (response: any) => {
+          const chatId = response?.data?.chat?.id;
+          if (status === "ACCEPTED" && chatId) {
+            const sender = request.sender;
+            router.push({
+              pathname: "/(screens)/chat/[roomId]",
+              params: {
+                roomId: chatId,
+                userId: request.senderId,
+                name:
+                  sender?.profile?.username ||
+                  sender?.username ||
+                  sender?.email ||
+                  "Match",
+                avatarUrl: sender?.profile?.avatarUrl || "",
+              },
+            });
+          }
+        },
+        onError: (error: any) => {
+          Alert.alert(
+            "Request failed",
+            error?.response?.data?.message || "Unable to update request.",
+          );
+        },
+      },
+    );
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-[#050505]">
@@ -302,6 +343,28 @@ export default function MatchesScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {incomingRequests.length ? (
+          <View className="mx-[18px] mt-4 rounded-[24px] border border-white/10 bg-black/70 p-3">
+            <View className="mb-2 flex-row items-center justify-between">
+              <Text className="text-sm font-extrabold text-white">
+                Requests
+              </Text>
+              <Text className="text-xs font-bold text-white/55">
+                {incomingRequests.length} waiting
+              </Text>
+            </View>
+            {incomingRequests.slice(0, 2).map((request) => (
+              <IncomingRequestRow
+                key={request.id}
+                request={request}
+                disabled={respondMatchRequest.isPending}
+                onAccept={() => respondToIncomingRequest(request, "ACCEPTED")}
+                onReject={() => respondToIncomingRequest(request, "REJECTED")}
+              />
+            ))}
+          </View>
+        ) : null}
 
         <View
           className="relative flex-1 justify-end px-[18px]"
@@ -595,6 +658,63 @@ const HeartAction = ({ onPress }: { onPress: () => void }) => (
     <Text className="mt-1 text-[11px] font-bold text-white">Like</Text>
   </TouchableOpacity>
 );
+
+const IncomingRequestRow = ({
+  request,
+  disabled,
+  onAccept,
+  onReject,
+}: {
+  request: MatchRequest;
+  disabled: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+}) => {
+  const name =
+    request.sender?.profile?.username ||
+    request.sender?.username ||
+    request.sender?.email ||
+    "Blunow user";
+  const avatarUrl = request.sender?.profile?.avatarUrl;
+
+  return (
+    <View className="mt-2 flex-row items-center rounded-[18px] bg-white/10 p-2">
+      {avatarUrl ? (
+        <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-[15px]" />
+      ) : (
+        <View className="h-11 w-11 items-center justify-center rounded-[15px] bg-white/15">
+          <Text className="text-base font-extrabold text-white">
+            {name.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      )}
+      <View className="ml-3 flex-1">
+        <Text className="text-sm font-extrabold text-white" numberOfLines={1}>
+          {name}
+        </Text>
+        <Text className="mt-0.5 text-xs font-semibold text-white/55" numberOfLines={1}>
+          {request.message || "Wants to connect"}
+        </Text>
+      </View>
+      <TouchableOpacity
+        className="mr-2 h-9 w-9 items-center justify-center rounded-full bg-white"
+        disabled={disabled}
+        onPress={onAccept}
+        activeOpacity={0.84}
+      >
+        <Ionicons name="checkmark" size={18} color="#050505" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        className="h-9 w-9 items-center justify-center rounded-full bg-white/10"
+        disabled={disabled}
+        onPress={onReject}
+        activeOpacity={0.84}
+      >
+        <Ionicons name="close" size={18} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   bottomContentShade: {

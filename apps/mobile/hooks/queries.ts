@@ -5,6 +5,14 @@ import { userService } from '@/services/user.service';
 import { searchService } from '@/services/search.service';
 import { matchService } from '@/services/match.service';
 import { storyService } from '@/services/story.service';
+import type {
+  Match,
+  DiscoverProfile,
+  MatchRecommendation,
+  MatchRequest,
+  RespondMatchRequestPayload,
+  SendMatchRequestPayload,
+} from '@/types/match.types';
 
 
 /**
@@ -178,7 +186,7 @@ export const useMatchesQuery = (enabled = true) => {
       if (!response?.success || !Array.isArray(response.data)) {
         return [];
       }
-      return response.data;
+      return response.data as Match[];
     },
     enabled,
   });
@@ -195,7 +203,20 @@ export const useMatchRecommendationsQuery = () => {
       if (!response?.success || !Array.isArray(response.data)) {
         return [];
       }
-      return response.data;
+      return response.data as MatchRecommendation[];
+    },
+  });
+};
+
+export const useDiscoverPeopleQuery = () => {
+  return useQuery({
+    queryKey: ['discover-people'],
+    queryFn: async () => {
+      const response = await searchService.getDiscoverPeople();
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+      return response.data as DiscoverProfile[];
     },
   });
 };
@@ -207,12 +228,72 @@ export const useSendMatchRequestMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ receiverId, message }: { receiverId: string; message?: string }) => {
+    mutationFn: async ({ receiverId, message }: SendMatchRequestPayload) => {
       return matchService.sendRequest(receiverId, message);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['match-recommendations'] });
       queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['match-requests-incoming'] });
+      queryClient.invalidateQueries({ queryKey: ['match-requests-outgoing'] });
+    },
+  });
+};
+
+export const useIncomingMatchRequestsQuery = (enabled = true) => {
+  return useQuery({
+    queryKey: ['match-requests-incoming'],
+    queryFn: async () => {
+      const response = await matchService.getIncomingRequests();
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+      return response.data as MatchRequest[];
+    },
+    enabled,
+  });
+};
+
+export const useOutgoingMatchRequestsQuery = (enabled = true) => {
+  return useQuery({
+    queryKey: ['match-requests-outgoing'],
+    queryFn: async () => {
+      const response = await matchService.getOutgoingRequests();
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+      return response.data as MatchRequest[];
+    },
+    enabled,
+  });
+};
+
+export const useRespondMatchRequestMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ requestId, status }: RespondMatchRequestPayload) => {
+      return matchService.respondToRequest(requestId, status);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['match-requests-incoming'] });
+      queryClient.invalidateQueries({ queryKey: ['match-requests-outgoing'] });
+      queryClient.invalidateQueries({ queryKey: ['match-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+    },
+  });
+};
+
+export const useUnmatchMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (matchId: string) => matchService.unmatch(matchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['match-recommendations'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
     },
   });
 };

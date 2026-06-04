@@ -8,6 +8,7 @@ const postFieldNames = new Set(
 );
 
 const supportsAnonymousPosts = postFieldNames.has("isAnonymous");
+let anonymousColumnName: string | null | undefined;
 
 export class FeedRepository {
   async getFilteredFeed(params: {
@@ -144,9 +145,34 @@ const getAnonymousFlags = async (ids: string[]) => {
   if (ids.length === 0 || supportsAnonymousPosts)
     return new Map<string, boolean>();
 
-  const rows = await prisma.$queryRaw<
+  const columnName = await getAnonymousColumnName();
+  if (!columnName) return new Map<string, boolean>();
+
+  const rows = await prisma.$queryRawUnsafe<
     { id: string; isAnonymous: boolean }[]
-  >`SELECT "id", "isAnonymous" FROM "posts" WHERE "id" IN (${Prisma.join(ids)})`;
+  >(
+    `SELECT "id", "${columnName}" AS "isAnonymous" FROM "posts" WHERE "id" IN (${ids
+      .map((_, index) => `$${index + 1}`)
+      .join(", ")})`,
+    ...ids,
+  );
 
   return new Map(rows.map((row) => [row.id, row.isAnonymous]));
+};
+
+const getAnonymousColumnName = async () => {
+  if (anonymousColumnName !== undefined) return anonymousColumnName;
+
+  const rows = await prisma.$queryRaw<
+    { column_name: string }[]
+  >`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = 'posts'
+      AND column_name IN ('isAnonymous', 'is_anonymous')
+    LIMIT 1
+  `;
+
+  anonymousColumnName = rows[0]?.column_name ?? null;
+  return anonymousColumnName;
 };

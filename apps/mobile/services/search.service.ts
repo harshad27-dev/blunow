@@ -15,6 +15,13 @@ export interface UnifiedSearchResult {
 }
 
 export const searchService = {
+  getDiscoverPeople: async (page: number = 1, limit: number = 20) => {
+    const response = await api.get('/search/discover', {
+      params: { page, limit },
+    });
+    return response.data;
+  },
+
   getUnifiedSearch: async (q: string, type: string = 'all', page: number = 1, limit: number = 20) => {
     const response = await api.get('/search', {
       params: { q, type, page, limit },

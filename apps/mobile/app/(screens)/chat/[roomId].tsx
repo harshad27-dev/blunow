@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -8,33 +8,38 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
-import { chatService } from "@/services/chat.service";
+import { ChatInput } from "@/components/chat/ChatInput";
+import { MessageBubble } from "@/components/chat/MessageBubble";
+import { TypingIndicator } from "@/components/chat/TypingIndicator";
+import {
+  useChatConversationQuery,
+  useChatMessagesQuery,
+  useMarkChatReadMutation,
+  useSendChatMessageMutation,
+  useUpdateChatSettingsMutation,
+} from "@/hooks/useChat";
 import { useAuthStore } from "@/store/authStore";
+import type { ChatMessage } from "@/types/chat.types";
 
-type LocalMessage = {
-  id: string;
-  content: string;
-  createdAt: string;
-  isMine: boolean;
-  isPending?: boolean;
-};
+type PendingMessage = ChatMessage & { isPending?: boolean };
 
 const getParam = (value?: string | string[]) => {
   if (Array.isArray(value)) return value[0];
   return value;
 };
+
+const getOtherParticipant = (conversation: any, currentUserId?: string) =>
+  conversation?.user1Id === currentUserId ? conversation?.user2 : conversation?.user1;
 
 export default function ChatRoomScreen() {
   const router = useRouter();
@@ -46,80 +51,99 @@ export default function ChatRoomScreen() {
     avatarUrl?: string;
   }>();
 
-  const roomId = getParam(params.roomId) || "chat";
-  const name = getParam(params.name) || "Chat";
-  const avatarUrl = getParam(params.avatarUrl);
+  const roomId = getParam(params.roomId) || "";
+  const fallbackName = getParam(params.name) || "Chat";
+  const fallbackAvatarUrl = getParam(params.avatarUrl);
   const { user } = useAuthStore();
-  const queryClient = useQueryClient();
-  const [draft, setDraft] = useState("");
-  const [pendingMessages, setPendingMessages] = useState<LocalMessage[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
 
+  const {
+    data: conversation,
+    isFetching: isConversationFetching,
+  } = useChatConversationQuery(roomId);
   const {
     data: serverMessages = [],
     isLoading,
     isFetching,
     refetch,
-  } = useQuery({
-    queryKey: ["chat-messages", roomId],
-    queryFn: async () => {
-      const response = await chatService.getMessages(roomId);
-      if (!response?.success || !Array.isArray(response.data)) return [];
+  } = useChatMessagesQuery(roomId);
+  const sendMessageMutation = useSendChatMessageMutation(roomId);
+  const markReadMutation = useMarkChatReadMutation(roomId);
+  const updateSettingsMutation = useUpdateChatSettingsMutation(roomId);
 
-      return response.data
-        .map((message: any) => ({
-          id: message.id,
-          content: message.content || "",
-          createdAt: message.createdAt,
-          isMine: message.senderId === user?.id,
-        }))
-        .reverse() as LocalMessage[];
-    },
-    enabled: Boolean(roomId),
-  });
+  const otherParticipant = getOtherParticipant(conversation, user?.id);
+  const name =
+    otherParticipant?.profile?.username ||
+    otherParticipant?.username ||
+    fallbackName;
+  const avatarUrl = otherParticipant?.profile?.avatarUrl || fallbackAvatarUrl;
 
   const messages = useMemo(
     () => [...serverMessages, ...pendingMessages],
     [pendingMessages, serverMessages],
   );
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) =>
-      chatService.sendMessage(roomId, { content, type: "TEXT" }),
-    onSuccess: () => {
-      setPendingMessages([]);
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", roomId] });
-      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
-    },
-    onError: (error: any) => {
-      setPendingMessages([]);
-      Alert.alert(
-        "Message failed",
-        error?.response?.data?.message || "Unable to send your message.",
-      );
-    },
-  });
+  const isCurrentUser1 = conversation?.user1Id === user?.id;
+  const isMuted = isCurrentUser1 ? conversation?.mutedBy1 : conversation?.mutedBy2;
+  const isArchived = isCurrentUser1
+    ? conversation?.archivedBy1
+    : conversation?.archivedBy2;
+
+  useEffect(() => {
+    if (roomId && serverMessages.some((message) => message.senderId !== user?.id)) {
+      markReadMutation.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, serverMessages.length, user?.id]);
 
   const subtitle = useMemo(() => {
+    if (isConversationFetching) return "Syncing...";
     if (messages.length === 0) return "Start the conversation";
+    if (isMuted) return "Muted";
     return `${messages.length} message${messages.length === 1 ? "" : "s"}`;
-  }, [messages.length]);
+  }, [isConversationFetching, isMuted, messages.length]);
 
-  const sendMessage = () => {
-    const content = draft.trim();
-    if (!content || sendMessageMutation.isPending) return;
+  const sendMessage = (content: string) => {
+    const pendingMessage: PendingMessage = {
+      id: `${roomId}-${Date.now()}`,
+      chatId: roomId,
+      senderId: user?.id || "me",
+      type: "TEXT",
+      content,
+      createdAt: new Date().toISOString(),
+      isPending: true,
+    };
 
-    setPendingMessages((current) => [
-      ...current,
+    setPendingMessages((current) => [...current, pendingMessage]);
+    sendMessageMutation.mutate(
+      { content, type: "TEXT" },
       {
-        id: `${roomId}-${Date.now()}`,
-        content,
-        createdAt: new Date().toISOString(),
-        isMine: true,
-        isPending: true,
+        onSuccess: () => setPendingMessages([]),
+        onError: (error: any) => {
+          setPendingMessages((current) =>
+            current.filter((message) => message.id !== pendingMessage.id),
+          );
+          Alert.alert(
+            "Message failed",
+            error?.response?.data?.message || "Unable to send your message.",
+          );
+        },
       },
+    );
+  };
+
+  const showChatActions = () => {
+    Alert.alert(name, "Conversation options", [
+      {
+        text: isMuted ? "Unmute" : "Mute",
+        onPress: () => updateSettingsMutation.mutate({ muted: !isMuted }),
+      },
+      {
+        text: isArchived ? "Unarchive" : "Archive",
+        onPress: () => updateSettingsMutation.mutate({ archived: !isArchived }),
+      },
+      { text: "Cancel", style: "cancel" },
     ]);
-    setDraft("");
-    sendMessageMutation.mutate(content);
   };
 
   return (
@@ -142,10 +166,7 @@ export default function ChatRoomScreen() {
           </TouchableOpacity>
 
           {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              className="h-11 w-11 rounded-full"
-            />
+            <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-full" />
           ) : (
             <View className="h-11 w-11 items-center justify-center rounded-full bg-[#111]">
               <Ionicons name="person" size={20} color="#888" />
@@ -163,6 +184,14 @@ export default function ChatRoomScreen() {
               {subtitle}
             </Text>
           </View>
+
+          <TouchableOpacity
+            className="h-10 w-10 items-center justify-center rounded-full bg-[#111]"
+            onPress={showChatActions}
+            activeOpacity={0.82}
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.white} />
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -171,6 +200,7 @@ export default function ChatRoomScreen() {
             flexGrow: 1,
             justifyContent: messages.length ? "flex-end" : "center",
             padding: 18,
+            paddingBottom: 20,
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -192,10 +222,7 @@ export default function ChatRoomScreen() {
           ) : messages.length === 0 ? (
             <View className="items-center px-4">
               {avatarUrl ? (
-                <Image
-                  source={{ uri: avatarUrl }}
-                  className="h-24 w-24 rounded-full"
-                />
+                <Image source={{ uri: avatarUrl }} className="h-24 w-24 rounded-full" />
               ) : (
                 <View className="h-24 w-24 items-center justify-center rounded-full bg-[#111]">
                   <Ionicons
@@ -209,68 +236,37 @@ export default function ChatRoomScreen() {
                 Chat with {name}
               </Text>
               <Text className="mt-2 text-center text-sm leading-5 text-[#888]">
-                Send a message to start talking from Matches.
+                Send a message to start the conversation.
               </Text>
             </View>
           ) : (
             <View className="gap-2.5">
-              {messages.map((message) => (
-                <View
-                  key={message.id}
-                  className={`max-w-[82%] rounded-3xl px-4 py-3 ${
-                    message.isMine
-                      ? "self-end bg-white"
-                      : "self-start bg-[#111]"
-                  }`}
-                >
-                  <Text
-                    className={`text-sm font-medium leading-5 ${
-                      message.isMine ? "text-black" : "text-white"
-                    }`}
-                  >
-                    {message.content}
-                  </Text>
-                  {message.isPending ? (
-                    <Text className="mt-1 text-[10px] font-semibold text-black/45">
-                      Sending...
-                    </Text>
-                  ) : null}
-                </View>
-              ))}
+              {messages.map((message, index) => {
+                const previous = messages[index - 1];
+                const showAvatar =
+                  message.senderId !== user?.id &&
+                  previous?.senderId !== message.senderId;
+
+                return (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    isMine={message.senderId === user?.id}
+                    showAvatar={showAvatar}
+                  />
+                );
+              })}
+              <TypingIndicator visible={false} />
             </View>
           )}
         </ScrollView>
 
-        <View
-          className="flex-row items-end border-t border-[#1A1A1A] bg-[#050505] px-4 pb-3 pt-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 12) }}
-        >
-          <View className="mr-2 flex-1 rounded-3xl border border-[#222] bg-[#111] px-4 py-2.5">
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={`Message ${name.split(" ")[0] || "them"}`}
-              placeholderTextColor="#666"
-              multiline
-              className="max-h-28 text-[15px] font-medium text-white"
-              style={{ padding: 0 }}
-            />
-          </View>
-
-          <TouchableOpacity
-            className={`h-11 w-11 items-center justify-center rounded-full ${
-              draft.trim() ? "bg-white" : "bg-[#1A1A1A]"
-            }`}
-            onPress={sendMessage}
-            activeOpacity={0.84}
+        <View style={{ paddingBottom: Math.max(insets.bottom - 12, 0) }}>
+          <ChatInput
+            placeholder={`Message ${name.split(" ")[0] || "them"}`}
             disabled={sendMessageMutation.isPending}
-          >
-            <Ionicons
-              name="send"
-              size={18}
-              color={draft.trim() ? Colors.black : Colors.textSecondary}
-            />
-          </TouchableOpacity>
+            onSend={sendMessage}
+          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

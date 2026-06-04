@@ -1,43 +1,6 @@
 import { api } from "./api";
-
-export type ChatMessagePreview = {
-  id: string;
-  content?: string | null;
-  mediaUrl?: string | null;
-  type?: string;
-  createdAt?: string;
-  senderId?: string;
-};
-
-export type ChatParticipant = {
-  id: string;
-  username?: string;
-  profile?: {
-    username?: string | null;
-    avatarUrl?: string | null;
-  } | null;
-};
-
-export type ChatConversation = {
-  id: string;
-  user1Id: string;
-  user2Id: string;
-  user1?: ChatParticipant;
-  user2?: ChatParticipant;
-  messages?: ChatMessagePreview[];
-  lastMessageAt?: string | null;
-  lastMessageContent?: string | null;
-  unreadCount?: number;
-  mutedBy1?: boolean;
-  mutedBy2?: boolean;
-  archivedBy1?: boolean;
-  archivedBy2?: boolean;
-  _count?: {
-    messages?: number;
-  };
-  createdAt?: string;
-  updatedAt?: string;
-};
+import type { ChatSettingsPayload, SendMessagePayload } from "@/types/chat.types";
+export type { ChatConversation, ChatMessage, ChatParticipant } from "@/types/chat.types";
 
 export const chatService = {
   getConversations: async () => {
@@ -59,13 +22,33 @@ export const chatService = {
 
   sendMessage: async (
     chatId: string,
-    payload: { content?: string; mediaUrl?: string; type?: string },
+    payload: SendMessagePayload,
   ) => {
     const response = await api.post(`/chat/${chatId}/messages`, {
       type: payload.type || "TEXT",
       content: payload.content,
       mediaUrl: payload.mediaUrl,
     });
+    return response.data;
+  },
+
+  updateConversation: async (chatId: string, payload: ChatSettingsPayload) => {
+    const response = await api.patch(`/chat/conversations/${chatId}`, payload);
+    return response.data;
+  },
+
+  markConversationRead: async (chatId: string) => {
+    const response = await api.patch(`/chat/conversations/${chatId}/read`);
+    return response.data;
+  },
+
+  setTyping: async (chatId: string, isTyping: boolean) => {
+    const response = await api.post(`/chat/${chatId}/typing`, { isTyping });
+    return response.data;
+  },
+
+  deleteConversation: async (chatId: string) => {
+    const response = await api.delete(`/chat/${chatId}`);
     return response.data;
   },
 };

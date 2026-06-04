@@ -12,7 +12,9 @@ export class ChatController {
       const chats = await this.chatService.getChatsForUser(req.user!.id);
       res.status(200).json({ success: true, data: chats });
     } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
+      res
+        .status(error.statusCode ?? 500)
+        .json({ success: false, message: error.message });
     }
   };
 
@@ -49,11 +51,17 @@ export class ChatController {
 
   sendMessage = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+      const type = req.body.type ?? "TEXT";
+      if (!["TEXT", "IMAGE", "VIDEO", "AUDIO"].includes(type)) {
+        res.status(400).json({ success: false, message: "Invalid message type" });
+        return;
+      }
+
       const message = await this.messageService.sendMessage(
         req.params.chatId,
         req.user!.id,
         {
-          type: req.body.type ?? "TEXT",
+          type,
           content: req.body.content,
           mediaUrl: req.body.mediaUrl,
         },
@@ -93,6 +101,24 @@ export class ChatController {
         .json({ success: true, conversationId: req.params.chatId, ...result });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  markChatRead = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const result = await this.messageService.markAsRead(
+        req.params.chatId,
+        req.user!.id,
+      );
+      res.status(200).json({
+        success: true,
+        conversationId: req.params.chatId,
+        readCount: result.count,
+      });
+    } catch (error: any) {
+      res
+        .status(error.statusCode ?? 400)
+        .json({ success: false, message: error.message });
     }
   };
 }

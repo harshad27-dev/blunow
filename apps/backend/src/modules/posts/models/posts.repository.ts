@@ -12,6 +12,7 @@ const pickPostFields = (data: Record<string, any>) =>
   Object.fromEntries(
     Object.entries(data).filter(([key]) => postFieldNames.has(key)),
   );
+let anonymousColumnName: string | null | undefined;
 
 export class PostsRepository {
   async create(data: {
@@ -34,7 +35,7 @@ export class PostsRepository {
     });
 
     if (isAnonymous && !supportsAnonymousPosts) {
-      await prisma.$executeRaw`UPDATE "posts" SET "isAnonymous" = true WHERE "id" = ${post.id}`;
+      await updateAnonymousFlag(post.id, true);
     }
 
     return { ...post, isAnonymous };
@@ -65,7 +66,7 @@ export class PostsRepository {
     });
 
     if (typeof isAnonymous === "boolean" && !supportsAnonymousPosts) {
-      await prisma.$executeRaw`UPDATE "posts" SET "isAnonymous" = ${isAnonymous} WHERE "id" = ${id}`;
+      await updateAnonymousFlag(id, isAnonymous);
     }
 
     return {
@@ -156,9 +157,15 @@ const hydrateAnonymousFlag = async <T extends { id: string }>(
     return post as T & { isAnonymous: boolean };
   }
 
-  const rows = await prisma.$queryRaw<{ id: string; isAnonymous: boolean }[]>`
-    SELECT "id", "isAnonymous" FROM "posts" WHERE "id" = ${post.id}
-  `;
+  const columnName = await getAnonymousColumnName();
+  if (!columnName) return { ...post, isAnonymous: false };
+
+  const rows = await prisma.$queryRawUnsafe<
+    { id: string; isAnonymous: boolean }[]
+  >(
+    `SELECT "id", "${columnName}" AS "isAnonymous" FROM "posts" WHERE "id" = $1`,
+    post.id,
+  );
 
   return { ...post, isAnonymous: Boolean(rows[0]?.isAnonymous) };
 };
@@ -172,13 +179,51 @@ const hydrateAnonymousFlags = async <T extends { id: string }[]>(
   }
 
   const ids = posts.map((post) => post.id);
-  const rows = await prisma.$queryRaw<
+  const columnName = await getAnonymousColumnName();
+  if (!columnName) {
+    return posts.map((post) => ({ ...post, isAnonymous: false }));
+  }
+
+  const rows = await prisma.$queryRawUnsafe<
     { id: string; isAnonymous: boolean }[]
-  >`SELECT "id", "isAnonymous" FROM "posts" WHERE "id" IN (${Prisma.join(ids)})`;
+  >(
+    `SELECT "id", "${columnName}" AS "isAnonymous" FROM "posts" WHERE "id" IN (${ids
+      .map((_, index) => `$${index + 1}`)
+      .join(", ")})`,
+    ...ids,
+  );
   const byId = new Map(rows.map((row) => [row.id, row.isAnonymous]));
 
   return posts.map((post) => ({
     ...post,
     isAnonymous: Boolean(byId.get(post.id)),
   }));
+};
+
+const getAnonymousColumnName = async () => {
+  if (anonymousColumnName !== undefined) return anonymousColumnName;
+
+  const rows = await prisma.$queryRaw<
+    { column_name: string }[]
+  >`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = 'posts'
+      AND column_name IN ('isAnonymous', 'is_anonymous')
+    LIMIT 1
+  `;
+
+  anonymousColumnName = rows[0]?.column_name ?? null;
+  return anonymousColumnName;
+};
+
+const updateAnonymousFlag = async (postId: string, isAnonymous: boolean) => {
+  const columnName = await getAnonymousColumnName();
+  if (!columnName) return;
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "posts" SET "${columnName}" = $1 WHERE "id" = $2`,
+    isAnonymous,
+    postId,
+  );
 };

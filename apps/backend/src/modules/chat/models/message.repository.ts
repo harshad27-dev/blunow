@@ -10,13 +10,18 @@ export class MessageRepository {
   }) {
     return prisma.$transaction(async (tx) => {
       const message = await tx.message.create({
-        data,
+        data: {
+          ...data,
+          content: data.content?.trim(),
+          deliveredAt: new Date(),
+        },
         include: {
           sender: {
             include: {
               profile: { select: { username: true, avatarUrl: true } },
             },
           },
+          readReceipts: true,
         },
       });
 
@@ -46,6 +51,7 @@ export class MessageRepository {
         sender: {
           include: { profile: { select: { username: true, avatarUrl: true } } },
         },
+        readReceipts: true,
       },
       orderBy: { createdAt: "desc" },
       skip,
@@ -54,9 +60,59 @@ export class MessageRepository {
   }
 
   async markAllRead(chatId: string, userId: string) {
-    return prisma.message.updateMany({
-      where: { chatId, senderId: { not: userId }, isRead: false },
-      data: { isRead: true },
+    return prisma.$transaction(async (tx) => {
+      const unreadMessages = await tx.message.findMany({
+        where: {
+          chatId,
+          senderId: { not: userId },
+          readReceipts: { none: { readByUserId: userId } },
+        },
+        select: { id: true },
+      });
+
+      if (unreadMessages.length === 0) {
+        await tx.chat.update({
+          where: { id: chatId },
+          data: { unreadCount: 0 },
+        });
+        return { count: 0 };
+      }
+
+      await tx.messageReadReceipt.createMany({
+        data: unreadMessages.map((message) => ({
+          messageId: message.id,
+          readByUserId: userId,
+        })),
+        skipDuplicates: true,
+      });
+
+      await tx.message.updateMany({
+        where: { id: { in: unreadMessages.map((message) => message.id) } },
+        data: { isRead: true },
+      });
+
+      await tx.chat.update({
+        where: { id: chatId },
+        data: { unreadCount: 0 },
+      });
+
+      return { count: unreadMessages.length };
     });
+  }
+
+  async countUnreadByChatIds(chatIds: string[], userId: string) {
+    if (chatIds.length === 0) return new Map<string, number>();
+
+    const grouped = await prisma.message.groupBy({
+      by: ["chatId"],
+      where: {
+        chatId: { in: chatIds },
+        senderId: { not: userId },
+        readReceipts: { none: { readByUserId: userId } },
+      },
+      _count: { _all: true },
+    });
+
+    return new Map(grouped.map((item) => [item.chatId, item._count._all]));
   }
 }

@@ -1,17 +1,37 @@
 import { prisma } from '../../../prisma/prisma';
+import { MessageRepository } from './message.repository';
 
 export class ChatRepository {
+  private messageRepository = new MessageRepository();
+
   async findByUser(userId: string) {
-    return prisma.chat.findMany({
+    const chats = await prisma.chat.findMany({
       where: { OR: [{ user1Id: userId }, { user2Id: userId }] },
       include: {
         user1: { include: { profile: { select: { username: true, avatarUrl: true } } } },
         user2: { include: { profile: { select: { username: true, avatarUrl: true } } } },
-        messages: { take: 1, orderBy: { createdAt: 'desc' } },
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            sender: { include: { profile: { select: { username: true, avatarUrl: true } } } },
+            readReceipts: true,
+          },
+        },
         _count: { select: { messages: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
     });
+
+    const unreadCounts = await this.messageRepository.countUnreadByChatIds(
+      chats.map((chat) => chat.id),
+      userId,
+    );
+
+    return chats.map((chat) => ({
+      ...chat,
+      unreadCount: unreadCounts.get(chat.id) ?? 0,
+    }));
   }
 
   async findById(id: string) {
@@ -20,12 +40,17 @@ export class ChatRepository {
       include: {
         user1: { include: { profile: true } },
         user2: { include: { profile: true } },
+        _count: { select: { messages: true } },
       },
     });
   }
 
   async create(matchId: string, user1Id: string, user2Id: string) {
-    return prisma.chat.create({ data: { matchId, user1Id, user2Id } });
+    return prisma.chat.upsert({
+      where: { matchId },
+      update: {},
+      create: { matchId, user1Id, user2Id },
+    });
   }
 
   async updateSettings(chatId: string, user1Id: string, user2Id: string, currentUserId: string, settings: { muted?: boolean; archived?: boolean }) {

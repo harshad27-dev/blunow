@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   RefreshControl,
@@ -11,13 +12,13 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
 
 import {
-  chatService,
-  type ChatConversation,
-  type ChatParticipant,
-} from "@/services/chat.service";
+  useChatConversationsQuery,
+  useDeleteChatMutation,
+  useUpdateChatSettingsMutation,
+} from "@/hooks/useChat";
+import type { ChatConversation, ChatParticipant } from "@/types/chat.types";
 import { useAuthStore } from "@/store/authStore";
 
 type ConversationItem = {
@@ -30,6 +31,7 @@ type ConversationItem = {
   isMuted: boolean;
   isArchived: boolean;
   messageCount: number;
+  raw: ChatConversation;
 };
 
 const getTimeLabel = (value?: string | null) => {
@@ -96,6 +98,7 @@ const normalizeConversation = (
     isMuted: Boolean(isMuted),
     isArchived: Boolean(isArchived),
     messageCount: chat._count?.messages || 0,
+    raw: chat,
   };
 };
 
@@ -109,14 +112,8 @@ export default function ChatListScreen() {
     isLoading,
     isFetching,
     refetch,
-  } = useQuery({
-    queryKey: ["chat-conversations"],
-    queryFn: async () => {
-      const response = await chatService.getConversations();
-      if (!response?.success || !Array.isArray(response.data)) return [];
-      return response.data as ChatConversation[];
-    },
-  });
+  } = useChatConversationsQuery();
+  const deleteChatMutation = useDeleteChatMutation();
 
   const items = useMemo(
     () =>
@@ -137,6 +134,17 @@ export default function ChatListScreen() {
         avatarUrl: item.avatarUrl || "",
       },
     });
+  };
+
+  const confirmDelete = (item: ConversationItem) => {
+    Alert.alert("Delete chat?", `Delete your conversation with ${item.name}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteChatMutation.mutate(item.id),
+      },
+    ]);
   };
 
   return (
@@ -209,6 +217,7 @@ export default function ChatListScreen() {
             <ConversationRow
               item={item}
               onPress={() => openConversation(item)}
+              onDelete={() => confirmDelete(item)}
             />
           )}
         />
@@ -235,71 +244,99 @@ const EmptyState = () => (
 const ConversationRow = ({
   item,
   onPress,
+  onDelete,
 }: {
   item: ConversationItem;
   onPress: () => void;
-}) => (
-  <TouchableOpacity
-    className="mb-3 flex-row items-center rounded-[24px] border border-[#1E1E1E] bg-[#0F0F0F] p-3"
-    onPress={onPress}
-    activeOpacity={0.84}
-  >
-    <View className="relative">
-      {item.avatarUrl ? (
-        <Image
-          source={{ uri: item.avatarUrl }}
-          className="h-16 w-16 rounded-[22px] bg-[#1A1A1A]"
-        />
-      ) : (
-        <View className="h-16 w-16 items-center justify-center rounded-[22px] bg-[#1A1A1A]">
-          <Ionicons name="person" size={24} color="#888" />
-        </View>
-      )}
-      {item.unreadCount > 0 ? (
-        <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0F0F0F] bg-white px-1">
-          <Text className="text-[10px] font-extrabold text-black">
-            {item.unreadCount > 9 ? "9+" : item.unreadCount}
-          </Text>
-        </View>
-      ) : null}
-    </View>
+  onDelete: () => void;
+}) => {
+  const settingsMutation = useUpdateChatSettingsMutation(item.id);
 
-    <View className="ml-4 flex-1">
-      <View className="flex-row items-center justify-between">
-        <Text
-          className="mr-3 flex-1 text-base font-extrabold text-white"
-          numberOfLines={1}
-        >
-          {item.name}
-        </Text>
-        <Text className="text-xs font-bold text-[#777]">{item.timeLabel}</Text>
-      </View>
+  const showActions = () => {
+    Alert.alert(item.name, "Conversation options", [
+      {
+        text: item.isMuted ? "Unmute" : "Mute",
+        onPress: () => settingsMutation.mutate({ muted: !item.isMuted }),
+      },
+      {
+        text: item.isArchived ? "Unarchive" : "Archive",
+        onPress: () => settingsMutation.mutate({ archived: !item.isArchived }),
+      },
+      { text: "Delete", style: "destructive", onPress: onDelete },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
-      <View className="mt-1.5 flex-row items-center">
-        {item.isMuted ? (
-          <Ionicons name="notifications-off-outline" size={13} color="#777" />
+  return (
+    <TouchableOpacity
+      className="mb-3 flex-row items-center rounded-[24px] border border-[#1E1E1E] bg-[#0F0F0F] p-3"
+      onPress={onPress}
+      onLongPress={showActions}
+      activeOpacity={0.84}
+    >
+      <View className="relative">
+        {item.avatarUrl ? (
+          <Image
+            source={{ uri: item.avatarUrl }}
+            className="h-16 w-16 rounded-[22px] bg-[#1A1A1A]"
+          />
+        ) : (
+          <View className="h-16 w-16 items-center justify-center rounded-[22px] bg-[#1A1A1A]">
+            <Ionicons name="person" size={24} color="#888" />
+          </View>
+        )}
+        {item.unreadCount > 0 ? (
+          <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0F0F0F] bg-white px-1">
+            <Text className="text-[10px] font-extrabold text-black">
+              {item.unreadCount > 9 ? "9+" : item.unreadCount}
+            </Text>
+          </View>
         ) : null}
-        <Text
-          className={`flex-1 text-sm leading-5 ${
-            item.unreadCount
-              ? "font-bold text-[#EDEDED]"
-              : "font-medium text-[#8A8A8A]"
-          } ${item.isMuted ? "ml-1" : ""}`}
-          numberOfLines={1}
-        >
-          {item.subtitle}
-        </Text>
       </View>
 
-      <View className="mt-2 flex-row items-center">
-        <View className="rounded-full bg-[#181818] px-2.5 py-1">
-          <Text className="text-[11px] font-bold text-[#9A9A9A]">
-            {item.messageCount || 0} messages
+      <View className="ml-4 flex-1">
+        <View className="flex-row items-center justify-between">
+          <Text
+            className="mr-3 flex-1 text-base font-extrabold text-white"
+            numberOfLines={1}
+          >
+            {item.name}
+          </Text>
+          <Text className="text-xs font-bold text-[#777]">{item.timeLabel}</Text>
+        </View>
+
+        <View className="mt-1.5 flex-row items-center">
+          {item.isMuted ? (
+            <Ionicons name="notifications-off-outline" size={13} color="#777" />
+          ) : null}
+          <Text
+            className={`flex-1 text-sm leading-5 ${
+              item.unreadCount
+                ? "font-bold text-[#EDEDED]"
+                : "font-medium text-[#8A8A8A]"
+            } ${item.isMuted ? "ml-1" : ""}`}
+            numberOfLines={1}
+          >
+            {item.subtitle}
           </Text>
         </View>
-      </View>
-    </View>
 
-    <Ionicons name="chevron-forward" size={18} color="#555" />
-  </TouchableOpacity>
-);
+        <View className="mt-2 flex-row items-center">
+          <View className="rounded-full bg-[#181818] px-2.5 py-1">
+            <Text className="text-[11px] font-bold text-[#9A9A9A]">
+              {item.messageCount || 0} messages
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        className="h-9 w-9 items-center justify-center rounded-full"
+        onPress={showActions}
+        activeOpacity={0.82}
+      >
+        <Ionicons name="ellipsis-horizontal" size={18} color="#777" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+};

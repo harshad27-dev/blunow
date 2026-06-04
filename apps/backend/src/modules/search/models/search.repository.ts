@@ -1,6 +1,81 @@
 import { prisma } from '../../../prisma/prisma';
 
 export class SearchRepository {
+  async getDiscoverPeople(currentUserId: string, limit: number, offset: number) {
+    const [currentUser, excludedRequests, excludedMatches, users] =
+      await Promise.all([
+        prisma.user.findUnique({
+          where: { id: currentUserId },
+          include: { profile: true },
+        }),
+        prisma.matchRequest.findMany({
+          where: {
+            OR: [{ senderId: currentUserId }, { receiverId: currentUserId }],
+          },
+          select: { senderId: true, receiverId: true },
+        }),
+        prisma.match.findMany({
+          where: {
+            OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
+          },
+          select: { user1Id: true, user2Id: true },
+        }),
+        prisma.user.findMany({
+          where: {
+            id: { not: currentUserId },
+            isActive: true,
+            profile: { isNot: null },
+          },
+          include: {
+            profile: true,
+            verification: { select: { status: true } },
+          },
+          orderBy: [{ createdAt: 'desc' }],
+          take: limit,
+          skip: offset,
+        }),
+      ]);
+
+    const connectedUserIds = new Set<string>();
+    excludedRequests.forEach((request) => {
+      connectedUserIds.add(
+        request.senderId === currentUserId ? request.receiverId : request.senderId,
+      );
+    });
+    excludedMatches.forEach((match) => {
+      connectedUserIds.add(
+        match.user1Id === currentUserId ? match.user2Id : match.user1Id,
+      );
+    });
+
+    const currentInterests = currentUser?.profile?.interests ?? [];
+
+    return users.map((user) => {
+      const interests = user.profile?.interests ?? [];
+      const sharedInterestCount = interests.filter((interest) =>
+        currentInterests.includes(interest),
+      ).length;
+
+      return {
+        id: user.id,
+        username: user.profile?.username ?? user.email.split('@')[0],
+        name: user.profile?.username ?? user.email.split('@')[0],
+        age: getAge(user.profile?.birthDate),
+        city: user.profile?.location ?? 'Location not set',
+        distance: 'Nearby',
+        avatarUrl: user.profile?.avatarUrl,
+        imageUrl: user.profile?.bannerUrl || user.profile?.avatarUrl || '',
+        bio: user.profile?.bio ?? 'No bio provided yet.',
+        quote: user.profile?.bio ?? 'No bio provided yet.',
+        interests,
+        online: false,
+        verified: user.verification?.status === 'VERIFIED' || user.isVerified,
+        matchScore: Math.min(99, 62 + sharedInterestCount * 6),
+        isConnected: connectedUserIds.has(user.id),
+      };
+    });
+  }
+
   async getUnifiedSearch(query: string, type: string, limit: number, offset: number) {
     if (!query) return { users: [], posts: [], rooms: [] };
 
@@ -94,3 +169,17 @@ export class SearchRepository {
     return { hashtags: sorted };
   }
 }
+
+const getAge = (birthDate?: Date | null) => {
+  if (!birthDate) return 18;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age;
+};

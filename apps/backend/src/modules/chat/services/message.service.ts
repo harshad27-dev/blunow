@@ -33,6 +33,9 @@ export class MessageService {
     if (!data.content?.trim() && !data.mediaUrl) {
       throw new AppError("Message content or media is required", 400);
     }
+    if (data.content && data.content.trim().length > 4000) {
+      throw new AppError("Message content is too long", 400);
+    }
 
     const chat = await this.chatRepository.findById(chatId);
     if (!chat) throw new AppError("Chat not found", 404);
@@ -54,6 +57,11 @@ export class MessageService {
   }
 
   async markAsRead(chatId: string, userId: string) {
+    const chat = await this.chatRepository.findById(chatId);
+    if (!chat) throw new AppError("Chat not found", 404);
+    if (chat.user1Id !== userId && chat.user2Id !== userId) {
+      throw new AppError("Forbidden", 403);
+    }
     return this.messageRepository.markAllRead(chatId, userId);
   }
 }
