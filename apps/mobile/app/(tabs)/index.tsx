@@ -12,21 +12,20 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import Header from "@/components/Header";
 import FeedCard from "@/components/FeedCard";
 import { Screen } from "@/components/common/Screen";
 import { ScreenSpacing } from "@/constants/screen";
-import { suggestedProfiles } from "@/data/matchProfiles";
 import { postService } from "@/services/post.service";
 import { useAuthStore } from "@/store/authStore";
-import { useFeedQuery } from "@/hooks/queries";
+import { useFeedQuery, useStoriesQuery } from "@/hooks/queries";
 import { useState } from "react";
 
 type StoryItem = {
   id: string;
   name: string;
   imageUrl?: string | null;
-  isLive?: boolean;
 };
 
 type FeedPost = {
@@ -60,7 +59,13 @@ const getTimeAgo = (dateString: string) => {
 };
 
 export default function FeedScreen() {
+  const router = useRouter();
   const { data: feedData, isLoading, isFetching, refetch } = useFeedQuery();
+  const {
+    data: storiesData,
+    isLoading: storiesLoading,
+    refetch: refetchStories,
+  } = useStoriesQuery();
   const { user } = useAuthStore();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
@@ -83,36 +88,23 @@ export default function FeedScreen() {
       timeAgo: p.createdAt ? getTimeAgo(p.createdAt) : "just now",
     })) || [];
 
-  const authorStories = posts.reduce<StoryItem[]>((items, post) => {
-    if (items.some((item) => item.name === post.author.username)) return items;
-
-    return [
-      ...items,
-      {
-        id: `author-${post.id}`,
-        name: post.author.username,
-        imageUrl: post.author.avatarUrl || post.mediaUrls?.[0],
-        isLive: items.length === 0,
-      },
-    ];
-  }, []);
-
-  const storyItems: StoryItem[] =
-    authorStories.length > 0
-      ? authorStories.slice(0, 8)
-      : suggestedProfiles.map((profile, index) => ({
-          id: profile.id,
-          name: profile.name,
-          imageUrl: profile.imageUrl,
-          isLive: index === 0,
-        }));
+  const storyItems: StoryItem[] = (storiesData || []).slice(0, 12);
 
   const currentUserName =
     user?.profile?.username || user?.username || "Your story";
   const currentUserAvatar = user?.profile?.avatarUrl;
 
+  const openCreateStory = () => router.push("/(screens)/create-story");
+
+  const openStory = (storyId: string) =>
+    router.push({
+      pathname: "/(screens)/story/[storyId]",
+      params: { storyId },
+    });
+
   const onRefresh = () => {
     refetch();
+    refetchStories();
   };
 
   const handleLikePost = async (postId: string, isLiked?: boolean) => {
@@ -162,6 +154,7 @@ export default function FeedScreen() {
         <TouchableOpacity
           className="w-[72px] items-center"
           activeOpacity={0.78}
+          onPress={openCreateStory}
         >
           <View className="h-[68px] w-[68px] items-center justify-center rounded-[24px] border border-[#2A2A2A] bg-[#111111]">
             {currentUserAvatar ? (
@@ -184,37 +177,48 @@ export default function FeedScreen() {
           </Text>
         </TouchableOpacity>
 
-        {storyItems.map((story) => (
-          <TouchableOpacity
-            key={story.id}
-            className="w-[72px] items-center"
-            activeOpacity={0.78}
-          >
-            <View className="h-[68px] w-[68px] items-center justify-center rounded-[24px] border-2 border-white bg-[#111111]">
-              {story.imageUrl ? (
-                <Image
-                  source={{ uri: story.imageUrl }}
-                  className="h-[60px] w-[60px] rounded-[21px]"
-                />
-              ) : (
-                <Ionicons name="person" size={24} color="#888888" />
-              )}
-              {story.isLive ? (
-                <View className="absolute -bottom-1 rounded-full bg-[#FF4F7B] px-2 py-0.5">
-                  <Text className="text-[9px] font-extrabold uppercase text-white">
-                    Live
-                  </Text>
+        {storiesLoading
+          ? Array.from({ length: 4 }).map((_, index) => (
+              <View
+                key={`story-loading-${index}`}
+                className="w-[72px] items-center"
+              >
+                <View className="h-[68px] w-[68px] rounded-[24px] border border-[#242424] bg-[#111111]" />
+                <View className="mt-3 h-3 w-12 rounded-full bg-[#151515]" />
+              </View>
+            ))
+          : storyItems.map((story) => (
+              <TouchableOpacity
+                key={story.id}
+                className="w-[72px] items-center"
+                activeOpacity={0.78}
+                onPress={() => openStory(story.id)}
+              >
+                <View className="h-[68px] w-[68px] items-center justify-center rounded-[24px] border-2 border-[#FF4F7B] bg-[#111111]">
+                  <View className="h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-[22px] border border-[#050505] bg-[#151515]">
+                    {story.imageUrl ? (
+                      <Image
+                        source={{ uri: story.imageUrl }}
+                        className="h-full w-full"
+                      />
+                    ) : (
+                      <Ionicons name="person" size={24} color="#888888" />
+                    )}
+                  </View>
+                  <View className="absolute -bottom-1 rounded-full bg-[#050505] px-2 py-0.5">
+                    <Text className="text-[9px] font-extrabold uppercase text-[#FF4F7B]">
+                      New
+                    </Text>
+                  </View>
                 </View>
-              ) : null}
-            </View>
-            <Text
-              className="mt-2 w-full text-center text-xs font-semibold text-white"
-              numberOfLines={1}
-            >
-              {story.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
+                <Text
+                  className="mt-2 w-full text-center text-xs font-semibold text-white"
+                  numberOfLines={1}
+                >
+                  {story.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
       </ScrollView>
     </View>
   );

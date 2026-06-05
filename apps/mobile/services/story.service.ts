@@ -1,6 +1,22 @@
 import { api } from "./api";
 
+export interface CreateStoryPayload {
+  mediaUrl: string;
+  mediaType: "IMAGE" | "VIDEO" | "AUDIO";
+  caption?: string;
+}
+
 export const storyService = {
+  getStories: async () => {
+    const response = await api.get("/stories");
+    return response.data;
+  },
+
+  createStory: async (payload: CreateStoryPayload) => {
+    const response = await api.post("/stories", payload);
+    return response.data;
+  },
+
   getUserStories: async (userId: string) => {
     const response = await api.get(`/stories/user/${userId}`);
     return response.data;

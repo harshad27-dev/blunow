@@ -176,6 +176,58 @@ export const useUserStoriesQuery = (userId?: string, enabled = true) => {
 };
 
 /**
+ * Fetches active stories for the feed carousel
+ */
+export const useStoriesQuery = () => {
+  return useQuery({
+    queryKey: ['stories'],
+    queryFn: async () => {
+      const response = await storyService.getStories();
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+
+      return response.data.map((story: any) => ({
+        id: story.id,
+        name:
+          story.author?.profile?.username ||
+          story.author?.username ||
+          'Story',
+        imageUrl: story.author?.profile?.avatarUrl || story.mediaUrl || '',
+        mediaUrl: story.mediaUrl || '',
+        expiresAt: story.expiresAt,
+        viewsCount: story._count?.views || story.viewsCount || 0,
+      }));
+    },
+  });
+};
+
+interface CreateStoryParams {
+  imageUri: string;
+  caption?: string;
+}
+
+export const useCreateStoryMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ imageUri, caption }: CreateStoryParams) => {
+      const mediaUrl = await postService.uploadMedia(imageUri);
+      return storyService.createStory({
+        mediaUrl,
+        mediaType: 'IMAGE',
+        caption: caption?.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stories'] });
+      queryClient.invalidateQueries({ queryKey: ['user-stories'] });
+      queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+    },
+  });
+};
+
+/**
  * Fetches matches for the current user
  */
 export const useMatchesQuery = (enabled = true) => {
