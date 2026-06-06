@@ -77,6 +77,7 @@ export class FeedRepository {
   }
 
   async getPeopleNearYou(
+    userId: string,
     lat: number,
     lng: number,
     maxDistance: number,
@@ -84,7 +85,7 @@ export class FeedRepository {
     offset: number,
   ) {
     const query = `
-      SELECT u."id", u."username", prof."avatarUrl", u."sexuality", prof."interests",
+      SELECT u."id", prof."username", prof."avatarUrl", u."sexuality", prof."interests",
       (
         6371 * acos(
           cos(radians($1)) * cos(radians(prof."latitude")) *
@@ -94,11 +95,14 @@ export class FeedRepository {
       ) AS distance
       FROM "users" u
       JOIN "profiles" prof ON u."id" = prof."userId"
-      WHERE prof."latitude" IS NOT NULL AND prof."longitude" IS NOT NULL
+      WHERE u."id" <> $5
+        AND u."isActive" = true
+        AND prof."latitude" IS NOT NULL
+        AND prof."longitude" IS NOT NULL
       ORDER BY distance ASC
       LIMIT $3 OFFSET $4
     `;
-    const users = await prisma.$queryRawUnsafe(query, lat, lng, limit, offset);
+    const users = await prisma.$queryRawUnsafe(query, lat, lng, limit, offset, userId);
     return (users as any[]).filter((u) => u.distance <= maxDistance);
   }
 

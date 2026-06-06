@@ -2,9 +2,10 @@ import "../global.css";
 import { useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts,
   Outfit_400Regular,
   Outfit_500Medium,
@@ -18,7 +19,7 @@ import { Colors } from '@/constants/colors';
 SplashScreen.preventAutoHideAsync();
 
 function AuthGuard() {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -26,21 +27,24 @@ function AuthGuard() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const onOnboarding = segments[1] === 'onboarding';
+    const needsOnboarding =
+      isAuthenticated && !(user?.profile?.lookingFor?.length);
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (isAuthenticated && inAuthGroup) {
+    } else if (needsOnboarding && !onOnboarding) {
+      router.replace('/(auth)/onboarding');
+    } else if (isAuthenticated && inAuthGroup && !needsOnboarding) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [isAuthenticated, isLoading, router, segments, user?.profile?.lookingFor]);
 
   return null;
 }
 
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-
 export default function RootLayout() {
-  const { rehydrate } = useAuthStore();
+  const { isLoading, rehydrate } = useAuthStore();
 
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,
@@ -52,7 +56,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     rehydrate();
-  }, []);
+  }, [rehydrate]);
 
   useEffect(() => {
     if (fontsLoaded) {
@@ -61,6 +65,23 @@ export default function RootLayout() {
   }, [fontsLoaded]);
 
   if (!fontsLoaded) return null;
+
+  if (isLoading) {
+    return (
+      <SafeAreaProvider>
+        <View
+          style={{
+            alignItems: 'center',
+            backgroundColor: Colors.bg,
+            flex: 1,
+            justifyContent: 'center',
+          }}
+        >
+          <ActivityIndicator color={Colors.white} size="large" />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>

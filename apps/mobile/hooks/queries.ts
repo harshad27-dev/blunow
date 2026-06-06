@@ -388,6 +388,25 @@ export const useSearchQuery = (q: string, type: string = 'users') => {
   });
 };
 
+export const useTrendingHashtagsQuery = () => {
+  return useQuery({
+    queryKey: ['trending-hashtags'],
+    queryFn: async () => {
+      const response = await searchService.getTrendingHashtags();
+      if (!response?.success || !Array.isArray(response.hashtags)) {
+        return [];
+      }
+      return response.hashtags as Array<{
+        hashtag: string;
+        postCount: number;
+        trendingScore: number;
+        trend: string;
+      }>;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+};
+
 /**
  * Fetches full profile data for any user
  */

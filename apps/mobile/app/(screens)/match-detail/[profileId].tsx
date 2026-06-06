@@ -1,5 +1,7 @@
 import React from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StatusBar,
@@ -14,12 +16,62 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { FontFamily, FontSize } from "@/constants/typography";
-import { interestMeta, suggestedProfiles } from "@/data/matchProfiles";
+import {
+  useMatchRecommendationsQuery,
+  useSendMatchRequestMutation,
+} from "@/hooks/queries";
+
+const fallbackProfileImage =
+  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
 
 export default function MatchDetailScreen() {
   const router = useRouter();
   const { profileId } = useLocalSearchParams<{ profileId: string }>();
-  const profile = suggestedProfiles.find((item) => item.id === profileId);
+  const { data: profiles = [], isLoading } = useMatchRecommendationsQuery();
+  const sendMatchRequest = useSendMatchRequestMutation();
+  const profile = profiles.find((item) => item.id === profileId);
+
+  const sendRequest = (message?: string) => {
+    if (!profile) return;
+
+    sendMatchRequest.mutate(
+      { receiverId: profile.id, message },
+      {
+        onSuccess: (response: any) => {
+          const chatId = response?.data?.chat?.id;
+          if (chatId) {
+            router.push({
+              pathname: "/(screens)/chat/[roomId]",
+              params: {
+                roomId: chatId,
+                userId: profile.id,
+                name: `${profile.name} ${profile.lastName}`,
+                avatarUrl: profile.avatarUrl || profile.imageUrl || "",
+              },
+            });
+            return;
+          }
+
+          Alert.alert("Request sent", "They will see your connection request.");
+        },
+        onError: (error: any) => {
+          Alert.alert(
+            "Request failed",
+            error?.response?.data?.message || "Unable to send request.",
+          );
+        },
+      },
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.emptyState}>
+        <ActivityIndicator color={Colors.textPrimary} size="large" />
+        <Text style={styles.loadingText}>Loading real profile...</Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!profile) {
     return (
@@ -38,7 +90,11 @@ export default function MatchDetailScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <Image source={{ uri: profile.imageUrl }} style={styles.heroImage} resizeMode="cover" />
+          <Image
+            source={{ uri: profile.imageUrl || profile.avatarUrl || fallbackProfileImage }}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
           <LinearGradient
             colors={["rgba(0,0,0,0.2)", "rgba(0,0,0,0.06)", "rgba(0,0,0,0.92)"]}
             locations={[0, 0.42, 1]}
@@ -99,14 +155,28 @@ export default function MatchDetailScreen() {
           </Section>
 
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.84}>
+            <TouchableOpacity
+              style={styles.secondaryAction}
+              activeOpacity={0.84}
+              onPress={() => router.back()}
+            >
               <Ionicons name="close" size={22} color={Colors.white} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.primaryAction} activeOpacity={0.86}>
+            <TouchableOpacity
+              style={styles.primaryAction}
+              activeOpacity={0.86}
+              disabled={sendMatchRequest.isPending}
+              onPress={() => sendRequest("I would like to connect with you.")}
+            >
               <Ionicons name="heart" size={21} color={Colors.black} />
               <Text style={styles.primaryActionText}>Like</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.84}>
+            <TouchableOpacity
+              style={styles.secondaryAction}
+              activeOpacity={0.84}
+              disabled={sendMatchRequest.isPending}
+              onPress={() => sendRequest("Hi, I would like to chat with you.")}
+            >
               <Ionicons name="chatbubble-ellipses" size={22} color={Colors.white} />
             </TouchableOpacity>
           </View>
@@ -159,10 +229,7 @@ const InfoRow = ({
 );
 
 const InterestChip = ({ label }: { label: string }) => {
-  const meta = interestMeta[label.toLowerCase()] || {
-    icon: "sparkles" as const,
-    color: Colors.textSecondary,
-  };
+  const meta = getInterestMeta(label);
 
   return (
     <View style={styles.interestChip}>
@@ -170,6 +237,30 @@ const InterestChip = ({ label }: { label: string }) => {
       <Text style={styles.interestText}>{label}</Text>
     </View>
   );
+};
+
+const getInterestMeta = (label: string) => {
+  const interestMeta: Record<
+    string,
+    { icon: keyof typeof Ionicons.glyphMap; color: string }
+  > = {
+    art: { icon: "color-palette", color: "#F97316" },
+    coffee: { icon: "cafe", color: "#C8A86B" },
+    design: { icon: "sparkles", color: "#A855F7" },
+    fashion: { icon: "shirt", color: "#EC4899" },
+    fitness: { icon: "barbell", color: "#2DD4BF" },
+    football: { icon: "football", color: "#6FBF8A" },
+    food: { icon: "restaurant", color: "#F97316" },
+    music: { icon: "musical-notes", color: "#EC4899" },
+    movies: { icon: "videocam", color: "#38BDF8" },
+    startups: { icon: "rocket", color: "#A855F7" },
+    travel: { icon: "airplane", color: "#38BDF8" },
+  };
+
+  return interestMeta[label.toLowerCase()] || {
+    icon: "sparkles" as const,
+    color: Colors.textSecondary,
+  };
 };
 
 const styles = StyleSheet.create({
@@ -392,6 +483,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     fontSize: FontSize.lg,
     marginBottom: 18,
+  },
+  loadingText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.sm,
+    marginTop: 14,
   },
   emptyButton: {
     backgroundColor: Colors.bgCard,

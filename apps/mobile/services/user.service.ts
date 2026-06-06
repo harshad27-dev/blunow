@@ -5,6 +5,8 @@ export interface UpdateProfilePayload {
   bio?: string;
   age?: number;
   location?: string;
+  latitude?: number;
+  longitude?: number;
   gender?: string;
   sexuality?: string;
   avatarUrl?: string;

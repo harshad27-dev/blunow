@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
@@ -27,6 +28,7 @@ interface SettingItem {
 export default function SettingsScreen() {
   const router = useRouter();
   const { logout } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const handleLogout = () => {
     Alert.alert(
@@ -39,6 +41,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await logout();
+            queryClient.clear();
             router.replace('/(auth)/login');
           }
         }
@@ -46,21 +49,81 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleLogoutAllDevices = () => {
+    Alert.alert(
+      'Sign out all devices',
+      'This will invalidate your saved sessions everywhere.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await logout({ allDevices: true });
+            queryClient.clear();
+            router.replace('/(auth)/login');
+          },
+        },
+      ],
+    );
+  };
+
   const sections: { title: string; items: SettingItem[] }[] = [
     {
       title: 'Account',
       items: [
-        { id: '1', title: 'Personal Information', icon: 'person-outline', onPress: () => {} },
-        { id: '2', title: 'Privacy & Security', icon: 'shield-checkmark-outline', onPress: () => {} },
-        { id: '3', title: 'Notifications', icon: 'notifications-outline', onPress: () => {} },
+        {
+          id: '1',
+          title: 'Personal Information',
+          icon: 'person-outline',
+          onPress: () => router.push('/(screens)/edit-profile'),
+        },
+        {
+          id: '2',
+          title: 'Privacy & Security',
+          subtitle: 'Session and account protection',
+          icon: 'shield-checkmark-outline',
+          onPress: () =>
+            Alert.alert(
+              'Privacy & Security',
+              'Your account uses email OTP sign-in and refresh-token sessions. Use “Sign out all devices” below to revoke every active session.',
+            ),
+        },
+        {
+          id: '3',
+          title: 'Notifications',
+          icon: 'notifications-outline',
+          onPress: () => router.push('/(screens)/notifications'),
+        },
       ]
     },
     {
       title: 'Support & About',
       items: [
-        { id: '4', title: 'Help Center', icon: 'help-circle-outline', onPress: () => {} },
-        { id: '5', title: 'Community Guidelines', icon: 'book-outline', onPress: () => {} },
-        { id: '6', title: 'About Blunow', icon: 'information-circle-outline', onPress: () => {} },
+        {
+          id: '4',
+          title: 'Help Center',
+          icon: 'help-circle-outline',
+          onPress: () =>
+            Alert.alert('Help Center', 'Support content will be available here soon.'),
+        },
+        {
+          id: '5',
+          title: 'Community Guidelines',
+          icon: 'book-outline',
+          onPress: () =>
+            Alert.alert(
+              'Community Guidelines',
+              'Be respectful, stay authentic, and report anything unsafe.',
+            ),
+        },
+        {
+          id: '6',
+          title: 'About Blunow',
+          icon: 'information-circle-outline',
+          onPress: () =>
+            Alert.alert('About Blunow', 'Blunow Version 1.0.0'),
+        },
       ]
     },
     {
@@ -72,6 +135,14 @@ export default function SettingsScreen() {
           icon: 'log-out-outline', 
           onPress: handleLogout,
           color: Colors.error
+        },
+        {
+          id: '8',
+          title: 'Sign Out All Devices',
+          subtitle: 'Revoke all refresh tokens',
+          icon: 'log-out',
+          onPress: handleLogoutAllDevices,
+          color: Colors.error,
         },
       ]
     }
@@ -103,9 +174,14 @@ export default function SettingsScreen() {
                     <View style={[styles.iconBox, { backgroundColor: item.color ? item.color + '15' : Colors.bgInput }]}>
                       <Ionicons name={item.icon} size={22} color={item.color || Colors.textPrimary} />
                     </View>
-                    <Text style={[styles.itemText, item.color ? { color: item.color } : {}]}>
-                      {item.title}
-                    </Text>
+                    <View>
+                      <Text style={[styles.itemText, item.color ? { color: item.color } : {}]}>
+                        {item.title}
+                      </Text>
+                      {item.subtitle ? (
+                        <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
+                      ) : null}
+                    </View>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
                 </TouchableOpacity>
@@ -194,6 +270,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     fontSize: FontSize.base,
     color: Colors.textPrimary,
+  },
+  itemSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    marginTop: 3,
   },
   footer: {
     marginTop: 40,

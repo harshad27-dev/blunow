@@ -7,17 +7,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/common/Input';
 import { DiscoverUserCard } from '@/components/discover/DiscoverUserCard';
-import { useSearchQuery } from '@/hooks/queries';
-
-const RECENT_SEARCHES = ['alexa_design', 'Designers', 'React Native', 'Coffee'];
-const TRENDING_TOPICS = ['UI Design', 'Photography', 'Music', 'Startup', 'Travel'];
+import {
+  useSearchQuery,
+  useSendMatchRequestMutation,
+  useTrendingHashtagsQuery,
+} from '@/hooks/queries';
 
 const calculateAge = (birthDateString: string) => {
   if (!birthDateString) return 0;
@@ -35,16 +37,29 @@ export default function SearchScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const sendMatchRequest = useSendMatchRequestMutation();
 
   // Manual debounce for the API call to prevent too many requests
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedQuery(searchQuery);
+      const trimmed = searchQuery.trim();
+      setDebouncedQuery(trimmed);
+      if (trimmed.length >= 2) {
+        setRecentSearches((current) => [
+          trimmed,
+          ...current.filter((item) => item.toLowerCase() !== trimmed.toLowerCase()),
+        ].slice(0, 5));
+      }
     }, 400);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   const { data, isLoading } = useSearchQuery(debouncedQuery, 'users');
+  const { data: trendingHashtags = [] } = useTrendingHashtagsQuery();
+  const trendingTopics = trendingHashtags.map((item) =>
+    item.hashtag.replace(/^#/, ''),
+  );
 
   const users = data?.users?.map((user: any) => ({
     id: user.id,
@@ -59,6 +74,44 @@ export default function SearchScreen() {
     matchScore: user.matchScore,
     isConnected: Boolean(user.isConnected),
   })) || [];
+
+  const handleConnect = (user: (typeof users)[number]) => {
+    sendMatchRequest.mutate(
+      {
+        receiverId: user.id,
+        message: 'I found you through search and would like to connect.',
+      },
+      {
+        onSuccess: (response: any) => {
+          const chatId = response?.data?.chat?.id;
+          if (chatId) {
+            router.push({
+              pathname: '/(screens)/chat/[roomId]',
+              params: {
+                roomId: chatId,
+                userId: user.id,
+                name: user.username,
+                avatarUrl: user.avatarUrl || '',
+              },
+            });
+            return;
+          }
+
+          Alert.alert('Request sent', 'They will see your connection request.');
+        },
+        onError: (error: any) => {
+          Alert.alert(
+            'Request failed',
+            error?.response?.data?.message || 'Unable to send request.',
+          );
+        },
+      },
+    );
+  };
+
+  const runSearch = (value: string) => {
+    setSearchQuery(value);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-[#050505]">
@@ -78,7 +131,7 @@ export default function SearchScreen() {
           <View className="flex-1">
             <Input
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={runSearch}
               placeholder="Search people or interests..."
               autoFocus
               icon={<Ionicons name="search" size={20} color="#FFFFFF" />}
@@ -90,16 +143,16 @@ export default function SearchScreen() {
         <View className="flex-1 px-5 mt-5">
           {searchQuery.length < 2 ? (
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Recent Searches */}
-              <View className="mb-8">
+              {recentSearches.length ? (
+                <View className="mb-8">
                 <View className="flex-row justify-between items-center mb-4">
                   <Text className="text-[#F5F5F3] font-bold text-lg">Recent</Text>
-                  <TouchableOpacity>
+                  <TouchableOpacity onPress={() => setRecentSearches([])}>
                     <Text className="text-[#888888] font-medium text-sm">Clear all</Text>
                   </TouchableOpacity>
                 </View>
                 <View>
-                  {RECENT_SEARCHES.map((item, index) => (
+                  {recentSearches.map((item, index) => (
                     <TouchableOpacity 
                       key={index} 
                       className="flex-row items-center py-3 border-b border-[#222]"
@@ -113,13 +166,15 @@ export default function SearchScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-              </View>
+                </View>
+              ) : null}
 
               {/* Trending Topics */}
-              <View className="mb-8">
+              {trendingTopics.length ? (
+                <View className="mb-8">
                 <Text className="text-[#F5F5F3] font-bold text-lg mb-4">Trending</Text>
                 <View className="flex-row flex-wrap">
-                  {TRENDING_TOPICS.map((topic, index) => (
+                  {trendingTopics.map((topic, index) => (
                     <TouchableOpacity 
                       key={index} 
                       className="bg-[#111] px-4 py-2.5 rounded-full mr-2.5 mb-2.5 border border-[#222]"
@@ -129,7 +184,8 @@ export default function SearchScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-              </View>
+                </View>
+              ) : null}
             </ScrollView>
           ) : (
             <View className="flex-1">
@@ -150,7 +206,7 @@ export default function SearchScreen() {
                       <DiscoverUserCard 
                         user={item} 
                         onPress={() => router.push(`/(screens)/user/${item.id}`)}
-                        onConnectPress={() => console.log(`Connect with ${item.username}`)}
+                        onConnectPress={() => handleConnect(item)}
                         onMessagePress={() => router.push('/(screens)/chat' as any)}
                       />
                     </View>

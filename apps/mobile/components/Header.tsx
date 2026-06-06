@@ -2,15 +2,17 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// You can uncomment and utilize your query hook for unread chat calculations!
-// import { useChatsQuery } from '@/hooks/queries';
+import { useChatConversationsQuery } from '@/hooks/useChat';
 
 export default function Header() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { data: conversations = [] } = useChatConversationsQuery();
 
-  // MVP mock: In a real flow, useChatsQuery would supply unread data
-  const unreadChats = 2; // e.g. chats.data?.filter(c => c.unread).length
+  const unreadChats = conversations.reduce(
+    (total, conversation) => total + (conversation.unreadCount ?? 0),
+    0,
+  );
 
   return (
     <View 
@@ -39,6 +41,7 @@ export default function Header() {
         <TouchableOpacity 
           className="w-10 h-10 rounded-full bg-[#111] border border-[#222] items-center justify-center active:bg-[#222] relative" 
           activeOpacity={0.7}
+          onPress={() => router.push('/(screens)/notifications')}
         >
           <Ionicons name="notifications-outline" size={20} color="#FFF" />
         </TouchableOpacity>
@@ -47,14 +50,16 @@ export default function Header() {
         <TouchableOpacity 
           className="w-10 h-10 rounded-full bg-[#111] border border-[#222] items-center justify-center active:bg-[#222] relative" 
           activeOpacity={0.7}
-          onPress={() => router.push('/(screens)/chat' as any)} // Route to chat list
+          onPress={() => router.push('/(screens)/chat' as any)}
         >
           <Ionicons name="chatbubble-ellipses-outline" size={20} color="#FFF" />
           
           {/* Dynamic Unread Badge */}
           {unreadChats > 0 && (
             <View className="absolute -top-1 -right-1 bg-blue-600 w-5 h-5 rounded-full items-center justify-center border-2 border-[#050505]">
-              <Text className="text-white text-[10px] font-extrabold">{unreadChats}</Text>
+              <Text className="text-white text-[10px] font-extrabold">
+                {unreadChats > 9 ? '9+' : unreadChats}
+              </Text>
             </View>
           )}
         </TouchableOpacity>

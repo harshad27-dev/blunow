@@ -22,8 +22,10 @@ interface AuthState {
   ) => Promise<RequestLoginOtpResponse>;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (options?: { allDevices?: boolean }) => Promise<void>;
+  clearSession: () => Promise<void>;
   rehydrate: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -62,15 +64,21 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
 
-  logout: async () => {
+  logout: async (options) => {
     try {
-      await authService.logout();
+      await authService.logout(Boolean(options?.allDevices));
     } catch {
       // Always clear local state.
     }
     await storage.delete(Config.TOKEN_KEY);
     await storage.delete(Config.REFRESH_TOKEN_KEY);
     set({ user: null, token: null, isAuthenticated: false });
+  },
+
+  clearSession: async () => {
+    await storage.delete(Config.TOKEN_KEY);
+    await storage.delete(Config.REFRESH_TOKEN_KEY);
+    set({ user: null, token: null, isAuthenticated: false, isLoading: false });
   },
 
   rehydrate: async () => {
@@ -104,5 +112,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       await storage.delete(Config.REFRESH_TOKEN_KEY);
       set({ isLoading: false });
     }
+  },
+
+  refreshUser: async () => {
+    const user = await authService.me();
+    set({ user, isAuthenticated: true });
   },
 }));

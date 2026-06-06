@@ -15,6 +15,8 @@ export class ProfileService {
       gender?: string;
       sexuality?: string;
       location?: string;
+      latitude?: number;
+      longitude?: number;
       avatarUrl?: string;
       bannerUrl?: string;
       interests?: string[];

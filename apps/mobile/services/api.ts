@@ -58,7 +58,7 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch {
         // Refresh failed, so clear local auth state.
-        useAuthStore.getState().logout();
+        useAuthStore.getState().clearSession();
         return Promise.reject(error);
       }
     }

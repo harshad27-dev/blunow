@@ -17,6 +17,8 @@ const updateProfileSchema = z.object({
   gender: genderSchema.optional(),
   sexuality: sexualitySchema.optional(),
   location: z.string().optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   avatarUrl: z.string().url().optional(),
   bannerUrl: z.string().url().optional(),
   interests: z.array(z.string()).max(20).optional(),

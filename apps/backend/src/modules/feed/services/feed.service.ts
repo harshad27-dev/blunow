@@ -52,6 +52,7 @@ export class FeedService {
   }
 
   async getPeopleNearYou(
+    userId: string,
     lat: number,
     lng: number,
     maxDistance: number,
@@ -59,6 +60,7 @@ export class FeedService {
     offset: number,
   ) {
     const users = await this.repo.getPeopleNearYou(
+      userId,
       lat,
       lng,
       maxDistance,

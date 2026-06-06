@@ -35,12 +35,7 @@ export class TokenService {
     }
 
     const user = stored.user;
-    const payload = { sub: user.id, email: user.email, role: user.role };
-
-    const accessToken = jwt.sign(payload, jwtConfig.secret, {
-      expiresIn: jwtConfig.expiresIn as any,
-    });
-
-    return { accessToken };
+    await this.authRepository.deleteRefreshToken(refreshToken);
+    return this.generateTokens(user);
   }
 }

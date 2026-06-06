@@ -19,14 +19,13 @@ import {
 } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { FontFamily } from "@/constants/typography";
-import { MatchProfile } from "@/data/matchProfiles";
 import {
   useMatchRecommendationsQuery,
   useIncomingMatchRequestsQuery,
   useRespondMatchRequestMutation,
   useSendMatchRequestMutation,
 } from "@/hooks/queries";
-import type { MatchRequest } from "@/types/match.types";
+import type { MatchRecommendation, MatchRequest } from "@/types/match.types";
 
 const bottomActionHeight = 94;
 const actionBackdropColor = "rgba(5, 5, 5, 0.92)";
@@ -41,18 +40,18 @@ export default function MatchesScreen() {
   const [matchBanner, setMatchBanner] = useState<{
     name: string;
     chatId: string;
-    profile: MatchProfile;
+    profile: MatchRecommendation;
   } | null>(null);
   const fade = useRef(new Animated.Value(1)).current;
   const { data: profiles = [], isLoading } = useMatchRecommendationsQuery();
   const { data: incomingRequests = [] } = useIncomingMatchRequestsQuery();
   const sendMatchRequest = useSendMatchRequestMutation();
   const respondMatchRequest = useRespondMatchRequestMutation();
-  const profile = profiles[activeIndex] as MatchProfile | undefined;
+  const profile = profiles[activeIndex] as MatchRecommendation | undefined;
   const nextProfiles = useMemo(
     () =>
       profiles
-        .filter((item: MatchProfile) => item.id !== profile?.id)
+        .filter((item: MatchRecommendation) => item.id !== profile?.id)
         .slice(0, 2),
     [profile?.id, profiles],
   );
@@ -168,7 +167,7 @@ export default function MatchesScreen() {
     });
   };
 
-  const openChat = (selectedProfile: MatchProfile, chatId: string) => {
+  const openChat = (selectedProfile: MatchRecommendation, chatId: string) => {
     router.push({
       pathname: "/(screens)/chat/[roomId]",
       params: {
@@ -385,7 +384,7 @@ export default function MatchesScreen() {
           <View className="mb-3 flex-row items-center justify-between">
             <ProgressDots activeIndex={activeIndex} total={profiles.length} />
             <View className="h-[42px] w-[72px] flex-row">
-              {nextProfiles.map((item: MatchProfile, index: number) => (
+              {nextProfiles.map((item: MatchRecommendation, index: number) => (
                 <Image
                   key={item.id}
                   source={{ uri: item.imageUrl || fallbackProfileImage }}

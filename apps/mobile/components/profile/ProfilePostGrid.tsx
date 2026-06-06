@@ -26,7 +26,9 @@ export const ProfilePostGrid: React.FC<ProfilePostGridProps> = ({ posts, onPostP
           <Ionicons name="images-outline" size={48} color={Colors.textMuted} />
         </View>
         <Text style={styles.emptyTitle}>No posts yet</Text>
-        <Text style={styles.emptySubtitle}>When you share photos, they'll appear here.</Text>
+        <Text style={styles.emptySubtitle}>
+          {"When you share photos, they'll appear here."}
+        </Text>
       </View>
     );
   }

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { Text, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
@@ -22,32 +22,7 @@ export const Toast: React.FC<ToastProps> = ({
   const opacity = React.useRef(new Animated.Value(0)).current;
   const translateY = React.useRef(new Animated.Value(-100)).current;
 
-  useEffect(() => {
-    if (visible) {
-      // Animate in
-      Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Auto hide after duration
-      const timer = setTimeout(() => {
-        hideToast();
-      }, duration);
-
-      return () => clearTimeout(timer);
-    }
-  }, [visible]);
-
-  const hideToast = () => {
+  const hideToast = useCallback(() => {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
@@ -62,7 +37,30 @@ export const Toast: React.FC<ToastProps> = ({
     ]).start(() => {
       onHide();
     });
-  };
+  }, [onHide, opacity, translateY]);
+
+  useEffect(() => {
+    if (!visible) return;
+
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const timer = setTimeout(() => {
+      hideToast();
+    }, duration);
+
+    return () => clearTimeout(timer);
+  }, [duration, hideToast, opacity, translateY, visible]);
 
   if (!visible) return null;
 

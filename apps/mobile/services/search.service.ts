@@ -37,9 +37,7 @@ export const searchService = {
   },
 
   getTrendingHashtags: async (limit: number = 10) => {
-    // Note: The backend mounts hashtags on a different base usually
-    // In this repo, it's exported as trendingRouter
-    const response = await api.get('/hashtags', {
+    const response = await api.get('/trending/hashtags', {
       params: { limit },
     });
     return response.data;

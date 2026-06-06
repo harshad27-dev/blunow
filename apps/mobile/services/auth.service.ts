@@ -1,4 +1,6 @@
 import { api } from "./api";
+import { Config } from "@/constants/config";
+import { storage } from "@/utils/storage";
 import type {
   LoginPayload,
   RequestLoginOtpPayload,
@@ -39,8 +41,9 @@ export const authService = {
     return data.data;
   },
 
-  logout: async (): Promise<void> => {
-    await api.post("/auth/logout");
+  logout: async (allDevices = false): Promise<void> => {
+    const refreshToken = await storage.get(Config.REFRESH_TOKEN_KEY);
+    await api.post("/auth/logout", allDevices ? {} : { refreshToken });
   },
 
   refresh: async (
