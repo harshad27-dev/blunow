@@ -5,6 +5,9 @@ import type {
   LoginPayload,
   RequestLoginOtpPayload,
   RequestLoginOtpResponse,
+  RequestPasswordResetPayload,
+  RequestPasswordResetResponse,
+  ResetPasswordPayload,
   RegisterPayload,
   AuthResponse,
 } from "@/types/auth.types";
@@ -44,6 +47,24 @@ export const authService = {
   logout: async (allDevices = false): Promise<void> => {
     const refreshToken = await storage.get(Config.REFRESH_TOKEN_KEY);
     await api.post("/auth/logout", allDevices ? {} : { refreshToken });
+  },
+
+  requestPasswordReset: async (
+    payload: RequestPasswordResetPayload,
+  ): Promise<RequestPasswordResetResponse> => {
+    const { data } = await api.post<ApiWrapper<RequestPasswordResetResponse>>(
+      "/auth/password-reset/otp",
+      payload,
+    );
+    return data.data;
+  },
+
+  resetPassword: async (payload: ResetPasswordPayload): Promise<{ message: string }> => {
+    const { data } = await api.post<ApiWrapper<{ message: string }>>(
+      "/auth/password-reset",
+      payload,
+    );
+    return data.data;
   },
 
   refresh: async (

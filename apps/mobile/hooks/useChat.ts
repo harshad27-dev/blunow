@@ -21,7 +21,7 @@ export const useChatConversationsQuery = () => {
       if (!response?.success || !Array.isArray(response.data)) return [];
       return response.data as ChatConversation[];
     },
-    refetchInterval: 15000,
+    refetchInterval: 30000,
   });
 };
 
@@ -48,7 +48,7 @@ export const useChatMessagesQuery = (chatId?: string) => {
       return response.data.reverse() as ChatMessage[];
     },
     enabled: Boolean(chatId),
-    refetchInterval: 5000,
+    staleTime: 1000 * 60,
   });
 };
 

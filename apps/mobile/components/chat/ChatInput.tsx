@@ -1,7 +1,11 @@
 import React, { useState } from "react";
-import { ActivityIndicator, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors } from "@/constants/colors";
 
 type ChatInputProps = {
   placeholder?: string;
@@ -25,42 +29,42 @@ export const ChatInput = ({
   };
 
   return (
-    <View className="flex-row items-end border-t border-[#1A1A1A] bg-[#050505] px-4 pb-3 pt-3">
+    <View className="flex-row items-end border-t border-white/10 bg-[#1B110A]/90 px-5 pb-5 pt-3">
       <TouchableOpacity
-        className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-[#222] bg-[#111]"
+        className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-[#281D15]"
         activeOpacity={0.84}
       >
-        <Ionicons name="add" size={22} color={Colors.textPrimary} />
+        <Ionicons name="add" size={23} color="#FFB77F" />
       </TouchableOpacity>
 
-      <View className="mr-2 flex-1 rounded-3xl border border-[#222] bg-[#111] px-4 py-2.5">
+      <View className="mr-3 min-h-12 flex-1 justify-center rounded-full bg-[#33281F] px-5 py-3">
         <TextInput
           value={draft}
           onChangeText={setDraft}
           placeholder={placeholder}
-          placeholderTextColor="#666"
+          placeholderTextColor="#A58C7B"
           multiline
           editable={!disabled}
-          className="max-h-28 text-[15px] font-medium text-white"
+          className="max-h-28 text-[15px] font-medium text-[#F3DFD1]"
           style={{ padding: 0 }}
         />
       </View>
 
       <TouchableOpacity
-        className={`h-11 w-11 items-center justify-center rounded-full ${
-          canSend ? "bg-white" : "bg-[#1A1A1A]"
+        className={`h-12 w-12 items-center justify-center rounded-full ${
+          canSend ? "bg-[#FF8A00]" : "bg-[#3F3229]"
         }`}
         onPress={send}
         activeOpacity={0.84}
         disabled={!canSend}
       >
         {disabled ? (
-          <ActivityIndicator color={Colors.textSecondary} size="small" />
+          <ActivityIndicator color="#DDC1AE" size="small" />
         ) : (
           <Ionicons
-            name="send"
-            size={18}
-            color={canSend ? Colors.black : Colors.textSecondary}
+            name="arrow-up"
+            size={21}
+            color={canSend ? "#2F1500" : "#A58C7B"}
           />
         )}
       </TouchableOpacity>

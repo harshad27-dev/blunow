@@ -32,6 +32,24 @@ export class AuthController {
     }
   };
 
+  requestPasswordReset = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.authService.requestPasswordReset(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
+  resetPassword = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.authService.resetPassword(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
   refreshToken = async (req: Request, res: Response): Promise<void> => {
     try {
       const result = await this.authService.refreshToken(req.body.refreshToken);

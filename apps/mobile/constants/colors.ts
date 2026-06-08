@@ -1,42 +1,74 @@
-// Blunow Design System — Black & White Color Tokens
-export const Colors = {
-  // Brand (monochrome — white as the accent)
-  primary: '#FFFFFF',           // pure white (primary accent)
-  primaryLight: '#E0E0E0',      // light gray
-  primaryDark: '#A0A0A0',       // mid gray
-  secondary: '#C0C0C0',         // silver
-  secondaryLight: '#D8D8D8',    // soft silver
-  accent: '#888888',            // medium gray
+import { Appearance } from "react-native";
 
-  // Backgrounds — very dark, more black
-  bg: '#050505',                // near-pure black
-  bgCard: '#0F0F0F',            // card bg
-  bgElevated: '#1A1A1A',        // elevated surfaces
-  bgInput: '#111111',           // input fields
+export const ColorThemes = {
+  light: {
+    primary: "#050505",
+    primaryLight: "#2D2D2D",
+    primaryDark: "#000000",
+    secondary: "#5F6368",
+    secondaryLight: "#7B8087",
+    accent: "#6B7280",
+    bg: "#F7F7F5",
+    bgCard: "#FFFFFF",
+    bgElevated: "#ECEDEA",
+    bgInput: "#F1F2EF",
+    textPrimary: "#111111",
+    textSecondary: "#5F6368",
+    textMuted: "#90959B",
+    textInverse: "#FFFFFF",
+    border: "#D9DAD6",
+    borderFocus: "#050505",
+    success: "#2F855A",
+    error: "#B42345",
+    warning: "#9A6700",
+    gradientPrimary: ["#050505", "#5F6368"] as const,
+    gradientBg: ["#F7F7F5", "#FFFFFF"] as const,
+    gradientCard: ["#FFFFFF", "#ECEDEA"] as const,
+    white: "#FFFFFF",
+    black: "#000000",
+    transparent: "transparent",
+    overlay: "rgba(255,255,255,0.78)",
+  },
+  dark: {
+    primary: "#FFFFFF",
+    primaryLight: "#E0E0E0",
+    primaryDark: "#A0A0A0",
+    secondary: "#C0C0C0",
+    secondaryLight: "#D8D8D8",
+    accent: "#888888",
+    bg: "#050505",
+    bgCard: "#0F0F0F",
+    bgElevated: "#1A1A1A",
+    bgInput: "#111111",
+    textPrimary: "#F5F5F5",
+    textSecondary: "#888888",
+    textMuted: "#444444",
+    textInverse: "#050505",
+    border: "#222222",
+    borderFocus: "#FFFFFF",
+    success: "#6FBF8A",
+    error: "#CF6679",
+    warning: "#C8A86B",
+    gradientPrimary: ["#FFFFFF", "#888888"] as const,
+    gradientBg: ["#050505", "#0F0F0F"] as const,
+    gradientCard: ["#1A1A1A", "#0F0F0F"] as const,
+    white: "#FFFFFF",
+    black: "#000000",
+    transparent: "transparent",
+    overlay: "rgba(0,0,0,0.75)",
+  },
+} as const;
 
-  // Text
-  textPrimary: '#F5F5F5',       // off-white
-  textSecondary: '#888888',     // medium gray
-  textMuted: '#444444',         // dim gray
-  textInverse: '#050505',       // black (for white backgrounds)
+export type ThemeName = keyof typeof ColorThemes;
+export type ThemeColors = (typeof ColorThemes)[ThemeName];
 
-  // Borders
-  border: '#222222',            // dark gray border
-  borderFocus: '#FFFFFF',       // white focus ring
+export const getThemeColors = (theme: ThemeName = "dark") => ColorThemes[theme];
 
-  // Status (desaturated to fit mono theme)
-  success: '#6FBF8A',           // muted green
-  error: '#CF6679',             // muted red
-  warning: '#C8A86B',           // muted amber
+const getSystemTheme = (): ThemeName =>
+  Appearance.getColorScheme() === "light" ? "light" : "dark";
 
-  // Gradients
-  gradientPrimary: ['#FFFFFF', '#888888'] as const,   // white → gray
-  gradientBg: ['#050505', '#0F0F0F'] as const,         // black → card
-  gradientCard: ['#1A1A1A', '#0F0F0F'] as const,       // elevated → card
-
-  // Misc
-  white: '#FFFFFF',
-  black: '#000000',
-  transparent: 'transparent',
-  overlay: 'rgba(0,0,0,0.75)',
-};
+export const Colors = new Proxy({} as ThemeColors, {
+  get(_target, property: keyof ThemeColors) {
+    return ColorThemes[getSystemTheme()][property];
+  },
+});

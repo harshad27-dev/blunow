@@ -8,6 +8,9 @@ import type {
   RegisterPayload,
   RequestLoginOtpPayload,
   RequestLoginOtpResponse,
+  RequestPasswordResetPayload,
+  RequestPasswordResetResponse,
+  ResetPasswordPayload,
 } from "@/types/auth.types";
 
 interface AuthState {
@@ -20,6 +23,10 @@ interface AuthState {
   requestLoginOtp: (
     payload: RequestLoginOtpPayload,
   ) => Promise<RequestLoginOtpResponse>;
+  requestPasswordReset: (
+    payload: RequestPasswordResetPayload,
+  ) => Promise<RequestPasswordResetResponse>;
+  resetPassword: (payload: ResetPasswordPayload) => Promise<{ message: string }>;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: (options?: { allDevices?: boolean }) => Promise<void>;
@@ -36,6 +43,14 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   requestLoginOtp: async (payload) => {
     return authService.requestLoginOtp(payload);
+  },
+
+  requestPasswordReset: async (payload) => {
+    return authService.requestPasswordReset(payload);
+  },
+
+  resetPassword: async (payload) => {
+    return authService.resetPassword(payload);
   },
 
   login: async (payload) => {

@@ -35,4 +35,26 @@ export class MailService {
       `,
     });
   }
+
+  async sendPasswordResetOtp(to: string, otp: string) {
+    const fromEmail = process.env.SMTP_FROM_EMAIL ?? process.env.SMTP_USER;
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !fromEmail) {
+      throw new AppError('SMTP is not configured', 500);
+    }
+
+    await this.transporter.sendMail({
+      from: `"Blunow" <${fromEmail}>`,
+      to,
+      subject: 'Reset your Blunow password',
+      text: `Your Blunow password reset OTP is ${otp}. It expires in 10 minutes.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>Reset your Blunow password</h2>
+          <p>Use this code to choose a new password:</p>
+          <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">${otp}</p>
+          <p>This code expires in 10 minutes.</p>
+        </div>
+      `,
+    });
+  }
 }

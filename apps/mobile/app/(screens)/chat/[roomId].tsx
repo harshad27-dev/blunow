@@ -12,12 +12,9 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { Colors } from "@/constants/colors";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
@@ -25,11 +22,13 @@ import {
   useChatConversationQuery,
   useChatMessagesQuery,
   useMarkChatReadMutation,
-  useSendChatMessageMutation,
   useUpdateChatSettingsMutation,
+  chatKeys,
 } from "@/hooks/useChat";
+import { useChatSocket } from "@/hooks/useSocket";
 import { useAuthStore } from "@/store/authStore";
 import type { ChatMessage } from "@/types/chat.types";
+import { useQueryClient } from "@tanstack/react-query";
 
 type PendingMessage = ChatMessage & { isPending?: boolean };
 
@@ -39,11 +38,12 @@ const getParam = (value?: string | string[]) => {
 };
 
 const getOtherParticipant = (conversation: any, currentUserId?: string) =>
-  conversation?.user1Id === currentUserId ? conversation?.user2 : conversation?.user1;
+  conversation?.user1Id === currentUserId
+    ? conversation?.user2
+    : conversation?.user1;
 
 export default function ChatRoomScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     roomId: string;
     userId?: string;
@@ -55,19 +55,19 @@ export default function ChatRoomScreen() {
   const fallbackName = getParam(params.name) || "Chat";
   const fallbackAvatarUrl = getParam(params.avatarUrl);
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const socket = useChatSocket();
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
+  const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
 
-  const {
-    data: conversation,
-    isFetching: isConversationFetching,
-  } = useChatConversationQuery(roomId);
+  const { data: conversation, isFetching: isConversationFetching } =
+    useChatConversationQuery(roomId);
   const {
     data: serverMessages = [],
     isLoading,
     isFetching,
     refetch,
   } = useChatMessagesQuery(roomId);
-  const sendMessageMutation = useSendChatMessageMutation(roomId);
   const markReadMutation = useMarkChatReadMutation(roomId);
   const updateSettingsMutation = useUpdateChatSettingsMutation(roomId);
 
@@ -83,15 +83,87 @@ export default function ChatRoomScreen() {
     [pendingMessages, serverMessages],
   );
 
+  useEffect(() => {
+    if (!roomId) return;
+
+    const handleConnect = () => {
+      setIsSocketConnected(true);
+      socket.emit("chat:join", roomId);
+    };
+
+    const handleDisconnect = () => {
+      setIsSocketConnected(false);
+    };
+
+    const handleNewMessage = (message: unknown) => {
+      const nextMessage = message as ChatMessage;
+      if (nextMessage.chatId !== roomId) return;
+
+      setPendingMessages((current) =>
+        current.filter(
+          (pending) =>
+            pending.content !== nextMessage.content ||
+            pending.senderId !== nextMessage.senderId,
+        ),
+      );
+
+      queryClient.setQueryData<ChatMessage[]>(
+        chatKeys.messages(roomId),
+        (current = []) => {
+          if (current.some((item) => item.id === nextMessage.id)) {
+            return current;
+          }
+          return [...current, nextMessage];
+        },
+      );
+      queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
+    };
+
+    const handleSocketError = (payload: { message?: string }) => {
+      setPendingMessages([]);
+      Alert.alert(
+        "Message failed",
+        payload.message || "Unable to send your message.",
+      );
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("chat:message:new", handleNewMessage);
+    socket.on("chat:error", handleSocketError);
+
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    return () => {
+      socket.emit("chat:leave", roomId);
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("chat:message:new", handleNewMessage);
+      socket.off("chat:error", handleSocketError);
+    };
+  }, [queryClient, roomId, socket]);
+
   const isCurrentUser1 = conversation?.user1Id === user?.id;
-  const isMuted = isCurrentUser1 ? conversation?.mutedBy1 : conversation?.mutedBy2;
+  const isMuted = isCurrentUser1
+    ? conversation?.mutedBy1
+    : conversation?.mutedBy2;
   const isArchived = isCurrentUser1
     ? conversation?.archivedBy1
     : conversation?.archivedBy2;
 
   useEffect(() => {
-    if (roomId && serverMessages.some((message) => message.senderId !== user?.id)) {
-      markReadMutation.mutate();
+    if (
+      roomId &&
+      serverMessages.some((message) => message.senderId !== user?.id)
+    ) {
+      if (isSocketConnected) {
+        socket.emit("chat:read", roomId);
+        queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
+      } else {
+        markReadMutation.mutate();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, serverMessages.length, user?.id]);
@@ -115,21 +187,23 @@ export default function ChatRoomScreen() {
     };
 
     setPendingMessages((current) => [...current, pendingMessage]);
-    sendMessageMutation.mutate(
-      { content, type: "TEXT" },
-      {
-        onSuccess: () => setPendingMessages([]),
-        onError: (error: any) => {
-          setPendingMessages((current) =>
-            current.filter((message) => message.id !== pendingMessage.id),
-          );
-          Alert.alert(
-            "Message failed",
-            error?.response?.data?.message || "Unable to send your message.",
-          );
-        },
-      },
-    );
+
+    if (!isSocketConnected) {
+      setPendingMessages((current) =>
+        current.filter((message) => message.id !== pendingMessage.id),
+      );
+      Alert.alert(
+        "Offline",
+        "Chat is reconnecting. Please try again in a moment.",
+      );
+      return;
+    }
+
+    socket.emit("chat:message", {
+      chatId: roomId,
+      type: "TEXT",
+      content,
+    });
   };
 
   const showChatActions = () => {
@@ -148,127 +222,157 @@ export default function ChatRoomScreen() {
 
   return (
     <SafeAreaView
-      className="flex-1 bg-[#050505]"
+      className="flex-1 bg-[#1B110A]"
       edges={["top", "left", "right"]}
     >
-      <KeyboardAvoidingView
+      <LinearGradient
+        colors={["#150C06", "#1B110A", "#241912"]}
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 4 : 0}
       >
-        <View className="flex-row items-center border-b border-[#1A1A1A] px-4 py-3">
-          <TouchableOpacity
-            className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-[#111]"
-            onPress={() => router.back()}
-            activeOpacity={0.82}
-          >
-            <Ionicons name="chevron-back" size={25} color={Colors.white} />
-          </TouchableOpacity>
-
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-full" />
-          ) : (
-            <View className="h-11 w-11 items-center justify-center rounded-full bg-[#111]">
-              <Ionicons name="person" size={20} color="#888" />
-            </View>
-          )}
-
-          <View className="ml-3 flex-1">
-            <Text className="text-base font-bold text-white" numberOfLines={1}>
-              {name}
-            </Text>
-            <Text
-              className="mt-0.5 text-xs font-semibold text-[#888]"
-              numberOfLines={1}
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 4 : 0}
+        >
+          <View className="flex-row items-center border-b border-white/10 bg-[#1B110A]/80 px-5 py-3">
+            <TouchableOpacity
+              className="mr-3 h-10 w-10 items-center justify-center rounded-full"
+              onPress={() => router.back()}
+              activeOpacity={0.82}
             >
-              {subtitle}
-            </Text>
+              <Ionicons name="arrow-back" size={24} color="#DDC1AE" />
+            </TouchableOpacity>
+
+            {avatarUrl ? (
+              <View className="relative">
+                <Image
+                  source={{ uri: avatarUrl }}
+                  className="h-11 w-11 rounded-full border border-[#FFB77F]/30"
+                />
+                {isSocketConnected ? (
+                  <View className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#1B110A] bg-green-500" />
+                ) : null}
+              </View>
+            ) : (
+              <View className="relative h-11 w-11 items-center justify-center rounded-full border border-[#FFB77F]/30 bg-[#281D15]">
+                <Ionicons name="person" size={20} color="#A58C7B" />
+                {isSocketConnected ? (
+                  <View className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#1B110A] bg-green-500" />
+                ) : null}
+              </View>
+            )}
+
+            <View className="ml-3 flex-1">
+              <Text
+                className="text-base font-extrabold text-[#F3DFD1]"
+                numberOfLines={1}
+              >
+                {name}
+              </Text>
+              <Text
+                className="mt-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFB77F]"
+                numberOfLines={1}
+              >
+                {isSocketConnected ? "Active now" : subtitle}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              className="h-10 w-10 items-center justify-center rounded-full"
+              onPress={showChatActions}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="ellipsis-vertical" size={22} color="#DDC1AE" />
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            className="h-10 w-10 items-center justify-center rounded-full bg-[#111]"
-            onPress={showChatActions}
-            activeOpacity={0.82}
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: messages.length ? "flex-end" : "center",
+              paddingHorizontal: 20,
+              paddingBottom: 24,
+              paddingTop: 26,
+            }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isFetching}
+                onRefresh={refetch}
+                tintColor="#FFFFFF"
+              />
+            }
           >
-            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.white} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: messages.length ? "flex-end" : "center",
-            padding: 18,
-            paddingBottom: 20,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isFetching}
-              onRefresh={refetch}
-              tintColor="#FFFFFF"
-            />
-          }
-        >
-          {isLoading ? (
-            <View className="items-center justify-center">
-              <ActivityIndicator color="#FFFFFF" size="large" />
-              <Text className="mt-3 text-sm font-semibold text-[#888]">
-                Loading messages
-              </Text>
-            </View>
-          ) : messages.length === 0 ? (
-            <View className="items-center px-4">
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} className="h-24 w-24 rounded-full" />
-              ) : (
-                <View className="h-24 w-24 items-center justify-center rounded-full bg-[#111]">
-                  <Ionicons
-                    name="chatbubble-ellipses-outline"
-                    size={34}
-                    color="#888"
+            {isLoading ? (
+              <View className="items-center justify-center">
+                <ActivityIndicator color="#FFB77F" size="large" />
+                <Text className="mt-3 text-sm font-semibold text-[#A58C7B]">
+                  Loading messages
+                </Text>
+              </View>
+            ) : messages.length === 0 ? (
+              <View className="items-center px-4">
+                {avatarUrl ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    className="h-24 w-24 rounded-full border border-[#FFB77F]/30"
                   />
+                ) : (
+                  <View className="h-24 w-24 items-center justify-center rounded-full bg-[#281D15]">
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={34}
+                      color="#A58C7B"
+                    />
+                  </View>
+                )}
+                <Text className="mt-5 text-center text-xl font-extrabold text-[#F3DFD1]">
+                  Chat with {name}
+                </Text>
+                <Text className="mt-2 text-center text-sm leading-5 text-[#A58C7B]">
+                  Send a message to start the conversation.
+                </Text>
+              </View>
+            ) : (
+              <View>
+                <View className="mb-10 items-center">
+                  <Text className="rounded-full bg-[#281D15] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#A58C7B]">
+                    Today
+                  </Text>
                 </View>
-              )}
-              <Text className="mt-5 text-center text-xl font-bold text-white">
-                Chat with {name}
-              </Text>
-              <Text className="mt-2 text-center text-sm leading-5 text-[#888]">
-                Send a message to start the conversation.
-              </Text>
-            </View>
-          ) : (
-            <View className="gap-2.5">
-              {messages.map((message, index) => {
-                const previous = messages[index - 1];
-                const showAvatar =
-                  message.senderId !== user?.id &&
-                  previous?.senderId !== message.senderId;
+                <View className="gap-3">
+                  {messages.map((message, index) => {
+                    const previous = messages[index - 1];
+                    const showAvatar =
+                      message.senderId !== user?.id &&
+                      previous?.senderId !== message.senderId;
 
-                return (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    isMine={message.senderId === user?.id}
-                    showAvatar={showAvatar}
-                  />
-                );
-              })}
-              <TypingIndicator visible={false} />
-            </View>
-          )}
-        </ScrollView>
+                    return (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        isMine={message.senderId === user?.id}
+                        showAvatar={showAvatar}
+                      />
+                    );
+                  })}
+                  <TypingIndicator visible={false} />
+                </View>
+              </View>
+            )}
+          </ScrollView>
 
-        <View style={{ paddingBottom: Math.max(insets.bottom - 12, 0) }}>
-          <ChatInput
-            placeholder={`Message ${name.split(" ")[0] || "them"}`}
-            disabled={sendMessageMutation.isPending}
-            onSend={sendMessage}
-          />
-        </View>
-      </KeyboardAvoidingView>
+          <SafeAreaView edges={["bottom"]} className="bg-[#1B110A]/90">
+            <ChatInput
+              placeholder={`Message ${name.split(" ")[0] || "them"}`}
+              disabled={!isSocketConnected}
+              onSend={sendMessage}
+            />
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
     </SafeAreaView>
   );
 }

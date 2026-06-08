@@ -60,7 +60,7 @@ export class AuthRepository {
   }
 
   async deleteRefreshToken(token: string) {
-    return prisma.refreshToken.delete({ where: { token } });
+    return prisma.refreshToken.deleteMany({ where: { token } });
   }
 
   async deleteAllRefreshTokens(userId: string) {
@@ -96,5 +96,13 @@ export class AuthRepository {
 
   async deleteLoginOtp(email: string) {
     return prisma.loginOtp.deleteMany({ where: { email } });
+  }
+
+  async updatePassword(userId: string, passwordHash: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+      include: { profile: true },
+    });
   }
 }

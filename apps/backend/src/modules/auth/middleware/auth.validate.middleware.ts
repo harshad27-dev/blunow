@@ -28,6 +28,12 @@ const requestLoginOtpSchema = z.object({
   email: z.string().email(),
 });
 
+const resetPasswordSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().regex(/^\d{6}$/, "OTP must be 6 digits"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
@@ -86,6 +92,22 @@ export const validateRefreshToken = (
   next: NextFunction,
 ): void => {
   const result = refreshTokenSchema.safeParse(req.body);
+  if (!result.success) {
+    res
+      .status(400)
+      .json({ success: false, errors: result.error.flatten().fieldErrors });
+    return;
+  }
+  req.body = result.data;
+  next();
+};
+
+export const validateResetPassword = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  const result = resetPasswordSchema.safeParse(req.body);
   if (!result.success) {
     res
       .status(400)

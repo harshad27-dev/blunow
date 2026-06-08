@@ -5,6 +5,7 @@ import {
   validateLogin,
   validateRefreshToken,
   validateRequestLoginOtp,
+  validateResetPassword,
 } from '../middleware/auth.validate.middleware';
 import { strictRateLimitMiddleware } from '../middleware/auth.ratelimit.middleware';
 import { authenticate } from '../../../common/middleware/auth.middleware';
@@ -24,6 +25,22 @@ router.post(
   strictRateLimitMiddleware,
   validateRequestLoginOtp,
   controller.requestLoginOtp,
+);
+
+// POST /api/auth/password-reset/otp
+router.post(
+  '/password-reset/otp',
+  strictRateLimitMiddleware,
+  validateRequestLoginOtp,
+  controller.requestPasswordReset,
+);
+
+// POST /api/auth/password-reset
+router.post(
+  '/password-reset',
+  strictRateLimitMiddleware,
+  validateResetPassword,
+  controller.resetPassword,
 );
 
 // POST /api/auth/refresh

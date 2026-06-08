@@ -9,6 +9,8 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+let refreshPromise: Promise<string> | null = null;
+
 // Request interceptor: attach token
 api.interceptors.request.use(async (config) => {
   const token = await storage.get(Config.TOKEN_KEY);
@@ -24,35 +26,52 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Skip retry for auth routes to prevent infinite logout loop
-    const isAuthRoute = originalRequest.url?.includes("/auth/");
+    const authRefreshBlockedRoutes = [
+      "/auth/login",
+      "/auth/login/otp",
+      "/auth/password-reset",
+      "/auth/password-reset/otp",
+      "/auth/register",
+      "/auth/refresh",
+      "/auth/logout",
+    ];
+    const shouldSkipRefresh = authRefreshBlockedRoutes.some((route) =>
+      originalRequest.url?.includes(route),
+    );
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
-      !isAuthRoute
+      !shouldSkipRefresh
     ) {
       originalRequest._retry = true;
       try {
         const refreshToken = await storage.get(Config.REFRESH_TOKEN_KEY);
         if (!refreshToken) throw new Error("No refresh token");
 
-        const { data } = await axios.post(
-          `${Config.API_URL}/api/auth/refresh`,
-          { refreshToken },
-        );
+        if (!refreshPromise) {
+          refreshPromise = axios
+            .post(`${Config.API_URL}/api/auth/refresh`, { refreshToken })
+            .then(async ({ data }) => {
+              const newToken: string | undefined = data.data.accessToken;
+              const newRefresh: string | undefined = data.data.refreshToken;
 
-        const newToken: string | undefined = data.data.accessToken;
-        const newRefresh: string | undefined = data.data.refreshToken;
-
-        if (!newToken) throw new Error("No access token returned");
-        await storage.set(Config.TOKEN_KEY, newToken);
-        if (newRefresh) {
-          await storage.set(Config.REFRESH_TOKEN_KEY, newRefresh);
+              if (!newToken) throw new Error("No access token returned");
+              await storage.set(Config.TOKEN_KEY, newToken);
+              if (newRefresh) {
+                await storage.set(Config.REFRESH_TOKEN_KEY, newRefresh);
+              }
+              useAuthStore.setState({
+                token: newToken,
+                isAuthenticated: true,
+              });
+              return newToken;
+            })
+            .finally(() => {
+              refreshPromise = null;
+            });
         }
-        useAuthStore.setState({
-          token: newToken,
-          isAuthenticated: true,
-        });
+
+        const newToken = await refreshPromise;
 
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return api(originalRequest);

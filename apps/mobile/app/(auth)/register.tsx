@@ -1,39 +1,53 @@
+import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   ActivityIndicator,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useForm, Controller } from "react-hook-form";
+import {
+  useForm,
+  Controller,
+  type Control,
+  type FieldErrors,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
 import { registerSchema, type RegisterFormData } from "@/zod/registerSchema";
 import { useAuthStore } from "@/store/authStore";
 import { Colors } from "@/constants/colors";
-import { FontFamily, FontSize } from "@/constants/typography";
-import { Spacing, Radius } from "@/constants/spacing";
+import { FontFamily } from "@/constants/typography";
 import type { Gender } from "@/types/auth.types";
 
-const GENDERS: { label: string; value: Gender }[] = [
-  { label: "Man", value: "MALE" },
-  { label: "Woman", value: "FEMALE" },
-  { label: "Non-binary", value: "NON_BINARY" },
-  { label: "Other", value: "OTHER" },
+const GENDERS: {
+  label: string;
+  value: Gender;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { label: "Man", value: "MALE", icon: "male" },
+  { label: "Woman", value: "FEMALE", icon: "female" },
+  { label: "Non-binary", value: "NON_BINARY", icon: "sparkles" },
+  { label: "Other", value: "OTHER", icon: "person" },
 ];
 
-// ── Component ──────────────────────────────────────────────────────
+const STEP_FIELDS: Record<number, (keyof RegisterFormData)[]> = {
+  2: ["username", "email"],
+  3: ["password", "confirmPassword"],
+  4: ["birthDate", "gender"],
+};
+
 export default function RegisterScreen() {
   const router = useRouter();
   const { register } = useAuthStore();
+  const [currentStep, setCurrentStep] = useState(1);
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
@@ -44,13 +58,24 @@ export default function RegisterScreen() {
     longitude: number;
   } | null>(null);
 
+  const totalSteps = 4;
+
   const {
     control,
     handleSubmit,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { gender: "MALE" },
+    defaultValues: {
+      username: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      birthDate: "",
+      gender: "MALE",
+    },
+    mode: "onTouched",
   });
 
   const onSubmit = async (values: RegisterFormData) => {
@@ -66,13 +91,29 @@ export default function RegisterScreen() {
         latitude: currentLocation?.latitude,
         longitude: currentLocation?.longitude,
       });
-      // AuthGuard in _layout.tsx handles redirect
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ??
         "Registration failed. Please try again.";
       setServerError(Array.isArray(msg) ? msg[0] : msg);
     }
+  };
+
+  const handleNext = async () => {
+    setServerError("");
+    const fieldsToValidate = STEP_FIELDS[currentStep];
+
+    if (fieldsToValidate) {
+      const isValid = await trigger(fieldsToValidate);
+      if (!isValid) return;
+    }
+
+    if (currentStep < totalSteps) {
+      setCurrentStep((step) => step + 1);
+      return;
+    }
+
+    await handleSubmit(onSubmit)();
   };
 
   const useCurrentLocation = async () => {
@@ -82,9 +123,7 @@ export default function RegisterScreen() {
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== Location.PermissionStatus.GRANTED) {
-        setLocationError(
-          "Location permission is required to use your current location.",
-        );
+        setLocationError("Location permission is needed to detect your city.");
         return;
       }
 
@@ -110,489 +149,559 @@ export default function RegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView className="flex-1 bg-[#050505]" edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-          >
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <View style={styles.brand}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoLetter}>B</Text>
-            </View>
-          </View>
-          <Text style={styles.heading}>Create account</Text>
-          <Text style={styles.subheading}>Join the blunow community</Text>
-        </View>
-
-        {/* ── Card ── */}
-        <View style={styles.card}>
-          {/* Username */}
-          <FieldWrapper label="Username" error={errors.username?.message}>
-            <Controller
-              control={control}
-              name="username"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextInput
-                  style={[styles.input, errors.username && styles.inputError]}
-                  placeholder="johndoe"
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  value={value}
-                />
-              )}
-            />
-          </FieldWrapper>
-
-          {/* Email */}
-          <FieldWrapper label="Email" error={errors.email?.message}>
-            <Controller
-              control={control}
-              name="email"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextInput
-                  style={[styles.input, errors.email && styles.inputError]}
-                  placeholder="you@example.com"
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  returnKeyType="next"
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  value={value}
-                />
-              )}
-            />
-          </FieldWrapper>
-
-          {/* Password */}
-          <FieldWrapper label="Password" error={errors.password?.message}>
-            <View style={styles.passwordRow}>
-              <Controller
-                control={control}
-                name="password"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    style={[
-                      styles.input,
-                      styles.passwordInput,
-                      errors.password && styles.inputError,
-                    ]}
-                    placeholder="Min 8 chars, 1 uppercase, 1 number"
-                    placeholderTextColor={Colors.textMuted}
-                    secureTextEntry={!showPassword}
-                    returnKeyType="next"
-                    onBlur={onBlur}
-                    onChangeText={onChange}
-                    value={value}
-                  />
-                )}
-              />
-              <Pressable
-                style={styles.eyeBtn}
-                onPress={() => setShowPassword((v) => !v)}
-              >
-                <Text style={styles.eyeText}>{showPassword ? "🙈" : "👁️"}</Text>
-              </Pressable>
-            </View>
-          </FieldWrapper>
-
-          {/* Confirm password */}
-          <FieldWrapper
-            label="Confirm Password"
-            error={errors.confirmPassword?.message}
-          >
-            <Controller
-              control={control}
-              name="confirmPassword"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextInput
-                  style={[
-                    styles.input,
-                    errors.confirmPassword && styles.inputError,
-                  ]}
-                  placeholder="Repeat your password"
-                  placeholderTextColor={Colors.textMuted}
-                  secureTextEntry={!showPassword}
-                  returnKeyType="next"
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  value={value}
-                />
-              )}
-            />
-          </FieldWrapper>
-
-          {/* Birth date */}
-          <FieldWrapper label="Date of Birth" error={errors.birthDate?.message}>
-            <Controller
-              control={control}
-              name="birthDate"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextInput
-                  style={[styles.input, errors.birthDate && styles.inputError]}
-                  placeholder="YYYY-MM-DD  (e.g. 1999-07-15)"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="numbers-and-punctuation"
-                  returnKeyType="next"
-                  maxLength={10}
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  value={value}
-                />
-              )}
-            />
-          </FieldWrapper>
-
-          {/* Gender picker */}
-          <FieldWrapper label="I identify as" error={errors.gender?.message}>
-            <Controller
-              control={control}
-              name="gender"
-              render={({ field: { onChange, value } }) => (
-                <View style={styles.genderRow}>
-                  {GENDERS.map((g) => (
-                    <TouchableOpacity
-                      key={g.value}
-                      style={[
-                        styles.genderChip,
-                        value === g.value && styles.genderChipActive,
-                      ]}
-                      onPress={() => onChange(g.value)}
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[
-                          styles.genderChipText,
-                          value === g.value && styles.genderChipTextActive,
-                        ]}
-                      >
-                        {g.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            />
-          </FieldWrapper>
-
-          <FieldWrapper label="Current location" error={locationError}>
+        <View className="flex-1 px-6 pt-5 pb-6">
+          <View className="mb-6 flex-row items-center justify-between">
             <TouchableOpacity
-              style={styles.locationButton}
-              onPress={useCurrentLocation}
-              disabled={isLocating}
+              className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5"
+              onPress={() => router.back()}
+              activeOpacity={0.78}
+            >
+              <Ionicons name="chevron-back" size={22} color="white" />
+            </TouchableOpacity>
+
+            <Text className="text-sm font-bold text-white/60">
+              {currentStep} of {totalSteps}
+            </Text>
+          </View>
+
+          <View className="mb-8 flex-row items-center gap-2">
+            {Array.from({ length: totalSteps }).map((_, index) => (
+              <View
+                key={index}
+                className={`h-1 flex-1 rounded-full ${
+                  index < currentStep ? "bg-white" : "bg-white/20"
+                }`}
+              />
+            ))}
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}
+          >
+            {currentStep === 1 && <WelcomeStep />}
+            {currentStep === 2 && (
+              <AccountStep control={control} errors={errors} />
+            )}
+            {currentStep === 3 && (
+              <PasswordStep
+                control={control}
+                errors={errors}
+                showPassword={showPassword}
+                onTogglePassword={() => setShowPassword((value) => !value)}
+              />
+            )}
+            {currentStep === 4 && (
+              <ProfileStep
+                control={control}
+                errors={errors}
+                currentLocation={currentLocation}
+                isLocating={isLocating}
+                locationError={locationError}
+                onUseCurrentLocation={useCurrentLocation}
+              />
+            )}
+
+            {serverError ? (
+              <View className="mt-4 rounded-2xl border border-red-400/50 bg-red-500/10 p-4">
+                <Text className="text-sm font-semibold text-red-200">
+                  {serverError}
+                </Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          <View className="mt-6 gap-3">
+            <TouchableOpacity
+              className="h-14 flex-row items-center justify-center rounded-full bg-white"
+              onPress={handleNext}
+              disabled={isSubmitting || isLocating}
               activeOpacity={0.84}
             >
-              <View style={styles.locationIconBox}>
-                <Ionicons
-                  name="location-outline"
-                  size={20}
-                  color={Colors.white}
-                />
-              </View>
-              <View style={styles.locationTextWrap}>
-                <Text style={styles.locationTitle}>
-                  {currentLocation
-                    ? currentLocation.label
-                    : "Use my current location"}
-                </Text>
-                <Text style={styles.locationSubtitle}>
-                  {currentLocation
-                    ? "Location saved for nearby matches"
-                    : "Helps show people and rooms around you"}
-                </Text>
-              </View>
-              {isLocating ? (
-                <ActivityIndicator color={Colors.white} />
+              {isSubmitting ? (
+                <ActivityIndicator color={Colors.black} />
               ) : (
-                <Text style={styles.locationAction}>
-                  {currentLocation ? "Update" : "Detect"}
-                </Text>
+                <>
+                  <Text className="text-base font-bold text-black">
+                    {currentStep === 1
+                      ? "Start"
+                      : currentStep === totalSteps
+                        ? "Create Account"
+                        : "Next"}
+                  </Text>
+                  {currentStep < totalSteps && (
+                    <Ionicons
+                      name="arrow-forward"
+                      size={18}
+                      color={Colors.black}
+                      style={{ marginLeft: 8 }}
+                    />
+                  )}
+                </>
               )}
             </TouchableOpacity>
-          </FieldWrapper>
 
-          {/* Server error */}
-          {serverError ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>⚠️ {serverError}</Text>
-            </View>
-          ) : null}
+            {currentStep > 1 ? (
+              <TouchableOpacity
+                className="h-14 flex-row items-center justify-center rounded-full border border-white/10 bg-black/30"
+                onPress={() => setCurrentStep((step) => step - 1)}
+                disabled={isSubmitting}
+                activeOpacity={0.84}
+              >
+                <Text className="text-base font-bold text-white">Back</Text>
+              </TouchableOpacity>
+            ) : null}
 
-          {/* Submit */}
-          <TouchableOpacity
-            style={styles.submitBtn}
-            onPress={handleSubmit(onSubmit)}
-            disabled={isSubmitting}
-            activeOpacity={0.88}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={Colors.black} />
-            ) : (
-              <Text style={styles.submitText}>Create Account</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Terms */}
-          <Text style={styles.terms}>
-            By creating an account you agree to our{" "}
-            <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
-            <Text style={styles.termsLink}>Privacy Policy</Text>.
-          </Text>
-
-          {/* Login CTA */}
-          <TouchableOpacity
-            style={styles.loginBtn}
-            onPress={() => router.push("/(auth)/login")}
-          >
-            <Text style={styles.loginText}>
-              Already have an account?{" "}
-              <Text style={styles.loginLink}>Sign in</Text>
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/login")}
+              disabled={isSubmitting}
+              activeOpacity={0.7}
+            >
+              <Text className="text-center text-sm font-semibold text-white/60">
+                Already have an account?{" "}
+                <Text className="text-white">Sign in</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-// ── Field wrapper helper ────────────────────────────────────────────
-function FieldWrapper({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
+function WelcomeStep() {
   return (
-    <View style={styles.fieldGroup}>
-      <Text style={styles.label}>{label}</Text>
-      {children}
-      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
+    <View className="flex-1 justify-center">
+      <View className="mb-8 h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-white/5">
+        <Ionicons name="heart" size={40} color="white" />
+      </View>
+
+      <Text
+        className="text-[42px] font-bold leading-[52px] text-white"
+        style={{ fontFamily: FontFamily.darleston }}
+      >
+        Welcome to Blunow
+      </Text>
+
+      <Text className="mt-4 text-base leading-6 text-white/70">
+        {
+          "Let's set up your profile to find meaningful connections based on real values and intent."
+        }
+      </Text>
+
+      <View className="mt-8 gap-4">
+        <OnboardingFeature
+          icon="sparkles"
+          title="Personality First"
+          description="We show who you really are before photos"
+        />
+        <OnboardingFeature
+          icon="shield-checkmark"
+          title="Verified & Safe"
+          description="Connect with real people in a respectful space"
+        />
+        <OnboardingFeature
+          icon="people"
+          title="Intentional Matching"
+          description="Find people looking for the same thing"
+        />
+      </View>
     </View>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────
+function OnboardingFeature({
+  icon,
+  title,
+  description,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+}) {
+  return (
+    <View className="flex-row items-start">
+      <View className="mr-3 mt-1 h-6 w-6 items-center justify-center rounded-full bg-white/10">
+        <Ionicons name={icon} size={14} color="white" />
+      </View>
+      <View className="flex-1">
+        <Text className="font-bold text-white">{title}</Text>
+        <Text className="mt-1 text-sm leading-4 text-white/70">
+          {description}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function AccountStep({
+  control,
+  errors,
+}: {
+  control: Control<RegisterFormData>;
+  errors: FieldErrors<RegisterFormData>;
+}) {
+  return (
+    <View className="flex-1 justify-center">
+      <StepHeader
+        icon="person-add"
+        title="Create your account"
+        description="Start with the basics people will use to recognize you."
+      />
+
+      <View className="mt-8 gap-4">
+        <FieldWrapper
+          label="Username"
+          icon="at"
+          error={errors.username?.message}
+        >
+          <Controller
+            control={control}
+            name="username"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-14 flex-1 text-base text-white"
+                placeholder="johndoe"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+              />
+            )}
+          />
+        </FieldWrapper>
+
+        <FieldWrapper label="Email" icon="mail" error={errors.email?.message}>
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-14 flex-1 text-base text-white"
+                placeholder="you@example.com"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                returnKeyType="next"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+              />
+            )}
+          />
+        </FieldWrapper>
+      </View>
+    </View>
+  );
+}
+
+function PasswordStep({
+  control,
+  errors,
+  showPassword,
+  onTogglePassword,
+}: {
+  control: Control<RegisterFormData>;
+  errors: FieldErrors<RegisterFormData>;
+  showPassword: boolean;
+  onTogglePassword: () => void;
+}) {
+  return (
+    <View className="flex-1 justify-center">
+      <StepHeader
+        icon="lock-closed"
+        title="Secure your login"
+        description="Use at least 8 characters with an uppercase letter and a number."
+      />
+
+      <View className="mt-8 gap-4">
+        <FieldWrapper
+          label="Password"
+          icon="key"
+          error={errors.password?.message}
+          trailing={
+            <Pressable
+              className="h-10 w-10 items-center justify-center rounded-full"
+              onPress={onTogglePassword}
+            >
+              <Ionicons
+                name={showPassword ? "eye-off" : "eye"}
+                size={20}
+                color="rgba(255,255,255,0.72)"
+              />
+            </Pressable>
+          }
+        >
+          <Controller
+            control={control}
+            name="password"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-14 flex-1 text-base text-white"
+                placeholder="Create password"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                secureTextEntry={!showPassword}
+                returnKeyType="next"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+              />
+            )}
+          />
+        </FieldWrapper>
+
+        <FieldWrapper
+          label="Confirm password"
+          icon="shield-checkmark"
+          error={errors.confirmPassword?.message}
+        >
+          <Controller
+            control={control}
+            name="confirmPassword"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-14 flex-1 text-base text-white"
+                placeholder="Repeat password"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                secureTextEntry={!showPassword}
+                returnKeyType="done"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+              />
+            )}
+          />
+        </FieldWrapper>
+      </View>
+    </View>
+  );
+}
+
+function ProfileStep({
+  control,
+  errors,
+  currentLocation,
+  isLocating,
+  locationError,
+  onUseCurrentLocation,
+}: {
+  control: Control<RegisterFormData>;
+  errors: FieldErrors<RegisterFormData>;
+  currentLocation: {
+    label: string;
+    latitude: number;
+    longitude: number;
+  } | null;
+  isLocating: boolean;
+  locationError: string;
+  onUseCurrentLocation: () => void;
+}) {
+  return (
+    <View className="flex-1 justify-center">
+      <StepHeader
+        icon="sparkles"
+        title="Tell us about you"
+        description="These details help create safer and more relevant matches."
+      />
+
+      <View className="mt-8 gap-5">
+        <FieldWrapper
+          label="Date of birth"
+          icon="calendar"
+          error={errors.birthDate?.message}
+        >
+          <Controller
+            control={control}
+            name="birthDate"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-14 flex-1 text-base text-white"
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                keyboardType="numbers-and-punctuation"
+                returnKeyType="next"
+                maxLength={10}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+              />
+            )}
+          />
+        </FieldWrapper>
+
+        <View>
+          <Text className="mb-3 text-sm font-semibold text-white/70">
+            I identify as
+          </Text>
+          <Controller
+            control={control}
+            name="gender"
+            render={({ field: { onChange, value } }) => (
+              <View className="gap-3">
+                {GENDERS.map((gender) => (
+                  <TouchableOpacity
+                    key={gender.value}
+                    className={`flex-row items-center rounded-2xl border-2 px-4 py-4 ${
+                      value === gender.value
+                        ? "border-white bg-white/10"
+                        : "border-white/10 bg-black/30"
+                    }`}
+                    onPress={() => onChange(gender.value)}
+                    activeOpacity={0.76}
+                  >
+                    <Ionicons
+                      name={gender.icon}
+                      size={22}
+                      color="white"
+                      style={{ marginRight: 12 }}
+                    />
+                    <Text className="flex-1 text-base font-semibold text-white">
+                      {gender.label}
+                    </Text>
+                    {value === gender.value ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color="white"
+                      />
+                    ) : null}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          />
+          {errors.gender?.message ? (
+            <Text className="mt-2 text-xs font-semibold text-red-200">
+              {errors.gender.message}
+            </Text>
+          ) : null}
+        </View>
+
+        <TouchableOpacity
+          className={`flex-row items-center rounded-2xl border-2 px-4 py-4 ${
+            currentLocation
+              ? "border-white bg-white/10"
+              : "border-white/10 bg-black/30"
+          }`}
+          onPress={onUseCurrentLocation}
+          disabled={isLocating}
+          activeOpacity={0.76}
+        >
+          <Ionicons
+            name="location"
+            size={24}
+            color="white"
+            style={{ marginRight: 12 }}
+          />
+          <View className="flex-1">
+            <Text className="font-semibold text-white">
+              {currentLocation ? currentLocation.label : "Use current location"}
+            </Text>
+            <Text className="mt-1 text-xs leading-4 text-white/70">
+              {currentLocation
+                ? "Location saved for nearby matches"
+                : "Optional, but improves nearby discovery"}
+            </Text>
+          </View>
+          {isLocating ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text className="text-xs font-bold text-white/70">
+              {currentLocation ? "Update" : "Detect"}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {locationError ? (
+          <Text className="text-xs font-semibold text-red-200">
+            {locationError}
+          </Text>
+        ) : null}
+
+        <Text className="text-center text-xs leading-5 text-white/45">
+          By creating an account you agree to our{" "}
+          <Text className="font-bold text-white/70">Terms</Text> and{" "}
+          <Text className="font-bold text-white/70">Privacy Policy</Text>.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function StepHeader({
+  icon,
+  title,
+  description,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+}) {
+  return (
+    <View>
+      <View className="mb-8 h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-white/5">
+        <Ionicons name={icon} size={38} color="white" />
+      </View>
+      <Text
+        className="text-[42px] font-bold leading-[52px] text-white"
+        style={{ fontFamily: FontFamily.darleston }}
+      >
+        {title}
+      </Text>
+      <Text className="mt-4 text-base leading-6 text-white/70">
+        {description}
+      </Text>
+    </View>
+  );
+}
+
+function FieldWrapper({
+  label,
+  icon,
+  error,
+  trailing,
+  children,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  error?: string;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <View>
+      <Text className="mb-2 text-sm font-semibold text-white/70">{label}</Text>
+      <View
+        className={`h-14 flex-row items-center rounded-2xl border-2 bg-black/30 px-4 ${
+          error ? "border-red-400/70" : "border-white/10"
+        }`}
+      >
+        <Ionicons
+          name={icon}
+          size={20}
+          color="rgba(255,255,255,0.7)"
+          style={{ marginRight: 12 }}
+        />
+        {children}
+        {trailing}
+      </View>
+      {error ? (
+        <Text className="mt-2 text-xs font-semibold text-red-200">{error}</Text>
+      ) : null}
+    </View>
+  );
+}
+
 const formatLocationLabel = (place?: Location.LocationGeocodedAddress) =>
   [place?.city || place?.district || place?.region, place?.country]
     .filter(Boolean)
     .join(", ");
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: Colors.bg },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing["2xl"],
-  },
-
-  header: { marginTop: 56, marginBottom: Spacing.lg },
-  backBtn: { marginBottom: Spacing.lg },
-  backText: {
-    fontSize: FontSize.base,
-    fontFamily: FontFamily.medium,
-    color: Colors.white,
-  },
-  brand: { alignItems: "center", marginBottom: Spacing.md },
-  logoCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoLetter: {
-    fontSize: 32,
-    fontFamily: FontFamily.bold,
-    color: Colors.black,
-  },
-  heading: {
-    fontSize: FontSize.xl,
-    fontFamily: FontFamily.bold,
-    color: Colors.white,
-    marginBottom: 4,
-    textAlign: "center",
-  },
-  subheading: {
-    fontSize: FontSize.base,
-    fontFamily: FontFamily.regular,
-    color: Colors.textSecondary,
-    textAlign: "center",
-  },
-
-  card: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-
-  fieldGroup: { marginBottom: Spacing.md },
-  label: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-    color: Colors.textSecondary,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: Colors.bgInput,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 14,
-    fontSize: FontSize.base,
-    fontFamily: FontFamily.regular,
-    color: Colors.white,
-  },
-  inputError: { borderColor: Colors.error },
-  fieldError: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.regular,
-    color: Colors.error,
-    marginTop: 4,
-  },
-
-  passwordRow: { position: "relative" },
-  passwordInput: { paddingRight: 52 },
-  eyeBtn: {
-    position: "absolute",
-    right: 14,
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
-  },
-  eyeText: { fontSize: 18 },
-
-  genderRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
-  genderChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 9,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bgInput,
-  },
-  genderChipActive: {
-    borderColor: Colors.white,
-    backgroundColor: Colors.white,
-  },
-  genderChipText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-    color: Colors.textSecondary,
-  },
-  genderChipTextActive: { color: Colors.black },
-
-  locationButton: {
-    alignItems: "center",
-    backgroundColor: Colors.bgInput,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    flexDirection: "row",
-    minHeight: 66,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-  },
-  locationIconBox: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    height: 40,
-    justifyContent: "center",
-    marginRight: 12,
-    width: 40,
-  },
-  locationTextWrap: {
-    flex: 1,
-    marginRight: 12,
-  },
-  locationTitle: {
-    color: Colors.white,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.sm,
-  },
-  locationSubtitle: {
-    color: Colors.textSecondary,
-    fontFamily: FontFamily.regular,
-    fontSize: FontSize.xs,
-    lineHeight: 18,
-    marginTop: 3,
-  },
-  locationAction: {
-    color: Colors.white,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.xs,
-  },
-
-  errorBanner: {
-    backgroundColor: "#330000",
-    borderWidth: 1,
-    borderColor: Colors.error,
-    borderRadius: Radius.sm,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  errorBannerText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.regular,
-    color: Colors.error,
-  },
-
-  submitBtn: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.full,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.md,
-    marginTop: Spacing.sm,
-  },
-  submitText: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.bold,
-    color: Colors.black,
-    letterSpacing: 0.3,
-  },
-
-  terms: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.regular,
-    color: Colors.textMuted,
-    textAlign: "center",
-    marginBottom: Spacing.md,
-    lineHeight: 18,
-  },
-  termsLink: { color: Colors.white, fontFamily: FontFamily.bold },
-
-  loginBtn: { alignItems: "center" },
-  loginText: {
-    fontSize: FontSize.base,
-    fontFamily: FontFamily.regular,
-    color: Colors.textSecondary,
-  },
-  loginLink: { fontFamily: FontFamily.bold, color: Colors.white },
-});

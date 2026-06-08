@@ -25,6 +25,16 @@ export interface RequestLoginOtpResponse {
   devOtp?: string;
 }
 
+export type RequestPasswordResetPayload = RequestLoginOtpPayload;
+
+export type RequestPasswordResetResponse = RequestLoginOtpResponse;
+
+export interface ResetPasswordPayload {
+  email: string;
+  otp: string;
+  password: string;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
