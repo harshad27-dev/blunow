@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Image,
   RefreshControl,
+  ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -32,6 +33,24 @@ type ConversationItem = {
   isArchived: boolean;
   messageCount: number;
   raw: ChatConversation;
+};
+
+type ChatFilter = "all" | "unread" | "muted" | "archived";
+type MessageSegment = "messages" | "requests";
+
+const FILTERS: { label: string; value: ChatFilter }[] = [
+  { label: "All", value: "all" },
+  { label: "Unread", value: "unread" },
+  { label: "Muted", value: "muted" },
+  { label: "Archived", value: "archived" },
+];
+
+const CARD_SHADOW = {
+  shadowColor: "#1C1C1C",
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.08,
+  shadowRadius: 18,
+  elevation: 3,
 };
 
 const getTimeLabel = (value?: string | null) => {
@@ -66,14 +85,34 @@ const getOtherParticipant = (chat: ChatConversation, currentUserId?: string) =>
 
 const getLastMessage = (chat: ChatConversation, currentUserId?: string) => {
   const latest = chat.messages?.[0];
+
+  if (latest?.isDeleted) return "Message deleted";
+
   const content =
     chat.lastMessageContent ||
     latest?.content ||
-    (latest?.mediaUrl ? "Shared media" : "");
+    (latest?.mediaUrl
+      ? latest.type === "IMAGE"
+        ? "Photo"
+        : latest.type === "VIDEO"
+          ? "Video"
+          : latest.type === "AUDIO"
+            ? "Voice message"
+            : "Shared media"
+      : "");
 
   if (!content) return "Matched and ready to chat";
   if (latest?.senderId === currentUserId) return `You: ${content}`;
   return content;
+};
+
+const getInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) return "BN";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 };
 
 const normalizeConversation = (
@@ -106,6 +145,11 @@ export default function ChatListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const [activeFilter, setActiveFilter] = useState<ChatFilter>("all");
+  const [activeSegment, setActiveSegment] =
+    useState<MessageSegment>("messages");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
 
   const {
     data: conversations = [],
@@ -115,15 +159,40 @@ export default function ChatListScreen() {
   } = useChatConversationsQuery();
   const deleteChatMutation = useDeleteChatMutation();
 
-  const items = useMemo(
-    () =>
-      conversations
-        .map((chat) => normalizeConversation(chat, user?.id))
-        .filter((chat) => !chat.isArchived),
+  const allItems = useMemo(
+    () => conversations.map((chat) => normalizeConversation(chat, user?.id)),
     [conversations, user?.id],
   );
 
-  const unreadTotal = items.reduce((sum, item) => sum + item.unreadCount, 0);
+  const items = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (activeSegment === "requests") return [];
+
+    return allItems
+      .filter((item) => {
+        if (activeFilter === "archived") return item.isArchived;
+        if (item.isArchived) return false;
+        if (activeFilter === "unread") return item.unreadCount > 0;
+        if (activeFilter === "muted") return item.isMuted;
+        return true;
+      })
+      .filter((item) => {
+        if (!query) return true;
+        return (
+          item.name.toLowerCase().includes(query) ||
+          item.subtitle.toLowerCase().includes(query)
+        );
+      });
+  }, [activeFilter, activeSegment, allItems, searchQuery]);
+
+  const activeItems = allItems.filter((item) => !item.isArchived);
+  const unreadTotal = activeItems.reduce(
+    (sum, item) => sum + item.unreadCount,
+    0,
+  );
+  const hasSearch = searchQuery.trim().length > 0;
+  const matchStories = activeItems.slice(0, 12);
 
   const openConversation = (item: ConversationItem) => {
     router.push({
@@ -134,6 +203,16 @@ export default function ChatListScreen() {
         avatarUrl: item.avatarUrl || "",
       },
     });
+  };
+
+  const showFilters = () => {
+    Alert.alert("Filter messages", "Choose which conversations to show.", [
+      ...FILTERS.map((filter) => ({
+        text: filter.label,
+        onPress: () => setActiveFilter(filter.value),
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
   };
 
   const confirmDelete = (item: ConversationItem) => {
@@ -148,58 +227,75 @@ export default function ChatListScreen() {
   };
 
   return (
-    <View className="flex-1 bg-[#050505]" style={{ paddingTop: insets.top }}>
-      <View className="border-b border-[#141414] px-4 pb-4 pt-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center">
+    <View className="flex-1 bg-[#F8F4F0]" style={{ paddingTop: insets.top }}>
+      <View className="px-5 pb-4 pt-3">
+        <View className="relative h-11 flex-row items-center justify-center">
+          <View className="absolute left-0">
             <TouchableOpacity
+              className="h-11 w-11 items-center justify-center rounded-full border border-[#E4DDD7] bg-white"
               onPress={() => router.back()}
-              className="-ml-2 h-10 w-10 items-center justify-center rounded-full"
-              activeOpacity={0.78}
+              activeOpacity={0.82}
+              style={CARD_SHADOW}
             >
-              <Ionicons name="chevron-back" size={28} color="#FFF" />
+              <Ionicons name="chevron-back" size={24} color="#1C1C1C" />
             </TouchableOpacity>
-            <View className="ml-2">
-              <Text className="text-2xl font-extrabold text-white">
-                Messages
-              </Text>
-              <Text className="mt-0.5 text-xs font-semibold text-[#777]">
-                {items.length
-                  ? `${items.length} conversation${items.length === 1 ? "" : "s"}`
-                  : "Your chats will appear here"}
-              </Text>
-            </View>
           </View>
 
-          <View className="h-11 min-w-11 items-center justify-center rounded-full border border-[#222] bg-[#101010] px-3">
-            <Text className="text-sm font-extrabold text-white">
-              {unreadTotal}
-            </Text>
+          <Text
+            className="px-24 text-center text-[34px] font-extrabold text-[#1C1C1C]"
+            numberOfLines={1}
+          >
+            Matches
+          </Text>
+
+          <View className="absolute right-0 flex-row items-center">
+            <TouchableOpacity
+              className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-[#E4DDD7] bg-white"
+              onPress={() => setIsSearchVisible((value) => !value)}
+              activeOpacity={0.82}
+              style={CARD_SHADOW}
+            >
+              <Ionicons name="search" size={19} color="#1C1C1C" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="h-11 w-11 items-center justify-center rounded-full border border-[#E4DDD7] bg-white"
+              onPress={showFilters}
+              activeOpacity={0.82}
+              style={CARD_SHADOW}
+            >
+              <Ionicons name="options-outline" size={20} color="#1C1C1C" />
+            </TouchableOpacity>
           </View>
         </View>
+
+        {isSearchVisible ? (
+          <View className="mt-5 flex-row items-center rounded-[24px] border border-[#E4DDD7] bg-white px-4">
+            <Ionicons name="search" size={18} color="#6F6259" />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search matches"
+              placeholderTextColor="#A99B91"
+              className="h-[52px] flex-1 px-3 text-[15px] font-semibold text-[#1C1C1C]"
+              autoCorrect={false}
+              returnKeyType="search"
+              style={{ paddingVertical: 0 }}
+            />
+            {hasSearch ? (
+              <TouchableOpacity
+                className="h-8 w-8 items-center justify-center rounded-full bg-[#F8F4F0]"
+                onPress={() => setSearchQuery("")}
+                activeOpacity={0.82}
+              >
+                <Ionicons name="close" size={16} color="#1C1C1C" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#FFFFFF" size="large" />
-          <Text className="mt-3 text-sm font-semibold text-[#888]">
-            Loading conversations
-          </Text>
-        </View>
-      ) : items.length === 0 ? (
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          refreshControl={
-            <RefreshControl
-              refreshing={isFetching}
-              onRefresh={refetch}
-              tintColor="#FFFFFF"
-            />
-          }
-          ListEmptyComponent={<EmptyState />}
-          contentContainerStyle={{ flexGrow: 1 }}
-        />
+        <ConversationSkeletonList />
       ) : (
         <FlatList
           data={items}
@@ -208,11 +304,37 @@ export default function ChatListScreen() {
             <RefreshControl
               refreshing={isFetching}
               onRefresh={refetch}
-              tintColor="#FFFFFF"
+              tintColor="#1C1C1C"
             />
           }
-          contentContainerClassName="px-4 pb-8 pt-4"
+          contentContainerClassName="px-5 pb-8"
+          contentContainerStyle={
+            items.length === 0 ? { flexGrow: 1 } : undefined
+          }
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View>
+              <MatchStories
+                items={matchStories}
+                onPress={openConversation}
+                unreadTotal={unreadTotal}
+              />
+              <MessagesSectionHeader
+                activeSegment={activeSegment}
+                onChangeSegment={setActiveSegment}
+                requestCount={0}
+                unreadTotal={unreadTotal}
+              />
+            </View>
+          }
+          ListEmptyComponent={
+            <EmptyState
+              segment={activeSegment}
+              filter={activeSegment === "requests" ? "all" : activeFilter}
+              hasSearch={hasSearch}
+              onClearSearch={() => setSearchQuery("")}
+            />
+          }
           renderItem={({ item }) => (
             <ConversationRow
               item={item}
@@ -226,18 +348,224 @@ export default function ChatListScreen() {
   );
 }
 
-const EmptyState = () => (
-  <View className="flex-1 items-center justify-center px-6">
-    <View className="mb-5 h-24 w-24 items-center justify-center rounded-[32px] border border-[#222] bg-[#111]">
-      <Ionicons name="chatbubbles-outline" size={36} color="#888" />
+const MatchStories = ({
+  items,
+  onPress,
+  unreadTotal,
+}: {
+  items: ConversationItem[];
+  onPress: (item: ConversationItem) => void;
+  unreadTotal: number;
+}) => (
+  <View className="pb-6">
+    <View className="mb-4 flex-row items-end justify-between">
+      <View>
+        <Text className="text-2xl font-extrabold text-[#1C1C1C]">
+          New matches
+        </Text>
+        <Text className="mt-1 text-sm font-semibold text-[#6F6259]">
+          People ready to start a conversation
+        </Text>
+      </View>
+      {unreadTotal > 0 ? (
+        <View className="rounded-full bg-[#B19F91] px-3 py-1.5">
+          <Text className="text-xs font-extrabold text-white">
+            {unreadTotal > 99 ? "99+" : unreadTotal} unread
+          </Text>
+        </View>
+      ) : null}
     </View>
-    <Text className="mb-2 text-center text-xl font-extrabold text-white">
-      No messages yet
-    </Text>
-    <Text className="max-w-[310px] text-center text-sm leading-5 text-[#888]">
-      When you match with someone or start a conversation, your messages will
-      appear here.
-    </Text>
+
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerClassName="pr-5"
+    >
+      <TouchableOpacity className="mr-4 w-[76px]" activeOpacity={0.84}>
+        <View
+          className="h-[76px] w-[76px] items-center justify-center rounded-full border border-[#B19F91] bg-white"
+          style={CARD_SHADOW}
+        >
+          <View className="h-[62px] w-[62px] items-center justify-center rounded-full bg-[#B19F91]">
+            <Ionicons name="heart" size={24} color="#FFFFFF" />
+          </View>
+        </View>
+        <Text
+          className="mt-2 text-center text-xs font-extrabold text-[#1C1C1C]"
+          numberOfLines={1}
+        >
+          Likes You
+        </Text>
+      </TouchableOpacity>
+
+      {items.map((item) => (
+        <TouchableOpacity
+          key={item.id}
+          className="mr-4 w-[76px]"
+          onPress={() => onPress(item)}
+          activeOpacity={0.84}
+        >
+          <View
+            className="h-[76px] w-[76px] items-center justify-center rounded-full border border-[#B19F91] bg-white"
+            style={CARD_SHADOW}
+          >
+            {item.avatarUrl ? (
+              <Image
+                source={{ uri: item.avatarUrl }}
+                className="h-[66px] w-[66px] rounded-full bg-[#E4DDD7]"
+              />
+            ) : (
+              <View className="h-[66px] w-[66px] items-center justify-center rounded-full bg-[#B19F91]">
+                <Text className="text-lg font-extrabold text-white">
+                  {getInitials(item.name)}
+                </Text>
+              </View>
+            )}
+            <View className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-white bg-[#5CB879]" />
+          </View>
+          <Text
+            className="mt-2 text-center text-xs font-bold text-[#6F6259]"
+            numberOfLines={1}
+          >
+            {item.name}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  </View>
+);
+
+const MessagesSectionHeader = ({
+  activeSegment,
+  onChangeSegment,
+  requestCount,
+  unreadTotal,
+}: {
+  activeSegment: MessageSegment;
+  onChangeSegment: (segment: MessageSegment) => void;
+  requestCount: number;
+  unreadTotal: number;
+}) => (
+  <View className="pb-2">
+    <View className="mb-4 flex-row items-center justify-between">
+      <Text className="text-2xl font-extrabold text-[#1C1C1C]">Messages</Text>
+      <Text className="text-sm font-bold text-[#6F6259]">
+        {unreadTotal > 0 ? `${unreadTotal} unread` : "All caught up"}
+      </Text>
+    </View>
+
+    <View className="flex-row rounded-[24px] border border-[#E4DDD7] bg-white p-1">
+      <TouchableOpacity
+        className={`flex-1 rounded-[20px] py-3 ${
+          activeSegment === "messages" ? "bg-[#1C1C1C]" : "bg-white"
+        }`}
+        onPress={() => onChangeSegment("messages")}
+        activeOpacity={0.84}
+      >
+        <Text
+          className={`text-center text-sm font-extrabold ${
+            activeSegment === "messages" ? "text-white" : "text-[#6F6259]"
+          }`}
+        >
+          Messages
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        className={`flex-1 rounded-[20px] py-3 ${
+          activeSegment === "requests" ? "bg-[#1C1C1C]" : "bg-white"
+        }`}
+        onPress={() => onChangeSegment("requests")}
+        activeOpacity={0.84}
+      >
+        <Text
+          className={`text-center text-sm font-extrabold ${
+            activeSegment === "requests" ? "text-white" : "text-[#6F6259]"
+          }`}
+        >
+          Requests{requestCount ? ` ${requestCount}` : ""}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+const EmptyState = ({
+  segment,
+  filter,
+  hasSearch,
+  onClearSearch,
+}: {
+  segment: MessageSegment;
+  filter: ChatFilter;
+  hasSearch: boolean;
+  onClearSearch: () => void;
+}) => {
+  const title = hasSearch
+    ? "No chats found"
+    : segment === "requests"
+      ? "No requests"
+      : filter === "unread"
+        ? "You're all caught up"
+        : filter === "muted"
+          ? "No muted chats"
+          : filter === "archived"
+            ? "No archived chats"
+            : "No messages yet";
+
+  const description = hasSearch
+    ? "Try a different name or message preview."
+    : segment === "requests"
+      ? "Message requests from new matches will appear here."
+      : filter === "unread"
+        ? "New messages will collect here when someone replies."
+        : filter === "muted"
+          ? "Muted conversations will appear here."
+          : filter === "archived"
+            ? "Archived conversations stay tucked away here."
+            : "When you match with someone or start a conversation, your messages will appear here.";
+
+  return (
+    <View className="flex-1 items-center justify-center px-6">
+      <View className="mb-5 h-24 w-24 items-center justify-center rounded-[30px] bg-[#1C1C1C]">
+        <Ionicons
+          name={hasSearch ? "search" : "chatbubbles-outline"}
+          size={36}
+          color="#F8F4F0"
+        />
+      </View>
+      <Text className="mb-2 text-center text-2xl font-extrabold text-[#1C1C1C]">
+        {title}
+      </Text>
+      <Text className="max-w-[310px] text-center text-sm font-medium leading-5 text-[#48494B]">
+        {description}
+      </Text>
+      {hasSearch ? (
+        <TouchableOpacity
+          className="mt-5 rounded-full bg-[#1C1C1C] px-5 py-3"
+          onPress={onClearSearch}
+          activeOpacity={0.84}
+        >
+          <Text className="text-sm font-extrabold text-[#F8F4F0]">
+            Clear search
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+};
+
+const ConversationSkeletonList = () => (
+  <View className="px-5 pb-8 pt-4">
+    {Array.from({ length: 6 }).map((_, index) => (
+      <View key={index} className="flex-row items-center py-4">
+        <View className="h-14 w-14 rounded-full bg-[#D9CEC5]" />
+        <View className="ml-4 flex-1">
+          <View className="h-4 w-2/3 rounded-full bg-[#CBBDB2]" />
+          <View className="mt-3 h-3 w-full rounded-full bg-[#D9CEC5]" />
+          <View className="mt-3 h-3 w-24 rounded-full bg-[#D9CEC5]" />
+        </View>
+      </View>
+    ))}
   </View>
 );
 
@@ -269,7 +597,7 @@ const ConversationRow = ({
 
   return (
     <TouchableOpacity
-      className="mb-3 flex-row items-center rounded-[24px] border border-[#1E1E1E] bg-[#0F0F0F] p-3"
+      className="flex-row items-center py-3.5"
       onPress={onPress}
       onLongPress={showActions}
       activeOpacity={0.84}
@@ -278,16 +606,18 @@ const ConversationRow = ({
         {item.avatarUrl ? (
           <Image
             source={{ uri: item.avatarUrl }}
-            className="h-16 w-16 rounded-[22px] bg-[#1A1A1A]"
+            className="h-14 w-14 rounded-full bg-[#E4DDD7]"
           />
         ) : (
-          <View className="h-16 w-16 items-center justify-center rounded-[22px] bg-[#1A1A1A]">
-            <Ionicons name="person" size={24} color="#888" />
+          <View className="h-14 w-14 items-center justify-center rounded-full bg-[#B19F91]">
+            <Text className="text-base font-extrabold text-[#F8F4F0]">
+              {getInitials(item.name)}
+            </Text>
           </View>
         )}
         {item.unreadCount > 0 ? (
-          <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0F0F0F] bg-white px-1">
-            <Text className="text-[10px] font-extrabold text-black">
+          <View className="absolute -right-0.5 -top-0.5 h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#F8F4F0] bg-[#B19F91] px-1">
+            <Text className="text-[10px] font-extrabold text-white">
               {item.unreadCount > 9 ? "9+" : item.unreadCount}
             </Text>
           </View>
@@ -297,46 +627,36 @@ const ConversationRow = ({
       <View className="ml-4 flex-1">
         <View className="flex-row items-center justify-between">
           <Text
-            className="mr-3 flex-1 text-base font-extrabold text-white"
+            className="mr-3 flex-1 text-[16px] font-extrabold text-[#1C1C1C]"
             numberOfLines={1}
           >
             {item.name}
           </Text>
-          <Text className="text-xs font-bold text-[#777]">{item.timeLabel}</Text>
+          <Text className="text-xs font-bold text-[#6F6259]">
+            {item.timeLabel}
+          </Text>
         </View>
 
         <View className="mt-1.5 flex-row items-center">
           {item.isMuted ? (
-            <Ionicons name="notifications-off-outline" size={13} color="#777" />
+            <Ionicons
+              name="notifications-off-outline"
+              size={13}
+              color="#B19F91"
+            />
           ) : null}
           <Text
             className={`flex-1 text-sm leading-5 ${
               item.unreadCount
-                ? "font-bold text-[#EDEDED]"
-                : "font-medium text-[#8A8A8A]"
+                ? "font-extrabold text-[#1C1C1C]"
+                : "font-semibold text-[#6F6259]"
             } ${item.isMuted ? "ml-1" : ""}`}
             numberOfLines={1}
           >
             {item.subtitle}
           </Text>
         </View>
-
-        <View className="mt-2 flex-row items-center">
-          <View className="rounded-full bg-[#181818] px-2.5 py-1">
-            <Text className="text-[11px] font-bold text-[#9A9A9A]">
-              {item.messageCount || 0} messages
-            </Text>
-          </View>
-        </View>
       </View>
-
-      <TouchableOpacity
-        className="h-9 w-9 items-center justify-center rounded-full"
-        onPress={showActions}
-        activeOpacity={0.82}
-      >
-        <Ionicons name="ellipsis-horizontal" size={18} color="#777" />
-      </TouchableOpacity>
     </TouchableOpacity>
   );
 };

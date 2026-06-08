@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
@@ -29,45 +30,63 @@ export const ChatInput = ({
   };
 
   return (
-    <View className="flex-row items-end border-t border-white/10 bg-[#1B110A]/90 px-5 pb-5 pt-3">
-      <TouchableOpacity
-        className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-[#281D15]"
-        activeOpacity={0.84}
+    <View className="bg-[#F8F4F0] px-5 pb-5 pt-3">
+      <View
+        className="h-14 flex-row items-center rounded-[28px] border border-[#E4DDD7] bg-white px-4"
+        style={styles.container}
       >
-        <Ionicons name="add" size={23} color="#FFB77F" />
-      </TouchableOpacity>
+        <TouchableOpacity
+          className="h-9 w-9 items-center justify-center rounded-full bg-[#B19F91]"
+          activeOpacity={0.84}
+        >
+          <Ionicons name="add" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
 
-      <View className="mr-3 min-h-12 flex-1 justify-center rounded-full bg-[#33281F] px-5 py-3">
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder={placeholder}
-          placeholderTextColor="#A58C7B"
+          placeholder="Type a message..."
+          placeholderTextColor="#9D8F85"
           multiline
           editable={!disabled}
-          className="max-h-28 text-[15px] font-medium text-[#F3DFD1]"
+          className="mx-3 max-h-11 flex-1 text-[16px] text-[#1C1C1C]"
           style={{ padding: 0 }}
         />
-      </View>
 
-      <TouchableOpacity
-        className={`h-12 w-12 items-center justify-center rounded-full ${
-          canSend ? "bg-[#FF8A00]" : "bg-[#3F3229]"
-        }`}
-        onPress={send}
-        activeOpacity={0.84}
-        disabled={!canSend}
-      >
-        {disabled ? (
-          <ActivityIndicator color="#DDC1AE" size="small" />
-        ) : (
-          <Ionicons
-            name="arrow-up"
-            size={21}
-            color={canSend ? "#2F1500" : "#A58C7B"}
-          />
-        )}
-      </TouchableOpacity>
+        <TouchableOpacity
+          className="h-10 w-10 items-center justify-center rounded-full"
+          activeOpacity={0.84}
+        >
+          <Ionicons name="happy-outline" size={22} color="#48494B" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className="h-10 w-10 items-center justify-center rounded-full"
+          onPress={send}
+          activeOpacity={0.84}
+          disabled={!canSend}
+        >
+          {disabled ? (
+            <ActivityIndicator color="#B19F91" size="small" />
+          ) : (
+            <Ionicons
+              name={canSend ? "arrow-up-circle" : "mic-outline"}
+              size={canSend ? 25 : 22}
+              color={canSend ? "#B19F91" : "#48494B"}
+            />
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    shadowColor: "#1C1C1C",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.07,
+    shadowRadius: 24,
+    elevation: 5,
+  },
+});

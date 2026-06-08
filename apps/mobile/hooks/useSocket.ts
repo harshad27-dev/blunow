@@ -1,9 +1,7 @@
 import { useEffect, useMemo } from "react";
-import type { Socket } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
 import { Config } from "@/constants/config";
 import { storage } from "@/utils/storage";
-
-const io = require("socket.io-client/dist/socket.io.js") as typeof import("socket.io-client").io;
 
 type ServerToClientEvents = {
   "chat:message:new": (message: unknown) => void;

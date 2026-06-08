@@ -7,12 +7,12 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -52,7 +52,7 @@ export default function ChatRoomScreen() {
   }>();
 
   const roomId = getParam(params.roomId) || "";
-  const fallbackName = getParam(params.name) || "Chat";
+  const fallbackName = getParam(params.name) || "Isabella";
   const fallbackAvatarUrl = getParam(params.avatarUrl);
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -222,157 +222,185 @@ export default function ChatRoomScreen() {
 
   return (
     <SafeAreaView
-      className="flex-1 bg-[#1B110A]"
+      className="flex-1 bg-[#F8F4F0]"
       edges={["top", "left", "right"]}
     >
-      <LinearGradient
-        colors={["#150C06", "#1B110A", "#241912"]}
+      <KeyboardAvoidingView
         className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 4 : 0}
       >
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 4 : 0}
-        >
-          <View className="flex-row items-center border-b border-white/10 bg-[#1B110A]/80 px-5 py-3">
-            <TouchableOpacity
-              className="mr-3 h-10 w-10 items-center justify-center rounded-full"
-              onPress={() => router.back()}
-              activeOpacity={0.82}
+        <View className="flex-row items-center border-b border-[#E4DDD7] bg-[#F8F4F0] px-5 py-3.5">
+          <TouchableOpacity
+            className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-white"
+            onPress={() => router.back()}
+            activeOpacity={0.82}
+            style={styles.navButton}
+          >
+            <Ionicons name="chevron-back" size={24} color="#1C1C1C" />
+          </TouchableOpacity>
+
+          {avatarUrl ? (
+            <View className="relative">
+              <Image
+                source={{ uri: avatarUrl }}
+                className="h-12 w-12 rounded-full border-2 border-white bg-[#E4DDD7]"
+              />
+              {isSocketConnected ? (
+                <View className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-[#F8F4F0] bg-[#4FB56F]" />
+              ) : null}
+            </View>
+          ) : (
+            <View className="relative h-12 w-12 items-center justify-center rounded-full border-2 border-white bg-[#B19F91]">
+              <Ionicons name="person" size={20} color="#F8F4F0" />
+              {isSocketConnected ? (
+                <View className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-[#F8F4F0] bg-[#4FB56F]" />
+              ) : null}
+            </View>
+          )}
+
+          <View className="ml-3 flex-1">
+            <Text
+              className="text-[17px] font-extrabold text-[#1C1C1C]"
+              numberOfLines={1}
             >
-              <Ionicons name="arrow-back" size={24} color="#DDC1AE" />
-            </TouchableOpacity>
-
-            {avatarUrl ? (
-              <View className="relative">
-                <Image
-                  source={{ uri: avatarUrl }}
-                  className="h-11 w-11 rounded-full border border-[#FFB77F]/30"
-                />
-                {isSocketConnected ? (
-                  <View className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#1B110A] bg-green-500" />
-                ) : null}
-              </View>
-            ) : (
-              <View className="relative h-11 w-11 items-center justify-center rounded-full border border-[#FFB77F]/30 bg-[#281D15]">
-                <Ionicons name="person" size={20} color="#A58C7B" />
-                {isSocketConnected ? (
-                  <View className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#1B110A] bg-green-500" />
-                ) : null}
-              </View>
-            )}
-
-            <View className="ml-3 flex-1">
+              {name}
+            </Text>
+            <View className="mt-1 flex-row items-center">
+              {isSocketConnected ? (
+                <View className="mr-1.5 h-2 w-2 rounded-full bg-[#4FB56F]" />
+              ) : null}
               <Text
-                className="text-base font-extrabold text-[#F3DFD1]"
+                className="text-xs font-semibold text-[#6F6259]"
                 numberOfLines={1}
               >
-                {name}
-              </Text>
-              <Text
-                className="mt-0.5 text-[10px] font-extrabold uppercase tracking-widest text-[#FFB77F]"
-                numberOfLines={1}
-              >
-                {isSocketConnected ? "Active now" : subtitle}
+                {isSocketConnected ? "Online now" : subtitle}
               </Text>
             </View>
-
-            <TouchableOpacity
-              className="h-10 w-10 items-center justify-center rounded-full"
-              onPress={showChatActions}
-              activeOpacity={0.82}
-            >
-              <Ionicons name="ellipsis-vertical" size={22} color="#DDC1AE" />
-            </TouchableOpacity>
           </View>
 
-          <ScrollView
-            className="flex-1"
-            contentContainerStyle={{
-              flexGrow: 1,
-              justifyContent: messages.length ? "flex-end" : "center",
-              paddingHorizontal: 20,
-              paddingBottom: 24,
-              paddingTop: 26,
-            }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={isFetching}
-                onRefresh={refetch}
-                tintColor="#FFFFFF"
-              />
-            }
+
+          <TouchableOpacity
+            className="h-10 w-10 items-center justify-center rounded-full bg-white"
+            onPress={showChatActions}
+            activeOpacity={0.82}
+            style={styles.navButton}
           >
-            {isLoading ? (
-              <View className="items-center justify-center">
-                <ActivityIndicator color="#FFB77F" size="large" />
-                <Text className="mt-3 text-sm font-semibold text-[#A58C7B]">
-                  Loading messages
-                </Text>
-              </View>
-            ) : messages.length === 0 ? (
-              <View className="items-center px-4">
-                {avatarUrl ? (
-                  <Image
-                    source={{ uri: avatarUrl }}
-                    className="h-24 w-24 rounded-full border border-[#FFB77F]/30"
-                  />
-                ) : (
-                  <View className="h-24 w-24 items-center justify-center rounded-full bg-[#281D15]">
-                    <Ionicons
-                      name="chatbubble-ellipses-outline"
-                      size={34}
-                      color="#A58C7B"
-                    />
-                  </View>
-                )}
-                <Text className="mt-5 text-center text-xl font-extrabold text-[#F3DFD1]">
-                  Chat with {name}
-                </Text>
-                <Text className="mt-2 text-center text-sm leading-5 text-[#A58C7B]">
-                  Send a message to start the conversation.
-                </Text>
-              </View>
-            ) : (
-              <View>
-                <View className="mb-10 items-center">
-                  <Text className="rounded-full bg-[#281D15] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#A58C7B]">
-                    Today
-                  </Text>
-                </View>
-                <View className="gap-3">
-                  {messages.map((message, index) => {
-                    const previous = messages[index - 1];
-                    const showAvatar =
-                      message.senderId !== user?.id &&
-                      previous?.senderId !== message.senderId;
+            <Ionicons name="ellipsis-horizontal" size={20} color="#1C1C1C" />
+          </TouchableOpacity>
+        </View>
 
-                    return (
-                      <MessageBubble
-                        key={message.id}
-                        message={message}
-                        isMine={message.senderId === user?.id}
-                        showAvatar={showAvatar}
-                      />
-                    );
-                  })}
-                  <TypingIndicator visible={false} />
-                </View>
-              </View>
-            )}
-          </ScrollView>
-
-          <SafeAreaView edges={["bottom"]} className="bg-[#1B110A]/90">
-            <ChatInput
-              placeholder={`Message ${name.split(" ")[0] || "them"}`}
-              disabled={!isSocketConnected}
-              onSend={sendMessage}
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: messages.length ? "flex-end" : "center",
+            paddingHorizontal: 12,
+            paddingBottom: 14,
+            paddingTop: 14,
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isFetching}
+              onRefresh={refetch}
+              tintColor="#B19F91"
             />
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </LinearGradient>
+          }
+        >
+          {isLoading ? (
+            <View className="items-center justify-center">
+              <ActivityIndicator color="#B19F91" size="large" />
+              <Text className="mt-3 text-sm font-semibold text-[#6F6259]">
+                Loading messages
+              </Text>
+            </View>
+          ) : messages.length === 0 ? (
+            <View className="items-center px-4">
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  className="h-24 w-24 rounded-full border-4 border-white bg-[#E4DDD7]"
+                />
+              ) : (
+                <View className="h-24 w-24 items-center justify-center rounded-full bg-[#B19F91]">
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={34}
+                    color="#F8F4F0"
+                  />
+                </View>
+              )}
+              <Text className="mt-5 text-center text-2xl font-extrabold text-[#1C1C1C]">
+                Chat with {name}
+              </Text>
+              <Text className="mt-2 text-center text-sm font-medium leading-5 text-[#6F6259]">
+                Start with something warm, specific, and easy to reply to.
+              </Text>
+            </View>
+          ) : (
+            <View>
+              <View className="mb-8 items-center">
+                <Text
+                  className="overflow-hidden rounded-full border border-[#E4DDD7] bg-white px-4 py-1.5 text-xs font-extrabold text-[#6F6259]"
+                  style={styles.datePill}
+                >
+                  Today
+                </Text>
+              </View>
+              <View className="gap-3.5">
+                {messages.map((message, index) => {
+                  const next = messages[index + 1];
+                  const showAvatar =
+                    message.senderId !== user?.id &&
+                    next?.senderId !== message.senderId;
+                  const showReaction =
+                    message.senderId !== user?.id &&
+                    index === Math.max(0, messages.length - 2);
+
+                  return (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      isMine={message.senderId === user?.id}
+                      showAvatar={showAvatar}
+                      avatarUrl={avatarUrl}
+                      reaction={showReaction ? "heart" : undefined}
+                    />
+                  );
+                })}
+                <TypingIndicator visible={false} />
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        <SafeAreaView edges={["bottom"]} className="bg-[#F8F4F0]">
+          <ChatInput
+            placeholder="Type a message..."
+            disabled={!isSocketConnected}
+            onSend={sendMessage}
+          />
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  navButton: {
+    shadowColor: "#1C1C1C",
+    shadowOffset: { height: 6, width: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  datePill: {
+    shadowColor: "#1C1C1C",
+    shadowOffset: { height: 5, width: 0 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 1,
+  },
+});

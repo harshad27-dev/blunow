@@ -1,7 +1,6 @@
 import React from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import type { ChatMessage } from "@/types/chat.types";
 
 type MessageBubbleProps = {
@@ -26,6 +25,9 @@ export const MessageBubble = ({
   showAvatar = false,
 }: MessageBubbleProps) => {
   const avatarUrl = message.sender?.profile?.avatarUrl;
+  const timeLabel = message.isPending
+    ? "Sending..."
+    : formatTime(message.createdAt);
   const content =
     message.content ||
     (message.mediaUrl
@@ -36,67 +38,58 @@ export const MessageBubble = ({
 
   return (
     <View
-      className={`flex-row items-end ${isMine ? "justify-end" : "justify-start"}`}
+      className={`flex-row ${isMine ? "justify-end" : "justify-start"}`}
     >
       {!isMine && showAvatar ? (
         avatarUrl ? (
           <Image
             source={{ uri: avatarUrl }}
-            className="mr-2 h-7 w-7 rounded-full"
+            className="mr-2 mt-1 h-8 w-8 rounded-full bg-[#E4DDD7]"
           />
         ) : (
-          <View className="mr-2 h-7 w-7 items-center justify-center rounded-full bg-[#181818]">
-            <Ionicons name="person" size={14} color="#888" />
+          <View className="mr-2 mt-1 h-8 w-8 items-center justify-center rounded-full bg-[#B19F91]">
+            <Ionicons name="person" size={15} color="#FFFFFF" />
           </View>
         )
       ) : !isMine ? (
-        <View className="mr-2 h-7 w-7" />
+        <View className="mr-2 h-8 w-8" />
       ) : null}
 
-      <View className="max-w-[82%]">
+      <View className={`max-w-[75%] ${isMine ? "items-end" : "items-start"}`}>
         <View
-          className={`overflow-hidden rounded-[26px] ${
-            isMine ? "rounded-br-lg" : "rounded-bl-lg"
-          }`}
-          style={isMine ? styles.userBubbleShadow : styles.glassBubble}
+          className="rounded-[28px] px-[14px] py-[10px]"
+          style={isMine ? styles.outgoingBubble : styles.incomingBubble}
         >
-          {isMine ? (
-            <LinearGradient
-              colors={["#FF8A00", "#FFB3B2"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
+          {message.mediaUrl ? (
+            <Image
+              source={{ uri: message.mediaUrl }}
+              className="mb-2 h-48 w-48 rounded-[22px] bg-[#E4DDD7]"
+              resizeMode="cover"
             />
           ) : null}
 
-          <View className="px-4 py-3">
-            {message.mediaUrl ? (
-              <Image
-                source={{ uri: message.mediaUrl }}
-                className="mb-2 h-48 w-48 rounded-2xl bg-[#3F3229]"
-                resizeMode="cover"
-              />
-            ) : null}
+          {content ? (
+            <Text
+              className={`text-[13px] font-normal leading-5 ${
+                isMine ? "text-white" : "text-[#1C1C1C]"
+              }`}
+            >
+              {content}
+            </Text>
+          ) : null}
 
-            {content ? (
-              <Text
-                className={`text-sm font-medium leading-5 ${
-                  isMine ? "text-[#2F1500]" : "text-[#F3DFD1]"
-                }`}
-              >
-                {content}
-              </Text>
-            ) : null}
-
-            <View className="mt-1 flex-row items-center justify-end">
+          {timeLabel ? (
+            <View
+              className={`mt-1 flex-row items-center ${
+                isMine ? "justify-end" : "justify-start"
+              }`}
+            >
               <Text
                 className={`text-[10px] font-semibold ${
-                  isMine ? "text-[#2F1500]/55" : "text-[#DDC1AE]/60"
+                  isMine ? "text-white/80" : "text-[#9D8F85]"
                 }`}
               >
-                {message.isPending
-                  ? "Sending..."
-                  : formatTime(message.createdAt)}
+                {timeLabel}
               </Text>
               {isMine && !message.isPending ? (
                 <Ionicons
@@ -105,29 +98,52 @@ export const MessageBubble = ({
                       ? "checkmark-done"
                       : "checkmark"
                   }
-                  size={13}
-                  color="rgba(47,21,0,0.55)"
+                  size={12}
+                  color="rgba(255,255,255,0.8)"
                   style={{ marginLeft: 4 }}
                 />
               ) : null}
             </View>
-          </View>
+          ) : null}
         </View>
+
+        {!isMine && message.readReceipts?.length ? (
+          <View
+            className="-mt-0.5 ml-4 h-7 w-9 items-center justify-center rounded-full border border-[#E4DDD7] bg-white"
+            style={styles.reactionPill}
+          >
+            <Ionicons name="heart" size={15} color="#B19F91" />
+          </View>
+        ) : null}
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  glassBubble: {
-    backgroundColor: "rgba(40,29,21,0.72)",
-    borderColor: "rgba(255,255,255,0.1)",
+  incomingBubble: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E4DDD7",
     borderWidth: 1,
+    shadowColor: "#1C1C1C",
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    elevation: 2,
   },
-  userBubbleShadow: {
-    shadowColor: "#FF8A00",
-    shadowOffset: { height: 4, width: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 15,
+  outgoingBubble: {
+    backgroundColor: "#B19F91",
+    shadowColor: "#6F6259",
+    shadowOffset: { height: 6, width: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  reactionPill: {
+    shadowColor: "#1C1C1C",
+    shadowOffset: { height: 5, width: 0 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
   },
 });
