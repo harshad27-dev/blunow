@@ -95,28 +95,28 @@ export default function ProfileScreen() {
   const journeyMetrics: JourneyMetric[] = [
     {
       icon: "eye-outline",
-      color: "#FF4F7B",
+      color: Colors.primaryLight,
       label: "Profile Views",
       value: stats?.profileViews || 0,
       caption: "People viewed you",
     },
     {
       icon: "heart-half",
-      color: "#8B5CF6",
+      color: Colors.secondary,
       label: "Likes Received",
       value: stats?.likesReceived || 0,
       caption: "You're liked by",
     },
     {
       icon: "heart-circle",
-      color: "#22C55E",
+      color: Colors.success,
       label: "Matches",
       value: stats?.matchCount || 0,
       caption: "It's a match!",
     },
     {
       icon: "chatbubble-ellipses-outline",
-      color: "#0EA5E9",
+      color: Colors.primary,
       label: "Conversations",
       value: stats?.conversationsCount || 0,
       caption: "Active chats",
@@ -138,7 +138,7 @@ export default function ProfileScreen() {
   }, [queryClient, user?.id]);
 
   return (
-    <SafeAreaView edges={["left", "right"]} className="flex-1 bg-[#05070B]">
+    <SafeAreaView edges={["left", "right"]} className="flex-1 bg-bg">
       <ScrollView
         className="flex-1"
         contentContainerClassName="pb-10"
@@ -262,19 +262,23 @@ const ProfileMatchList = ({
         <TouchableOpacity
           key={match.id}
           activeOpacity={0.85}
-          className="mb-3 flex-row items-center rounded-2xl border border-[#232938] bg-[#080B11] p-4"
+          className="mb-3 flex-row items-center rounded-2xl border border-border bg-bg-card p-4"
         >
           {matchedProfile?.avatarUrl ? (
             <Image
               source={{ uri: matchedProfile.avatarUrl }}
-              className="h-14 w-14 rounded-2xl bg-[#111111]"
+              className="h-14 w-14 rounded-2xl bg-bg-elevated"
             />
           ) : (
-            <View className="h-14 w-14 rounded-2xl bg-[#15151D]" />
+            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-bg-elevated">
+              <Text className="text-base font-extrabold text-text-secondary">
+                {name.slice(0, 2).toUpperCase()}
+              </Text>
+            </View>
           )}
           <View className="ml-4 flex-1">
-            <Text className="text-base font-bold text-[#F5F5F5]">{name}</Text>
-            <Text className="mt-1 text-sm text-[#A6ACB8]">
+            <Text className="text-base font-bold text-text-primary">{name}</Text>
+            <Text className="mt-1 text-sm text-text-secondary">
               Matched and ready to chat
             </Text>
           </View>

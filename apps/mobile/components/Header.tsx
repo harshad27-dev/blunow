@@ -3,6 +3,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChatConversationsQuery } from '@/hooks/useChat';
+import { Colors } from '@/constants/colors';
+
+const HEADER_SHADOW = {
+  shadowColor: Colors.black,
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.06,
+  shadowRadius: 16,
+  elevation: 2,
+};
+
+const ACTION_BUTTON_CLASS =
+  'relative h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-card active:bg-bg-elevated';
 
 export default function Header() {
   const insets = useSafeAreaInsets();
@@ -16,48 +28,53 @@ export default function Header() {
 
   return (
     <View 
-      className="flex-row items-center justify-between px-5 pb-3 bg-[#050505] border-b border-[#1a1a1a]" 
+      className="flex-row items-center justify-between border-b border-border bg-bg px-5 pb-3"
       style={{ paddingTop: insets.top + 8 }}
     >
-      {/* Left side: Logo */}
       <View className="flex-row items-center">
-        <Text className="text-white text-2xl font-extrabold tracking-widest lowercase">
+        <Text className="text-2xl font-extrabold tracking-widest text-text-primary lowercase">
           blunow
         </Text>
       </View>
 
-      {/* Right side: Actions */}
       <View className="flex-row items-center gap-3">
-        {/* Create Post */}
         <TouchableOpacity 
-          className="w-10 h-10 rounded-full bg-[#111] border border-[#222] items-center justify-center active:bg-[#222]" 
-          activeOpacity={0.7}
+          className={ACTION_BUTTON_CLASS}
+          activeOpacity={0.78}
           onPress={() => router.push('/(screens)/create-post')}
+          style={HEADER_SHADOW}
         >
-          <Ionicons name="add" size={24} color="#FFF" />
+          <Ionicons name="add" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
         
-        {/* Notifications */}
         <TouchableOpacity 
-          className="w-10 h-10 rounded-full bg-[#111] border border-[#222] items-center justify-center active:bg-[#222] relative" 
-          activeOpacity={0.7}
+          className={ACTION_BUTTON_CLASS}
+          activeOpacity={0.78}
           onPress={() => router.push('/(screens)/notifications')}
+          style={HEADER_SHADOW}
         >
-          <Ionicons name="notifications-outline" size={20} color="#FFF" />
+          <Ionicons
+            name="notifications-outline"
+            size={20}
+            color={Colors.textPrimary}
+          />
         </TouchableOpacity>
 
-        {/* Chat / Inbox */}
         <TouchableOpacity 
-          className="w-10 h-10 rounded-full bg-[#111] border border-[#222] items-center justify-center active:bg-[#222] relative" 
-          activeOpacity={0.7}
+          className={ACTION_BUTTON_CLASS}
+          activeOpacity={0.78}
           onPress={() => router.push('/(screens)/chat' as any)}
+          style={HEADER_SHADOW}
         >
-          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#FFF" />
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={20}
+            color={Colors.textPrimary}
+          />
           
-          {/* Dynamic Unread Badge */}
           {unreadChats > 0 && (
-            <View className="absolute -top-1 -right-1 bg-blue-600 w-5 h-5 rounded-full items-center justify-center border-2 border-[#050505]">
-              <Text className="text-white text-[10px] font-extrabold">
+            <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full border-2 border-bg bg-primary-light px-1">
+              <Text className="text-[10px] font-extrabold text-white">
                 {unreadChats > 9 ? '9+' : unreadChats}
               </Text>
             </View>

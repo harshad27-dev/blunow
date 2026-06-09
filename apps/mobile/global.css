@@ -4,46 +4,46 @@
 
 @layer base {
   :root {
-    --color-primary: 5 5 5;
-    --color-primary-light: 45 45 45;
-    --color-primary-dark: 0 0 0;
-    --color-secondary: 95 99 104;
-    --color-secondary-light: 123 128 135;
-    --color-accent: 107 114 128;
-    --color-bg: 247 247 245;
+    --color-primary: 28 28 28;
+    --color-primary-light: 177 159 145;
+    --color-primary-dark: 17 17 17;
+    --color-secondary: 111 98 89;
+    --color-secondary-light: 169 155 145;
+    --color-accent: 177 159 145;
+    --color-bg: 248 244 240;
     --color-bg-card: 255 255 255;
-    --color-bg-elevated: 236 237 234;
-    --color-bg-input: 241 242 239;
-    --color-text-primary: 17 17 17;
-    --color-text-secondary: 95 99 104;
-    --color-text-muted: 144 149 155;
-    --color-inverse: 255 255 255;
-    --color-border: 217 218 214;
-    --color-border-focus: 5 5 5;
-    --color-success: 47 133 90;
+    --color-bg-elevated: 228 221 215;
+    --color-bg-input: 255 255 255;
+    --color-text-primary: 28 28 28;
+    --color-text-secondary: 111 98 89;
+    --color-text-muted: 169 155 145;
+    --color-inverse: 248 244 240;
+    --color-border: 228 221 215;
+    --color-border-focus: 177 159 145;
+    --color-success: 92 184 121;
     --color-error: 180 35 69;
     --color-warning: 154 103 0;
   }
 
   .dark:root {
-    --color-primary: 255 255 255;
-    --color-primary-light: 224 224 224;
-    --color-primary-dark: 160 160 160;
-    --color-secondary: 192 192 192;
-    --color-secondary-light: 216 216 216;
-    --color-accent: 136 136 136;
-    --color-bg: 5 5 5;
-    --color-bg-card: 15 15 15;
-    --color-bg-elevated: 26 26 26;
-    --color-bg-input: 17 17 17;
-    --color-text-primary: 245 245 245;
-    --color-text-secondary: 136 136 136;
-    --color-text-muted: 68 68 68;
-    --color-inverse: 5 5 5;
-    --color-border: 34 34 34;
-    --color-border-focus: 255 255 255;
-    --color-success: 111 191 138;
-    --color-error: 207 102 121;
-    --color-warning: 200 168 107;
+    --color-primary: 28 28 28;
+    --color-primary-light: 177 159 145;
+    --color-primary-dark: 17 17 17;
+    --color-secondary: 111 98 89;
+    --color-secondary-light: 169 155 145;
+    --color-accent: 177 159 145;
+    --color-bg: 248 244 240;
+    --color-bg-card: 255 255 255;
+    --color-bg-elevated: 228 221 215;
+    --color-bg-input: 255 255 255;
+    --color-text-primary: 28 28 28;
+    --color-text-secondary: 111 98 89;
+    --color-text-muted: 169 155 145;
+    --color-inverse: 248 244 240;
+    --color-border: 228 221 215;
+    --color-border-focus: 177 159 145;
+    --color-success: 92 184 121;
+    --color-error: 180 35 69;
+    --color-warning: 154 103 0;
   }
 }

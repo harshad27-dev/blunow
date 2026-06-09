@@ -77,7 +77,7 @@ export default function RootLayout() {
             justifyContent: 'center',
           }}
         >
-          <ActivityIndicator color={Colors.white} size="large" />
+          <ActivityIndicator color={Colors.primary} size="large" />
         </View>
       </SafeAreaProvider>
     );
@@ -88,7 +88,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <View style={{ flex: 1, backgroundColor: Colors.bg }}>
           <AuthGuard />
-          <StatusBar style="light" backgroundColor={Colors.bg} />
+          <StatusBar style="dark" backgroundColor={Colors.bg} />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'none' }}>
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />

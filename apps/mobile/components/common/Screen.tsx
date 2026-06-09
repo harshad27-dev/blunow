@@ -32,7 +32,7 @@ export function Screen({
 }: ScreenProps) {
   return (
     <SafeAreaView edges={edges} style={[ScreenStyles.root, style]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <View style={[ScreenStyles.fill, padded && ScreenStyles.padded]}>
         {children}
       </View>
@@ -50,7 +50,7 @@ export function ScreenScroll({
 }: ScreenScrollProps) {
   return (
     <SafeAreaView edges={edges} style={[ScreenStyles.root, style]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
       <ScrollView
         style={ScreenStyles.fill}
         contentContainerStyle={[

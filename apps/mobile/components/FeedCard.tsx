@@ -54,15 +54,19 @@ export default function FeedCard({
   ];
 
   return (
-    <View className="mx-4 mb-6 overflow-hidden rounded-[28px] bg-[#0F0F0F]">
+    <View className="00 overflow-hidden">
       <View className="flex-row items-center justify-between px-4 py-4">
         <View className="min-w-0 flex-1 flex-row items-center">
-          <View className="mr-3 h-12 w-12 overflow-hidden rounded-full border border-[#2A2A2A] bg-[#1A1A1A]">
+          <View className="mr-3 h-12 w-12 overflow-hidden rounded-full border border-border bg-bg-elevated">
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} className="h-full w-full" />
             ) : (
-              <View className="h-full w-full items-center justify-center bg-[#151515]">
-                <Ionicons name="eye-off-outline" size={22} color="#A0A0A0" />
+              <View className="h-full w-full items-center justify-center bg-bg-elevated">
+                <Ionicons
+                  name="eye-off-outline"
+                  size={22}
+                  color={Colors.textMuted}
+                />
               </View>
             )}
           </View>
@@ -70,39 +74,39 @@ export default function FeedCard({
           <View className="min-w-0 flex-1">
             <View className="flex-row items-center">
               <Text
-                className="max-w-[82%] text-[15px] font-extrabold text-white"
+                className="max-w-[82%] text-[15px] font-extrabold text-text-primary"
                 numberOfLines={1}
               >
                 {displayName}
               </Text>
               {post.isAnonymous ? (
-                <View className="ml-2 rounded-full border border-[#333] bg-[#191919] px-2 py-0.5">
-                  <Text className="text-[9px] font-extrabold uppercase text-[#A0A0A0]">
+                <View className="ml-2 rounded-full border border-border bg-bg-elevated px-2 py-0.5">
+                  <Text className="text-[9px] font-extrabold uppercase text-text-muted">
                     Hidden
                   </Text>
                 </View>
               ) : (
-                <View className="ml-1.5 h-4 w-4 items-center justify-center rounded-full bg-white">
-                  <Ionicons name="checkmark" size={11} color={Colors.black} />
+                <View className="ml-1.5 h-4 w-4 items-center justify-center rounded-full bg-primary-light">
+                  <Ionicons name="checkmark" size={11} color={Colors.white} />
                 </View>
               )}
             </View>
 
             <View className="mt-1 flex-row items-center">
               <Text
-                className="text-xs font-medium text-[#8A8A8A]"
+                className="text-xs font-medium text-text-secondary"
                 numberOfLines={1}
               >
                 {post.timeAgo}
               </Text>
-              <View className="mx-2 h-1 w-1 rounded-full bg-[#555555]" />
+              <View className="mx-2 h-1 w-1 rounded-full bg-text-muted" />
               <Ionicons
                 name="location-outline"
                 size={12}
                 color={Colors.textSecondary}
               />
               <Text
-                className="ml-1 text-xs font-medium text-[#8A8A8A]"
+                className="ml-1 text-xs font-medium text-text-secondary"
                 numberOfLines={1}
               >
                 Nearby
@@ -113,7 +117,7 @@ export default function FeedCard({
 
         <TouchableOpacity
           activeOpacity={0.75}
-          className="ml-3 h-10 w-10 items-center justify-center rounded-full bg-[#1A1A1A]"
+          className="ml-3 h-10 w-10 items-center justify-center rounded-full bg-bg-elevated"
         >
           <Ionicons
             name="ellipsis-horizontal"
@@ -125,7 +129,7 @@ export default function FeedCard({
 
       {hasImage ? (
         <View
-          className="mx-3 overflow-hidden rounded-[24px] bg-[#1A1A1A]"
+          className="mx-3 overflow-hidden rounded-[24px] bg-bg-elevated"
           style={{ height: mediaHeight }}
         >
           <Image
@@ -159,13 +163,13 @@ export default function FeedCard({
           </View>
         </View>
       ) : (
-        <View className="mx-3 rounded-[24px] border border-[#242424] bg-[#151515] px-5 py-7">
+        <View className="mx-3 rounded-[24px] border border-border bg-bg-elevated px-5 py-7">
           <Ionicons
             name="chatbubble-ellipses-outline"
             size={28}
             color={Colors.textSecondary}
           />
-          <Text className="mt-4 text-xl font-extrabold leading-7 text-white">
+          <Text className="mt-4 text-xl font-extrabold leading-7 text-text-primary">
             {post.caption || "Shared a fresh moment from the city."}
           </Text>
         </View>
@@ -173,8 +177,10 @@ export default function FeedCard({
 
       <View className="px-5 pb-4 pt-4">
         {hasImage && (
-          <Text className="text-[15px] leading-6 text-[#E8E8E8]">
-            <Text className="font-extrabold text-white">{displayName} </Text>
+          <Text className="text-[15px] leading-6 text-text-secondary">
+            <Text className="font-extrabold text-text-primary">
+              {displayName}{" "}
+            </Text>
             {post.caption || "Shared a fresh moment from the city."}
           </Text>
         )}
@@ -185,32 +191,32 @@ export default function FeedCard({
               <Image
                 key={avatar}
                 source={{ uri: avatar }}
-                className="h-7 w-7 rounded-full border-2 border-[#0F0F0F] bg-[#1A1A1A]"
+                className="h-7 w-7 rounded-full border-2 border-bg-card bg-bg-elevated"
                 style={{ marginLeft: index === 0 ? 0 : -8 }}
               />
             ))}
             <Text
-              className="ml-2 flex-1 text-xs font-semibold text-[#8A8A8A]"
+              className="ml-2 flex-1 text-xs font-semibold text-text-secondary"
               numberOfLines={1}
             >
               {post.likesCount} likes
             </Text>
           </View>
 
-          <View className="flex-row items-center rounded-full border border-[#242424] bg-[#151515] px-3 py-2">
+          <View className="flex-row items-center rounded-full border border-border bg-bg-elevated px-3 py-2">
             <Ionicons
               name="eye-outline"
               size={14}
               color={Colors.textSecondary}
             />
-            <Text className="ml-1.5 text-xs font-bold text-[#A0A0A0]">
+            <Text className="ml-1.5 text-xs font-bold text-text-secondary">
               2.4k
             </Text>
           </View>
         </View>
       </View>
 
-      <View className="mx-4 mb-4 h-px bg-[#242424]" />
+      <View className="mx-4 mb-4 h-px bg-border" />
 
       <View className="flex-row items-center justify-between px-4 pb-4">
         <View className="flex-row items-center">
@@ -218,17 +224,17 @@ export default function FeedCard({
             activeOpacity={0.75}
             onPress={() => onLikePress?.(post.id, post.isLiked)}
             className={`mr-2 flex-row items-center rounded-full px-4 py-3 ${
-              post.isLiked ? "bg-white" : "bg-[#1A1A1A]"
+              post.isLiked ? "bg-primary" : "bg-bg-elevated"
             }`}
           >
             <Ionicons
               name={post.isLiked ? "heart" : "heart-outline"}
               size={18}
-              color={post.isLiked ? Colors.black : Colors.textPrimary}
+              color={post.isLiked ? Colors.white : Colors.textPrimary}
             />
             <Text
               className={`ml-2 text-sm font-extrabold ${
-                post.isLiked ? "text-black" : "text-white"
+                post.isLiked ? "text-white" : "text-text-primary"
               }`}
             >
               {post.likesCount}
@@ -238,14 +244,14 @@ export default function FeedCard({
           <TouchableOpacity
             activeOpacity={0.75}
             onPress={() => onCommentPress?.(post.id)}
-            className="flex-row items-center rounded-full bg-[#1A1A1A] px-4 py-3"
+            className="flex-row items-center rounded-full bg-bg-elevated px-4 py-3"
           >
             <Ionicons
               name="chatbubble-outline"
               size={18}
               color={Colors.textPrimary}
             />
-            <Text className="ml-2 text-sm font-extrabold text-white">
+            <Text className="ml-2 text-sm font-extrabold text-text-primary">
               {post.commentsCount}
             </Text>
           </TouchableOpacity>
@@ -254,7 +260,7 @@ export default function FeedCard({
         <View className="flex-row items-center">
           <TouchableOpacity
             activeOpacity={0.75}
-            className="mr-2 h-11 w-11 items-center justify-center rounded-full bg-[#1A1A1A]"
+            className="mr-2 h-11 w-11 items-center justify-center rounded-full bg-bg-elevated"
           >
             <Ionicons
               name="paper-plane-outline"
@@ -265,7 +271,7 @@ export default function FeedCard({
           <TouchableOpacity
             activeOpacity={0.75}
             onPress={() => onSavePress?.(post.id, post.isSaved)}
-            className="h-11 w-11 items-center justify-center rounded-full bg-[#1A1A1A]"
+            className="h-11 w-11 items-center justify-center rounded-full bg-bg-elevated"
           >
             <Ionicons
               name={post.isSaved ? "bookmark" : "bookmark-outline"}
