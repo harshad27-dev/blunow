@@ -219,6 +219,52 @@ export class AuthService {
     return { user: this.sanitizeUser(user), ...tokens };
   }
 
+  async googleMobileLogin(dto: { idToken: string }) {
+    const googleProfile = await this.verifyGoogleIdToken(dto.idToken);
+    let user =
+      (await this.authRepository.findByGoogleId(googleProfile.sub)) ||
+      (await this.authRepository.findByEmail(googleProfile.email));
+    let isNewUser = false;
+
+    if (user && !user.isActive) {
+      throw new AppError("Account has been deactivated", 403);
+    }
+
+    if (user?.googleId && user.googleId !== googleProfile.sub) {
+      throw new AppError("This email is linked to another Google account", 409);
+    }
+
+    if (user && !user.googleId) {
+      user = await this.authRepository.linkGoogleAccount(
+        user.id,
+        googleProfile.sub,
+      );
+    }
+
+    if (!user) {
+      isNewUser = true;
+      user = await this.authRepository.createGoogleUser({
+        email: googleProfile.email,
+        googleId: googleProfile.sub,
+        username: await this.generateGoogleUsername(googleProfile),
+        avatarUrl: googleProfile.picture,
+      });
+
+      eventBus.emit(EVENTS.AUTH.USER_REGISTERED, {
+        userId: user.id,
+        email: user.email,
+      });
+    }
+
+    const tokens = await this.tokenService.generateTokens(user);
+    return {
+      user: this.sanitizeUser(user),
+      isNewUser,
+      onboardingRequired: !user.profile?.lookingFor?.length,
+      ...tokens,
+    };
+  }
+
   async refreshToken(refreshToken: string) {
     return this.tokenService.refreshAccessToken(refreshToken);
   }
@@ -240,5 +286,78 @@ export class AuthService {
   private sanitizeUser(user: any) {
     const { passwordHash, ...safe } = user;
     return safe;
+  }
+
+  private async verifyGoogleIdToken(idToken: string) {
+    const allowedAudiences = [
+      process.env.GOOGLE_EXPO_CLIENT_ID,
+      process.env.GOOGLE_IOS_CLIENT_ID,
+      process.env.GOOGLE_ANDROID_CLIENT_ID,
+      process.env.GOOGLE_WEB_CLIENT_ID,
+    ].filter(Boolean);
+
+    if (!allowedAudiences.length) {
+      throw new AppError("Google sign-in is not configured", 500);
+    }
+
+    const response = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
+        idToken,
+      )}`,
+    );
+
+    if (!response.ok) {
+      throw new AppError("Invalid Google token", 401);
+    }
+
+    const payload = (await response.json()) as {
+      aud?: string;
+      sub?: string;
+      email?: string;
+      email_verified?: string | boolean;
+      name?: string;
+      picture?: string;
+    };
+
+    if (!payload.aud || !allowedAudiences.includes(payload.aud)) {
+      throw new AppError("Google token audience is not allowed", 401);
+    }
+
+    if (!payload.sub || !payload.email) {
+      throw new AppError("Google account is missing required details", 401);
+    }
+
+    if (payload.email_verified !== true && payload.email_verified !== "true") {
+      throw new AppError("Google email is not verified", 401);
+    }
+
+    return {
+      sub: payload.sub,
+      email: payload.email.toLowerCase(),
+      name: payload.name,
+      picture: payload.picture,
+    };
+  }
+
+  private async generateGoogleUsername(profile: {
+    email: string;
+    name?: string;
+  }) {
+    const base = (profile.name || profile.email.split("@")[0] || "blunow")
+      .toLowerCase()
+      .replace(/[^a-z0-9._]/g, "")
+      .replace(/^[._]+|[._]+$/g, "")
+      .slice(0, 16);
+    const safeBase = base.length >= 3 ? base : `user${base}`;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const suffix = attempt === 0 ? "" : String(randomInt(100, 9999));
+      const username = `${safeBase}${suffix}`.slice(0, 20);
+      if (!(await this.authRepository.isUsernameTaken(username))) {
+        return username;
+      }
+    }
+
+    return `user${randomInt(100000, 999999)}`;
   }
 }

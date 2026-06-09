@@ -3,6 +3,7 @@ import { AuthController } from '../controllers/auth.controller';
 import {
   validateRegister,
   validateLogin,
+  validateGoogleMobileLogin,
   validateRefreshToken,
   validateRequestLoginOtp,
   validateResetPassword,
@@ -18,6 +19,14 @@ router.post('/register', validateRegister, controller.register);
 
 // POST /api/auth/login
 router.post('/login', strictRateLimitMiddleware, validateLogin, controller.login);
+
+// POST /api/auth/google/mobile
+router.post(
+  '/google/mobile',
+  strictRateLimitMiddleware,
+  validateGoogleMobileLogin,
+  controller.googleMobileLogin,
+);
 
 // POST /api/auth/login/otp
 router.post(

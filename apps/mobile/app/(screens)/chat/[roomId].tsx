@@ -27,6 +27,7 @@ import {
 } from "@/hooks/useChat";
 import { useChatSocket } from "@/hooks/useSocket";
 import { useAuthStore } from "@/store/authStore";
+import { Colors } from "@/constants/colors";
 import type { ChatMessage } from "@/types/chat.types";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -222,7 +223,7 @@ export default function ChatRoomScreen() {
 
   return (
     <SafeAreaView
-      className="flex-1 bg-[#F8F4F0]"
+      className="flex-1 bg-bg"
       edges={["top", "left", "right"]}
     >
       <KeyboardAvoidingView
@@ -230,48 +231,48 @@ export default function ChatRoomScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 4 : 0}
       >
-        <View className="flex-row items-center border-b border-[#E4DDD7] bg-[#F8F4F0] px-5 py-3.5">
+        <View className="flex-row items-center border-b border-border bg-bg px-5 py-3.5">
           <TouchableOpacity
-            className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-white"
+            className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-bg-card"
             onPress={() => router.back()}
             activeOpacity={0.82}
             style={styles.navButton}
           >
-            <Ionicons name="chevron-back" size={24} color="#1C1C1C" />
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
 
           {avatarUrl ? (
             <View className="relative">
               <Image
                 source={{ uri: avatarUrl }}
-                className="h-12 w-12 rounded-full border-2 border-white bg-[#E4DDD7]"
+                className="h-12 w-12 rounded-full border-2 border-bg-card bg-bg-elevated"
               />
               {isSocketConnected ? (
-                <View className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-[#F8F4F0] bg-[#4FB56F]" />
+                <View className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-bg bg-success" />
               ) : null}
             </View>
           ) : (
-            <View className="relative h-12 w-12 items-center justify-center rounded-full border-2 border-white bg-[#B19F91]">
-              <Ionicons name="person" size={20} color="#F8F4F0" />
+            <View className="relative h-12 w-12 items-center justify-center rounded-full border-2 border-bg-card bg-primary-light">
+              <Ionicons name="person" size={20} color={Colors.textInverse} />
               {isSocketConnected ? (
-                <View className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-[#F8F4F0] bg-[#4FB56F]" />
+                <View className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-bg bg-success" />
               ) : null}
             </View>
           )}
 
           <View className="ml-3 flex-1">
             <Text
-              className="text-[17px] font-extrabold text-[#1C1C1C]"
+              className="text-[17px] font-extrabold text-text-primary"
               numberOfLines={1}
             >
               {name}
             </Text>
             <View className="mt-1 flex-row items-center">
               {isSocketConnected ? (
-                <View className="mr-1.5 h-2 w-2 rounded-full bg-[#4FB56F]" />
+                <View className="mr-1.5 h-2 w-2 rounded-full bg-success" />
               ) : null}
               <Text
-                className="text-xs font-semibold text-[#6F6259]"
+                className="text-xs font-semibold text-text-secondary"
                 numberOfLines={1}
               >
                 {isSocketConnected ? "Online now" : subtitle}
@@ -281,12 +282,12 @@ export default function ChatRoomScreen() {
 
 
           <TouchableOpacity
-            className="h-10 w-10 items-center justify-center rounded-full bg-white"
+            className="h-10 w-10 items-center justify-center rounded-full bg-bg-card"
             onPress={showChatActions}
             activeOpacity={0.82}
             style={styles.navButton}
           >
-            <Ionicons name="ellipsis-horizontal" size={20} color="#1C1C1C" />
+            <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textPrimary} />
           </TouchableOpacity>
         </View>
 
@@ -305,14 +306,14 @@ export default function ChatRoomScreen() {
             <RefreshControl
               refreshing={isFetching}
               onRefresh={refetch}
-              tintColor="#B19F91"
+              tintColor={Colors.primaryLight}
             />
           }
         >
           {isLoading ? (
             <View className="items-center justify-center">
-              <ActivityIndicator color="#B19F91" size="large" />
-              <Text className="mt-3 text-sm font-semibold text-[#6F6259]">
+              <ActivityIndicator color={Colors.primaryLight} size="large" />
+              <Text className="mt-3 text-sm font-semibold text-text-secondary">
                 Loading messages
               </Text>
             </View>
@@ -321,21 +322,21 @@ export default function ChatRoomScreen() {
               {avatarUrl ? (
                 <Image
                   source={{ uri: avatarUrl }}
-                  className="h-24 w-24 rounded-full border-4 border-white bg-[#E4DDD7]"
+                  className="h-24 w-24 rounded-full border-4 border-bg-card bg-bg-elevated"
                 />
               ) : (
-                <View className="h-24 w-24 items-center justify-center rounded-full bg-[#B19F91]">
+                <View className="h-24 w-24 items-center justify-center rounded-full bg-primary-light">
                   <Ionicons
                     name="chatbubble-ellipses-outline"
                     size={34}
-                    color="#F8F4F0"
+                    color={Colors.textInverse}
                   />
                 </View>
               )}
-              <Text className="mt-5 text-center text-2xl font-extrabold text-[#1C1C1C]">
+              <Text className="mt-5 text-center text-2xl font-extrabold text-text-primary">
                 Chat with {name}
               </Text>
-              <Text className="mt-2 text-center text-sm font-medium leading-5 text-[#6F6259]">
+              <Text className="mt-2 text-center text-sm font-medium leading-5 text-text-secondary">
                 Start with something warm, specific, and easy to reply to.
               </Text>
             </View>
@@ -343,7 +344,7 @@ export default function ChatRoomScreen() {
             <View>
               <View className="mb-8 items-center">
                 <Text
-                  className="overflow-hidden rounded-full border border-[#E4DDD7] bg-white px-4 py-1.5 text-xs font-extrabold text-[#6F6259]"
+                  className="overflow-hidden rounded-full border border-border bg-bg-card px-4 py-1.5 text-xs font-extrabold text-text-secondary"
                   style={styles.datePill}
                 >
                   Today
@@ -376,7 +377,7 @@ export default function ChatRoomScreen() {
           )}
         </ScrollView>
 
-        <SafeAreaView edges={["bottom"]} className="bg-[#F8F4F0]">
+        <SafeAreaView edges={["bottom"]} className="bg-bg">
           <ChatInput
             placeholder="Type a message..."
             disabled={!isSocketConnected}
@@ -390,14 +391,14 @@ export default function ChatRoomScreen() {
 
 const styles = StyleSheet.create({
   navButton: {
-    shadowColor: "#1C1C1C",
+    shadowColor: Colors.black,
     shadowOffset: { height: 6, width: 0 },
     shadowOpacity: 0.06,
     shadowRadius: 14,
     elevation: 2,
   },
   datePill: {
-    shadowColor: "#1C1C1C",
+    shadowColor: Colors.black,
     shadowOffset: { height: 5, width: 0 },
     shadowOpacity: 0.04,
     shadowRadius: 12,

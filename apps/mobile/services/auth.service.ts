@@ -2,14 +2,11 @@ import { api } from "./api";
 import { Config } from "@/constants/config";
 import { storage } from "@/utils/storage";
 import type {
-  LoginPayload,
-  RequestLoginOtpPayload,
-  RequestLoginOtpResponse,
   RequestPasswordResetPayload,
   RequestPasswordResetResponse,
   ResetPasswordPayload,
-  RegisterPayload,
   AuthResponse,
+  GoogleLoginPayload,
 } from "@/types/auth.types";
 
 interface ApiWrapper<T> {
@@ -18,27 +15,9 @@ interface ApiWrapper<T> {
 }
 
 export const authService = {
-  requestLoginOtp: async (
-    payload: RequestLoginOtpPayload,
-  ): Promise<RequestLoginOtpResponse> => {
-    const { data } = await api.post<ApiWrapper<RequestLoginOtpResponse>>(
-      "/auth/login/otp",
-      payload,
-    );
-    return data.data;
-  },
-
-  login: async (payload: LoginPayload): Promise<AuthResponse> => {
+  googleLogin: async (payload: GoogleLoginPayload): Promise<AuthResponse> => {
     const { data } = await api.post<ApiWrapper<AuthResponse>>(
-      "/auth/login",
-      payload,
-    );
-    return data.data;
-  },
-
-  register: async (payload: RegisterPayload): Promise<AuthResponse> => {
-    const { data } = await api.post<ApiWrapper<AuthResponse>>(
-      "/auth/register",
+      "/auth/google/mobile",
       payload,
     );
     return data.data;

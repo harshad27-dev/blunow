@@ -1,4 +1,5 @@
 import { api } from "./api";
+import type { AxiosProgressEvent } from "axios";
 
 export interface CreatePostPayload {
   caption?: string;
@@ -12,6 +13,7 @@ export const postService = {
   uploadMedia: async (
     uri: string,
     mimeType: string = "image/jpeg",
+    onProgress?: (progress: number) => void,
   ): Promise<string> => {
     const formData = new FormData();
     const filename = uri.split("/").pop() || "upload.jpg";
@@ -26,6 +28,10 @@ export const postService = {
     const response = await api.post("/media/upload", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
+      },
+      onUploadProgress: (event: AxiosProgressEvent) => {
+        if (!event.total) return;
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
       },
     });
 

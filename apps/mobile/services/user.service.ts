@@ -9,8 +9,8 @@ export interface UpdateProfilePayload {
   longitude?: number;
   gender?: string;
   sexuality?: string;
-  avatarUrl?: string;
-  bannerUrl?: string;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
   interests?: string[];
   interestedIn?: string[];
   lookingFor?: string[];

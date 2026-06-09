@@ -28,6 +28,10 @@ const requestLoginOtpSchema = z.object({
   email: z.string().email(),
 });
 
+const googleMobileSchema = z.object({
+  idToken: z.string().min(20),
+});
+
 const resetPasswordSchema = z.object({
   email: z.string().email(),
   otp: z.string().regex(/^\d{6}$/, "OTP must be 6 digits"),
@@ -76,6 +80,22 @@ export const validateRequestLoginOtp = (
   next: NextFunction,
 ): void => {
   const result = requestLoginOtpSchema.safeParse(req.body);
+  if (!result.success) {
+    res
+      .status(400)
+      .json({ success: false, errors: result.error.flatten().fieldErrors });
+    return;
+  }
+  req.body = result.data;
+  next();
+};
+
+export const validateGoogleMobileLogin = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  const result = googleMobileSchema.safeParse(req.body);
   if (!result.success) {
     res
       .status(400)

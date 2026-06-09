@@ -78,6 +78,7 @@ export default function ProfileScreen() {
     city: profile?.location,
     bio: profile?.bio,
     interests: profile?.interests,
+    lookingFor: profile?.lookingFor,
   });
   const editProfile = () => router.push("/(screens)/edit-profile");
   const openSettings = () => router.push("/(screens)/settings");
@@ -317,12 +318,14 @@ const getProfileCompletion = ({
   city,
   bio,
   interests,
+  lookingFor,
 }: {
   avatarUrl?: string | null;
   bannerUrl?: string | null;
   city?: string | null;
   bio?: string | null;
   interests?: string[];
+  lookingFor?: string[];
 }) => {
   const checks = [
     avatarUrl,
@@ -330,6 +333,7 @@ const getProfileCompletion = ({
     city,
     bio,
     interests?.length ? "interests" : null,
+    lookingFor?.length ? "lookingFor" : null,
   ];
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 };

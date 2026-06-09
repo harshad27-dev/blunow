@@ -21,6 +21,7 @@ import {
 } from "@/hooks/useChat";
 import type { ChatConversation, ChatParticipant } from "@/types/chat.types";
 import { useAuthStore } from "@/store/authStore";
+import { Colors } from "@/constants/colors";
 
 type ConversationItem = {
   id: string;
@@ -46,7 +47,7 @@ const FILTERS: { label: string; value: ChatFilter }[] = [
 ];
 
 const CARD_SHADOW = {
-  shadowColor: "#1C1C1C",
+  shadowColor: Colors.black,
   shadowOffset: { width: 0, height: 10 },
   shadowOpacity: 0.08,
   shadowRadius: 18,
@@ -227,22 +228,22 @@ export default function ChatListScreen() {
   };
 
   return (
-    <View className="flex-1 bg-[#F8F4F0]" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-bg" style={{ paddingTop: insets.top }}>
       <View className="px-5 pb-4 pt-3">
         <View className="relative h-11 flex-row items-center justify-center">
           <View className="absolute left-0">
             <TouchableOpacity
-              className="h-11 w-11 items-center justify-center rounded-full border border-[#E4DDD7] bg-white"
+              className="h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-card"
               onPress={() => router.back()}
               activeOpacity={0.82}
               style={CARD_SHADOW}
             >
-              <Ionicons name="chevron-back" size={24} color="#1C1C1C" />
+              <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <Text
-            className="px-24 text-center text-[34px] font-extrabold text-[#1C1C1C]"
+            className="px-24 text-center text-[34px] font-extrabold text-text-primary"
             numberOfLines={1}
           >
             Matches
@@ -250,44 +251,44 @@ export default function ChatListScreen() {
 
           <View className="absolute right-0 flex-row items-center">
             <TouchableOpacity
-              className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-[#E4DDD7] bg-white"
+              className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-card"
               onPress={() => setIsSearchVisible((value) => !value)}
               activeOpacity={0.82}
               style={CARD_SHADOW}
             >
-              <Ionicons name="search" size={19} color="#1C1C1C" />
+              <Ionicons name="search" size={19} color={Colors.textPrimary} />
             </TouchableOpacity>
             <TouchableOpacity
-              className="h-11 w-11 items-center justify-center rounded-full border border-[#E4DDD7] bg-white"
+              className="h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-card"
               onPress={showFilters}
               activeOpacity={0.82}
               style={CARD_SHADOW}
             >
-              <Ionicons name="options-outline" size={20} color="#1C1C1C" />
+              <Ionicons name="options-outline" size={20} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>
         </View>
 
         {isSearchVisible ? (
-          <View className="mt-5 flex-row items-center rounded-[24px] border border-[#E4DDD7] bg-white px-4">
-            <Ionicons name="search" size={18} color="#6F6259" />
+          <View className="mt-5 flex-row items-center rounded-[24px] border border-border bg-bg-card px-4">
+            <Ionicons name="search" size={18} color={Colors.textSecondary} />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder="Search matches"
-              placeholderTextColor="#A99B91"
-              className="h-[52px] flex-1 px-3 text-[15px] font-semibold text-[#1C1C1C]"
+              placeholderTextColor={Colors.textMuted}
+              className="h-[52px] flex-1 px-3 text-[15px] font-semibold text-text-primary"
               autoCorrect={false}
               returnKeyType="search"
               style={{ paddingVertical: 0 }}
             />
             {hasSearch ? (
               <TouchableOpacity
-                className="h-8 w-8 items-center justify-center rounded-full bg-[#F8F4F0]"
+                className="h-8 w-8 items-center justify-center rounded-full bg-bg"
                 onPress={() => setSearchQuery("")}
                 activeOpacity={0.82}
               >
-                <Ionicons name="close" size={16} color="#1C1C1C" />
+                <Ionicons name="close" size={16} color={Colors.textPrimary} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -304,7 +305,7 @@ export default function ChatListScreen() {
             <RefreshControl
               refreshing={isFetching}
               onRefresh={refetch}
-              tintColor="#1C1C1C"
+              tintColor={Colors.textPrimary}
             />
           }
           contentContainerClassName="px-5 pb-8"
@@ -360,16 +361,16 @@ const MatchStories = ({
   <View className="pb-6">
     <View className="mb-4 flex-row items-end justify-between">
       <View>
-        <Text className="text-2xl font-extrabold text-[#1C1C1C]">
+        <Text className="text-2xl font-extrabold text-text-primary">
           New matches
         </Text>
-        <Text className="mt-1 text-sm font-semibold text-[#6F6259]">
+        <Text className="mt-1 text-sm font-semibold text-text-secondary">
           People ready to start a conversation
         </Text>
       </View>
       {unreadTotal > 0 ? (
-        <View className="rounded-full bg-[#B19F91] px-3 py-1.5">
-          <Text className="text-xs font-extrabold text-white">
+        <View className="rounded-full bg-primary-light px-3 py-1.5">
+          <Text className="text-xs font-extrabold text-inverse">
             {unreadTotal > 99 ? "99+" : unreadTotal} unread
           </Text>
         </View>
@@ -383,15 +384,15 @@ const MatchStories = ({
     >
       <TouchableOpacity className="mr-4 w-[76px]" activeOpacity={0.84}>
         <View
-          className="h-[76px] w-[76px] items-center justify-center rounded-full border border-[#B19F91] bg-white"
+          className="h-[76px] w-[76px] items-center justify-center rounded-full border border-primary-light bg-bg-card"
           style={CARD_SHADOW}
         >
-          <View className="h-[62px] w-[62px] items-center justify-center rounded-full bg-[#B19F91]">
-            <Ionicons name="heart" size={24} color="#FFFFFF" />
+          <View className="h-[62px] w-[62px] items-center justify-center rounded-full bg-primary-light">
+            <Ionicons name="heart" size={24} color={Colors.white} />
           </View>
         </View>
         <Text
-          className="mt-2 text-center text-xs font-extrabold text-[#1C1C1C]"
+          className="mt-2 text-center text-xs font-extrabold text-text-primary"
           numberOfLines={1}
         >
           Likes You
@@ -406,25 +407,25 @@ const MatchStories = ({
           activeOpacity={0.84}
         >
           <View
-            className="h-[76px] w-[76px] items-center justify-center rounded-full border border-[#B19F91] bg-white"
+            className="h-[76px] w-[76px] items-center justify-center rounded-full border border-primary-light bg-bg-card"
             style={CARD_SHADOW}
           >
             {item.avatarUrl ? (
               <Image
                 source={{ uri: item.avatarUrl }}
-                className="h-[66px] w-[66px] rounded-full bg-[#E4DDD7]"
+                className="h-[66px] w-[66px] rounded-full bg-bg-elevated"
               />
             ) : (
-              <View className="h-[66px] w-[66px] items-center justify-center rounded-full bg-[#B19F91]">
-                <Text className="text-lg font-extrabold text-white">
+              <View className="h-[66px] w-[66px] items-center justify-center rounded-full bg-primary-light">
+                <Text className="text-lg font-extrabold text-inverse">
                   {getInitials(item.name)}
                 </Text>
               </View>
             )}
-            <View className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-white bg-[#5CB879]" />
+            <View className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-bg-card bg-success" />
           </View>
           <Text
-            className="mt-2 text-center text-xs font-bold text-[#6F6259]"
+            className="mt-2 text-center text-xs font-bold text-text-secondary"
             numberOfLines={1}
           >
             {item.name}
@@ -448,23 +449,23 @@ const MessagesSectionHeader = ({
 }) => (
   <View className="pb-2">
     <View className="mb-4 flex-row items-center justify-between">
-      <Text className="text-2xl font-extrabold text-[#1C1C1C]">Messages</Text>
-      <Text className="text-sm font-bold text-[#6F6259]">
+      <Text className="text-2xl font-extrabold text-text-primary">Messages</Text>
+      <Text className="text-sm font-bold text-text-secondary">
         {unreadTotal > 0 ? `${unreadTotal} unread` : "All caught up"}
       </Text>
     </View>
 
-    <View className="flex-row rounded-[24px] border border-[#E4DDD7] bg-white p-1">
+    <View className="flex-row rounded-[24px] border border-border bg-bg-card p-1">
       <TouchableOpacity
         className={`flex-1 rounded-[20px] py-3 ${
-          activeSegment === "messages" ? "bg-[#1C1C1C]" : "bg-white"
+          activeSegment === "messages" ? "bg-primary" : "bg-bg-card"
         }`}
         onPress={() => onChangeSegment("messages")}
         activeOpacity={0.84}
       >
         <Text
           className={`text-center text-sm font-extrabold ${
-            activeSegment === "messages" ? "text-white" : "text-[#6F6259]"
+            activeSegment === "messages" ? "text-inverse" : "text-text-secondary"
           }`}
         >
           Messages
@@ -472,14 +473,14 @@ const MessagesSectionHeader = ({
       </TouchableOpacity>
       <TouchableOpacity
         className={`flex-1 rounded-[20px] py-3 ${
-          activeSegment === "requests" ? "bg-[#1C1C1C]" : "bg-white"
+          activeSegment === "requests" ? "bg-primary" : "bg-bg-card"
         }`}
         onPress={() => onChangeSegment("requests")}
         activeOpacity={0.84}
       >
         <Text
           className={`text-center text-sm font-extrabold ${
-            activeSegment === "requests" ? "text-white" : "text-[#6F6259]"
+            activeSegment === "requests" ? "text-inverse" : "text-text-secondary"
           }`}
         >
           Requests{requestCount ? ` ${requestCount}` : ""}
@@ -526,26 +527,26 @@ const EmptyState = ({
 
   return (
     <View className="flex-1 items-center justify-center px-6">
-      <View className="mb-5 h-24 w-24 items-center justify-center rounded-[30px] bg-[#1C1C1C]">
+      <View className="mb-5 h-24 w-24 items-center justify-center rounded-[30px] bg-primary">
         <Ionicons
           name={hasSearch ? "search" : "chatbubbles-outline"}
           size={36}
-          color="#F8F4F0"
+          color={Colors.textInverse}
         />
       </View>
-      <Text className="mb-2 text-center text-2xl font-extrabold text-[#1C1C1C]">
+      <Text className="mb-2 text-center text-2xl font-extrabold text-text-primary">
         {title}
       </Text>
-      <Text className="max-w-[310px] text-center text-sm font-medium leading-5 text-[#48494B]">
+      <Text className="max-w-[310px] text-center text-sm font-medium leading-5 text-text-secondary">
         {description}
       </Text>
       {hasSearch ? (
         <TouchableOpacity
-          className="mt-5 rounded-full bg-[#1C1C1C] px-5 py-3"
+          className="mt-5 rounded-full bg-primary px-5 py-3"
           onPress={onClearSearch}
           activeOpacity={0.84}
         >
-          <Text className="text-sm font-extrabold text-[#F8F4F0]">
+          <Text className="text-sm font-extrabold text-inverse">
             Clear search
           </Text>
         </TouchableOpacity>
@@ -558,11 +559,11 @@ const ConversationSkeletonList = () => (
   <View className="px-5 pb-8 pt-4">
     {Array.from({ length: 6 }).map((_, index) => (
       <View key={index} className="flex-row items-center py-4">
-        <View className="h-14 w-14 rounded-full bg-[#D9CEC5]" />
+        <View className="h-14 w-14 rounded-full bg-bg-elevated" />
         <View className="ml-4 flex-1">
-          <View className="h-4 w-2/3 rounded-full bg-[#CBBDB2]" />
-          <View className="mt-3 h-3 w-full rounded-full bg-[#D9CEC5]" />
-          <View className="mt-3 h-3 w-24 rounded-full bg-[#D9CEC5]" />
+          <View className="h-4 w-2/3 rounded-full bg-border" />
+          <View className="mt-3 h-3 w-full rounded-full bg-bg-elevated" />
+          <View className="mt-3 h-3 w-24 rounded-full bg-bg-elevated" />
         </View>
       </View>
     ))}
@@ -606,18 +607,18 @@ const ConversationRow = ({
         {item.avatarUrl ? (
           <Image
             source={{ uri: item.avatarUrl }}
-            className="h-14 w-14 rounded-full bg-[#E4DDD7]"
+            className="h-14 w-14 rounded-full bg-bg-elevated"
           />
         ) : (
-          <View className="h-14 w-14 items-center justify-center rounded-full bg-[#B19F91]">
-            <Text className="text-base font-extrabold text-[#F8F4F0]">
+          <View className="h-14 w-14 items-center justify-center rounded-full bg-primary-light">
+            <Text className="text-base font-extrabold text-inverse">
               {getInitials(item.name)}
             </Text>
           </View>
         )}
         {item.unreadCount > 0 ? (
-          <View className="absolute -right-0.5 -top-0.5 h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#F8F4F0] bg-[#B19F91] px-1">
-            <Text className="text-[10px] font-extrabold text-white">
+          <View className="absolute -right-0.5 -top-0.5 h-5 min-w-5 items-center justify-center rounded-full border-2 border-bg bg-primary-light px-1">
+            <Text className="text-[10px] font-extrabold text-inverse">
               {item.unreadCount > 9 ? "9+" : item.unreadCount}
             </Text>
           </View>
@@ -627,12 +628,12 @@ const ConversationRow = ({
       <View className="ml-4 flex-1">
         <View className="flex-row items-center justify-between">
           <Text
-            className="mr-3 flex-1 text-[16px] font-extrabold text-[#1C1C1C]"
+            className="mr-3 flex-1 text-[16px] font-extrabold text-text-primary"
             numberOfLines={1}
           >
             {item.name}
           </Text>
-          <Text className="text-xs font-bold text-[#6F6259]">
+          <Text className="text-xs font-bold text-text-secondary">
             {item.timeLabel}
           </Text>
         </View>
@@ -642,14 +643,14 @@ const ConversationRow = ({
             <Ionicons
               name="notifications-off-outline"
               size={13}
-              color="#B19F91"
+              color={Colors.primaryLight}
             />
           ) : null}
           <Text
             className={`flex-1 text-sm leading-5 ${
               item.unreadCount
-                ? "font-extrabold text-[#1C1C1C]"
-                : "font-semibold text-[#6F6259]"
+                ? "font-extrabold text-text-primary"
+                : "font-semibold text-text-secondary"
             } ${item.isMuted ? "ml-1" : ""}`}
             numberOfLines={1}
           >
@@ -660,3 +661,4 @@ const ConversationRow = ({
     </TouchableOpacity>
   );
 };
+

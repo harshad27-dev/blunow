@@ -1,6 +1,7 @@
 import React from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Colors } from "@/constants/colors";
 import type { MatchRecommendation } from "@/types/match.types";
 
 type SwipeCardProps = {
@@ -22,7 +23,7 @@ export const SwipeCard = ({
   onChat,
 }: SwipeCardProps) => (
   <TouchableOpacity
-    className="overflow-hidden rounded-[28px] border border-[#222] bg-[#111]"
+    className="overflow-hidden rounded-[28px] border border-border bg-bg-card"
     onPress={onPress}
     activeOpacity={0.9}
   >
@@ -37,8 +38,8 @@ export const SwipeCard = ({
           {profile.name}, {profile.age}
         </Text>
         <View className="ml-3 flex-row items-center rounded-full bg-white px-3 py-2">
-          <Ionicons name="sparkles" size={14} color="#050505" />
-          <Text className="ml-1 text-xs font-extrabold text-[#050505]">
+          <Ionicons name="sparkles" size={14} color={Colors.black} />
+          <Text className="ml-1 text-xs font-extrabold text-text-primary">
             {profile.matchScore}%
           </Text>
         </View>
@@ -55,15 +56,15 @@ export const SwipeCard = ({
           onPress={onPass}
           activeOpacity={0.84}
         >
-          <Ionicons name="close" size={22} color="#FFFFFF" />
+          <Ionicons name="close" size={22} color={Colors.white} />
         </TouchableOpacity>
         <TouchableOpacity
           className="h-12 flex-1 flex-row items-center justify-center rounded-full bg-white"
           onPress={onLike}
           activeOpacity={0.84}
         >
-          <Ionicons name="heart" size={20} color="#050505" />
-          <Text className="ml-2 text-base font-extrabold text-[#050505]">
+          <Ionicons name="heart" size={20} color={Colors.black} />
+          <Text className="ml-2 text-base font-extrabold text-text-primary">
             Connect
           </Text>
         </TouchableOpacity>
@@ -72,7 +73,7 @@ export const SwipeCard = ({
           onPress={onChat}
           activeOpacity={0.84}
         >
-          <Ionicons name="chatbubble-ellipses" size={21} color="#FFFFFF" />
+          <Ionicons name="chatbubble-ellipses" size={21} color={Colors.white} />
         </TouchableOpacity>
       </View>
     </View>

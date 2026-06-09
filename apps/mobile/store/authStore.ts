@@ -4,10 +4,7 @@ import { storage } from "@/utils/storage";
 import { Config } from "@/constants/config";
 import type {
   AuthUser,
-  LoginPayload,
-  RegisterPayload,
-  RequestLoginOtpPayload,
-  RequestLoginOtpResponse,
+  GoogleLoginPayload,
   RequestPasswordResetPayload,
   RequestPasswordResetResponse,
   ResetPasswordPayload,
@@ -20,15 +17,11 @@ interface AuthState {
   isLoading: boolean;
 
   // Actions
-  requestLoginOtp: (
-    payload: RequestLoginOtpPayload,
-  ) => Promise<RequestLoginOtpResponse>;
   requestPasswordReset: (
     payload: RequestPasswordResetPayload,
   ) => Promise<RequestPasswordResetResponse>;
   resetPassword: (payload: ResetPasswordPayload) => Promise<{ message: string }>;
-  login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
+  googleLogin: (payload: GoogleLoginPayload) => Promise<void>;
   logout: (options?: { allDevices?: boolean }) => Promise<void>;
   clearSession: () => Promise<void>;
   rehydrate: () => Promise<void>;
@@ -41,10 +34,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
 
-  requestLoginOtp: async (payload) => {
-    return authService.requestLoginOtp(payload);
-  },
-
   requestPasswordReset: async (payload) => {
     return authService.requestPasswordReset(payload);
   },
@@ -53,21 +42,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     return authService.resetPassword(payload);
   },
 
-  login: async (payload) => {
-    const response = await authService.login(payload);
-    await storage.set(Config.TOKEN_KEY, response.accessToken);
-    if (response.refreshToken) {
-      await storage.set(Config.REFRESH_TOKEN_KEY, response.refreshToken);
-    }
-    set({
-      user: response.user,
-      token: response.accessToken,
-      isAuthenticated: true,
-    });
-  },
-
-  register: async (payload) => {
-    const response = await authService.register(payload);
+  googleLogin: async (payload) => {
+    const response = await authService.googleLogin(payload);
     await storage.set(Config.TOKEN_KEY, response.accessToken);
     if (response.refreshToken) {
       await storage.set(Config.REFRESH_TOKEN_KEY, response.refreshToken);

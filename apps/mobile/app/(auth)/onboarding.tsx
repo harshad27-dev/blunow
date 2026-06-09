@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,15 +8,18 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/colors";
+import { Config } from "@/constants/config";
 import { FontFamily } from "@/constants/typography";
 import { useUpdateProfileMutation } from "@/hooks/queries";
 import { useAuthStore } from "@/store/authStore";
+import { storage } from "@/utils/storage";
 
 const INTEREST_OPTIONS = [
   "Music",
@@ -57,6 +60,16 @@ const LOOKING_FOR_OPTIONS = [
 ] as const;
 
 type LookingFor = (typeof LOOKING_FOR_OPTIONS)[number]["label"];
+type OnboardingProgress = {
+  bio: string;
+  currentStep: number;
+  permissions: { location: boolean; notifications: boolean };
+  selectedInterests: string[];
+  selectedLookingFor: LookingFor;
+};
+const REGISTRATION_STEPS = 4;
+const ONBOARDING_STEPS = 4;
+const TOTAL_FLOW_STEPS = REGISTRATION_STEPS + ONBOARDING_STEPS;
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -74,11 +87,70 @@ export default function OnboardingScreen() {
     notifications: false,
   });
   const [serverError, setServerError] = useState("");
+  const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
 
-  const totalSteps = 4;
+  const totalSteps = ONBOARDING_STEPS;
+  const displayStep = REGISTRATION_STEPS + currentStep;
   const selectedIntent =
     LOOKING_FOR_OPTIONS.find((item) => item.label === selectedLookingFor) ??
     LOOKING_FOR_OPTIONS[1];
+
+  useEffect(() => {
+    const restoreProgress = async () => {
+      const raw = await storage.get(Config.ONBOARDING_PROGRESS_KEY);
+      if (!raw) {
+        setHasRestoredProgress(true);
+        return;
+      }
+
+      try {
+        const progress = JSON.parse(raw) as Partial<OnboardingProgress>;
+        if (progress.bio !== undefined) setBio(progress.bio);
+        if (progress.currentStep) {
+          setCurrentStep(Math.min(Math.max(progress.currentStep, 1), totalSteps));
+        }
+        if (progress.permissions) setPermissions(progress.permissions);
+        if (Array.isArray(progress.selectedInterests)) {
+          setSelectedInterests(progress.selectedInterests);
+        }
+        if (
+          progress.selectedLookingFor &&
+          LOOKING_FOR_OPTIONS.some(
+            (option) => option.label === progress.selectedLookingFor,
+          )
+        ) {
+          setSelectedLookingFor(progress.selectedLookingFor);
+        }
+      } catch {
+        await storage.delete(Config.ONBOARDING_PROGRESS_KEY);
+      } finally {
+        setHasRestoredProgress(true);
+      }
+    };
+
+    restoreProgress();
+  }, [totalSteps]);
+
+  useEffect(() => {
+    if (!hasRestoredProgress) return;
+
+    const progress: OnboardingProgress = {
+      bio,
+      currentStep,
+      permissions,
+      selectedInterests,
+      selectedLookingFor,
+    };
+
+    storage.set(Config.ONBOARDING_PROGRESS_KEY, JSON.stringify(progress));
+  }, [
+    bio,
+    currentStep,
+    hasRestoredProgress,
+    permissions,
+    selectedInterests,
+    selectedLookingFor,
+  ]);
 
   const completeOnboarding = async ({
     useDefaults = false,
@@ -104,6 +176,7 @@ export default function OnboardingScreen() {
         ...locationPayload,
       });
       await refreshUser();
+      await storage.delete(Config.ONBOARDING_PROGRESS_KEY);
       router.replace("/(tabs)/discover");
     } catch (error: any) {
       const message =
@@ -129,28 +202,27 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#050505]" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1" style={styles.screen} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View className="flex-1 px-6 pt-6 pb-6">
           <View className="mb-6 flex-row items-center justify-between">
-            <Text className="text-sm font-bold text-white/60">
+            <Text className="text-sm font-bold" style={styles.mutedText}>
               Finish profile
             </Text>
-            <Text className="text-sm font-bold text-white/60">
-              {currentStep} of {totalSteps}
+            <Text className="text-sm font-bold" style={styles.mutedText}>
+              {displayStep} of {TOTAL_FLOW_STEPS}
             </Text>
           </View>
 
           <View className="mb-8 flex-row items-center gap-2">
-            {Array.from({ length: totalSteps }).map((_, index) => (
+            {Array.from({ length: TOTAL_FLOW_STEPS }).map((_, index) => (
               <View
                 key={index}
-                className={`h-1 flex-1 rounded-full ${
-                  index < currentStep ? "bg-white" : "bg-white/20"
-                }`}
+                className="h-1 flex-1 rounded-full"
+                style={index < displayStep ? styles.progressActive : styles.progressInactive}
               />
             ))}
           </View>
@@ -188,23 +260,24 @@ export default function OnboardingScreen() {
 
           <View className="mt-8 gap-3">
             <TouchableOpacity
-              className="h-14 flex-row items-center justify-center rounded-full bg-white"
+              className="h-14 flex-row items-center justify-center rounded-full"
+              style={styles.primaryButton}
               onPress={handleNext}
               disabled={isLoading}
               activeOpacity={0.84}
             >
               {isLoading ? (
-                <ActivityIndicator color={Colors.black} />
+                <ActivityIndicator color={Colors.textInverse} />
               ) : (
                 <>
-                  <Text className="text-base font-bold text-black">
+                  <Text className="text-base font-bold" style={styles.primaryButtonText}>
                     {currentStep === totalSteps ? "Get Started" : "Next"}
                   </Text>
                   {currentStep < totalSteps ? (
                     <Ionicons
                       name="arrow-forward"
                       size={18}
-                      color={Colors.black}
+                      color={Colors.textInverse}
                       style={{ marginLeft: 8 }}
                     />
                   ) : null}
@@ -214,12 +287,13 @@ export default function OnboardingScreen() {
 
             {currentStep > 1 ? (
               <TouchableOpacity
-                className="h-14 flex-row items-center justify-center rounded-full border border-white/10 bg-black/30"
+                className="h-14 flex-row items-center justify-center rounded-full border"
+                style={styles.secondaryButton}
                 onPress={() => setCurrentStep((step) => step - 1)}
                 disabled={isLoading}
                 activeOpacity={0.84}
               >
-                <Text className="text-base font-bold text-white">Back</Text>
+                <Text className="text-base font-bold" style={styles.titleText}>Back</Text>
               </TouchableOpacity>
             ) : null}
 
@@ -228,7 +302,7 @@ export default function OnboardingScreen() {
               disabled={isLoading}
               activeOpacity={0.6}
             >
-              <Text className="text-center text-sm font-semibold text-white/60">
+              <Text className="text-center text-sm font-semibold" style={styles.mutedText}>
                 Skip for now
               </Text>
             </TouchableOpacity>
@@ -254,20 +328,21 @@ function BioStep({
         description="A few honest lines help people understand your vibe before they match."
       />
 
-      <View className="mt-8 rounded-2xl border-2 border-white/10 bg-black/30 px-4 py-4">
+      <View className="mt-8 rounded-2xl border-2 px-4 py-4" style={styles.fieldBox}>
         <TextInput
           value={bio}
           onChangeText={onChangeBio}
           placeholder="I love slow coffee, weekend walks, and conversations that actually go somewhere."
-          placeholderTextColor="rgba(255,255,255,0.35)"
+          placeholderTextColor={Colors.textMuted}
           multiline
           maxLength={180}
           textAlignVertical="top"
-          className="min-h-[150px] text-base leading-6 text-white"
+          className="min-h-[150px] text-base leading-6"
+          style={styles.inputText}
         />
       </View>
 
-      <Text className="mt-3 text-right text-xs font-semibold text-white/40">
+      <Text className="mt-3 text-right text-xs font-semibold" style={styles.mutedText}>
         {bio.length}/180
       </Text>
     </View>
@@ -293,25 +368,26 @@ function LookingForStep({
         {LOOKING_FOR_OPTIONS.map((option) => (
           <TouchableOpacity
             key={option.label}
-            className={`flex-row items-center rounded-2xl border-2 px-4 py-4 ${
+            className="flex-row items-center rounded-2xl border-2 px-4 py-4"
+            style={
               selectedLookingFor === option.label
-                ? "border-white bg-white/10"
-                : "border-white/10 bg-black/30"
-            }`}
+                ? styles.optionSelected
+                : styles.option
+            }
             onPress={() => onSelectLookingFor(option.label)}
             activeOpacity={0.76}
           >
             <Ionicons
               name={option.icon}
               size={24}
-              color="white"
+              color={Colors.textPrimary}
               style={{ marginRight: 12 }}
             />
-            <Text className="flex-1 text-base font-semibold text-white">
+            <Text className="flex-1 text-base font-semibold" style={styles.titleText}>
               {option.label}
             </Text>
             {selectedLookingFor === option.label ? (
-              <Ionicons name="checkmark-circle" size={24} color="white" />
+              <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
             ) : null}
           </TouchableOpacity>
         ))}
@@ -342,16 +418,14 @@ function InterestsStep({
           return (
             <TouchableOpacity
               key={interest}
-              className={`min-h-11 justify-center rounded-2xl border px-4 ${
-                active ? "border-white bg-white" : "border-white/10 bg-black/30"
-              }`}
+              className="min-h-11 justify-center rounded-2xl border px-4"
+              style={active ? styles.chipActive : styles.chip}
               onPress={() => onToggleInterest(interest)}
               activeOpacity={0.76}
             >
               <Text
-                className={`text-sm font-bold ${
-                  active ? "text-black" : "text-white/70"
-                }`}
+                className="text-sm font-bold"
+                style={active ? styles.primaryButtonText : styles.bodyText}
               >
                 {interest}
               </Text>
@@ -405,19 +479,19 @@ function PermissionsStep({
       </View>
 
       {error ? (
-        <View className="mt-4 rounded-2xl border border-red-500/50 bg-red-500/10 p-4">
-          <Text className="text-sm font-semibold text-red-200">{error}</Text>
+        <View className="mt-4 rounded-2xl border p-4" style={styles.errorBox}>
+          <Text className="text-sm font-semibold" style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
 
-      <View className="mt-8 flex-row items-start gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
+      <View className="mt-8 flex-row items-start gap-3 rounded-2xl border p-4" style={styles.infoBox}>
         <Ionicons
           name="information-circle"
           size={20}
-          color="#38BDF8"
+          color={Colors.primaryLight}
           style={{ marginTop: 2 }}
         />
-        <Text className="flex-1 text-xs leading-5 text-white/70">
+        <Text className="flex-1 text-xs leading-5" style={styles.bodyText}>
           You can update your bio, interests, and preferences anytime in
           settings.
         </Text>
@@ -437,18 +511,18 @@ function StepHeader({
 }) {
   return (
     <View>
-      <View className="mb-8 h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-white/5">
-        <Ionicons name={icon} size={40} color="white" />
+      <View className="mb-8 h-20 w-20 items-center justify-center rounded-full border" style={styles.heroIcon}>
+        <Ionicons name={icon} size={40} color={Colors.textInverse} />
       </View>
 
       <Text
-        className="text-[42px] font-bold leading-[52px] text-white"
-        style={{ fontFamily: FontFamily.darleston }}
+        className="text-[42px] font-bold leading-[52px]"
+        style={[styles.displayTitle, { fontFamily: FontFamily.darleston }]}
       >
         {title}
       </Text>
 
-      <Text className="mt-4 text-base leading-6 text-white/70">
+      <Text className="mt-4 text-base leading-6" style={styles.bodyText}>
         {description}
       </Text>
     </View>
@@ -470,36 +544,117 @@ function PermissionToggle({
 }) {
   return (
     <TouchableOpacity
-      className={`flex-row items-center rounded-2xl border-2 px-4 py-4 ${
-        value ? "border-white bg-white/10" : "border-white/10 bg-black/30"
-      }`}
+      className="flex-row items-center rounded-2xl border-2 px-4 py-4"
+      style={value ? styles.optionSelected : styles.option}
       onPress={() => onChange(!value)}
       activeOpacity={0.7}
     >
       <Ionicons
         name={icon}
         size={24}
-        color="white"
+        color={Colors.textPrimary}
         style={{ marginRight: 12 }}
       />
       <View className="flex-1">
-        <Text className="font-semibold text-white">{title}</Text>
-        <Text className="mt-1 text-xs leading-4 text-white/70">
+        <Text className="font-semibold" style={styles.titleText}>{title}</Text>
+        <Text className="mt-1 text-xs leading-4" style={styles.bodyText}>
           {description}
         </Text>
       </View>
       <View
-        className={`h-6 w-11 rounded-full border-2 ${
-          value ? "border-white bg-white" : "border-white/20 bg-white/10"
-        }`}
+        className="h-6 w-11 rounded-full border-2"
+        style={value ? styles.toggleOn : styles.toggleOff}
       >
         {value ? (
-          <View className="absolute right-0.5 top-0.5 h-5 w-5 rounded-full bg-[#050505]" />
+          <View className="absolute right-0.5 top-0.5 h-5 w-5 rounded-full" style={styles.toggleKnob} />
         ) : null}
       </View>
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: Colors.bg,
+  },
+  progressActive: {
+    backgroundColor: Colors.primary,
+  },
+  progressInactive: {
+    backgroundColor: Colors.border,
+  },
+  titleText: {
+    color: Colors.textPrimary,
+  },
+  displayTitle: {
+    color: Colors.textPrimary,
+  },
+  bodyText: {
+    color: Colors.textSecondary,
+  },
+  mutedText: {
+    color: Colors.textMuted,
+  },
+  heroIcon: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  primaryButton: {
+    backgroundColor: Colors.primary,
+  },
+  primaryButtonText: {
+    color: Colors.textInverse,
+  },
+  secondaryButton: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  fieldBox: {
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+  },
+  inputText: {
+    color: Colors.textPrimary,
+  },
+  option: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  optionSelected: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.primary,
+  },
+  chip: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  errorBox: {
+    backgroundColor: Colors.error + "12",
+    borderColor: Colors.error,
+  },
+  errorText: {
+    color: Colors.error,
+  },
+  infoBox: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  toggleOn: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  toggleOff: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+  },
+  toggleKnob: {
+    backgroundColor: Colors.textInverse,
+  },
+});
 
 async function getLocationPayload() {
   const permission = await Location.requestForegroundPermissionsAsync();

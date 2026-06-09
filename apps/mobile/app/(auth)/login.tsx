@@ -1,404 +1,245 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
+  Animated,
+  ImageBackground,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useState } from 'react';
-import { useAuthStore } from '@/store/authStore';
-import { Colors } from '@/constants/colors';
-import { FontFamily, FontSize } from '@/constants/typography';
-import { Spacing, Radius } from '@/constants/spacing';
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-const schema = z.object({
-  email: z.string().email('Enter a valid email'),
-  otp: z
-    .string()
-    .trim()
-    .regex(/^\d{6}$/, 'Enter the 6-digit OTP'),
-});
-
-type FormData = z.infer<typeof schema>;
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
+import { Colors } from "@/constants/colors";
+import { Radius, Spacing } from "@/constants/spacing";
+import { FontFamily, FontSize } from "@/constants/typography";
+import { useAuthStore } from "@/store/authStore";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, requestLoginOtp } = useAuthStore();
-  const [serverError, setServerError] = useState('');
-  const [otpNotice, setOtpNotice] = useState('');
-  const [isRequestingOtp, setIsRequestingOtp] = useState(false);
+  const googleLogin = useAuthStore((state) => state.googleLogin);
+  const [serverError, setServerError] = useState("");
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(28)).current;
+  const backgroundFadeAnim = useRef(new Animated.Value(0)).current;
 
-  const {
-    control,
-    handleSubmit,
-    getValues,
-    trigger,
-    formState: { errors, isSubmitting },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: { email: '', otp: '' },
-  });
+  const clearError = useCallback(() => setServerError(""), []);
+  const handleGoogleToken = useCallback(
+    (idToken: string) => googleLogin({ idToken }),
+    [googleLogin],
+  );
 
-  const handleRequestOtp = async () => {
-    setServerError('');
-    setOtpNotice('');
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        duration: 620,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        damping: 18,
+        mass: 0.9,
+        stiffness: 90,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
 
-    const isEmailValid = await trigger('email');
-    if (!isEmailValid) return;
+    const backgroundLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(backgroundFadeAnim, {
+          delay: 1800,
+          duration: 1600,
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backgroundFadeAnim, {
+          delay: 2600,
+          duration: 1600,
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
 
-    setIsRequestingOtp(true);
-    try {
-      const response = await requestLoginOtp({ email: getValues('email') });
-      setOtpNotice(
-        response.devOtp
-          ? `${response.message} Dev OTP: ${response.devOtp}`
-          : response.message,
-      );
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ?? 'Unable to send OTP. Please try again.';
-      setServerError(msg);
-    } finally {
-      setIsRequestingOtp(false);
-    }
-  };
+    backgroundLoop.start();
 
-  const onSubmit = async (values: FormData) => {
-    setServerError('');
-    try {
-      await login(values);
-      // AuthGuard in _layout.tsx handles the redirect.
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ??
-        'OTP verification failed. Please try again.';
-      setServerError(msg);
-    }
-  };
+    return () => backgroundLoop.stop();
+  }, [backgroundFadeAnim, fadeAnim, slideAnim]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.screen} edges={[]}>
+      <ImageBackground
+        source={require("@/assets/images/authimages/cou1.png")}
+        style={styles.background}
+        resizeMode="cover"
       >
-        <View style={styles.brand}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoLetter}>B</Text>
-          </View>
-          <Text style={styles.appName}>blunow</Text>
-          <Text style={styles.tagline}>Connect. Vibe. Match.</Text>
-        </View>
+        <Animated.Image
+          source={require("@/assets/images/authimages/cou2.png")}
+          style={[styles.backgroundImage, { opacity: backgroundFadeAnim }]}
+          resizeMode="cover"
+        />
+        <View style={styles.imageOverlay} />
+        <View style={styles.bottomOverlay} />
 
-        <View style={styles.card}>
-          <Text style={styles.heading}>Welcome back</Text>
-          <Text style={styles.subheading}>
-            Sign in with the OTP sent to your email.
-          </Text>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email</Text>
-            <Controller
-              control={control}
-              name="email"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextInput
-                  style={[styles.input, errors.email && styles.inputError]}
-                  placeholder="you@example.com"
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  returnKeyType="next"
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  value={value}
-                />
-              )}
-            />
-            {errors.email && (
-              <Text style={styles.fieldError}>{errors.email.message}</Text>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={styles.otpRequestBtn}
-            onPress={handleRequestOtp}
-            disabled={isRequestingOtp}
-            activeOpacity={0.8}
-          >
-            {isRequestingOtp ? (
-              <ActivityIndicator color={Colors.white} />
-            ) : (
-              <Text style={styles.otpRequestText}>Send OTP</Text>
-            )}
-          </TouchableOpacity>
-
-          {otpNotice ? (
-            <Text style={styles.noticeText}>{otpNotice}</Text>
-          ) : null}
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>OTP</Text>
-            <Controller
-              control={control}
-              name="otp"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.otpInput,
-                    errors.otp && styles.inputError,
-                  ]}
-                  placeholder="123456"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="number-pad"
-                  textContentType="oneTimeCode"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  returnKeyType="done"
-                  onBlur={onBlur}
-                  onChangeText={(text) =>
-                    onChange(text.replace(/\D/g, '').slice(0, 6))
-                  }
-                  onSubmitEditing={handleSubmit(onSubmit)}
-                  value={value}
-                />
-              )}
-            />
-            {errors.otp && (
-              <Text style={styles.fieldError}>{errors.otp.message}</Text>
-            )}
-          </View>
-
-          {serverError ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>{serverError}</Text>
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={styles.brand}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="heart" size={34} color={Colors.textInverse} />
             </View>
-          ) : null}
-
-          <TouchableOpacity
-            style={styles.submitBtn}
-            onPress={handleSubmit(onSubmit)}
-            disabled={isSubmitting}
-            activeOpacity={0.88}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={Colors.black} />
-            ) : (
-              <Text style={styles.submitText}>Verify OTP</Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
+            <Text style={styles.appName}>blunow</Text>
+            <Text style={styles.tagline}>Connect. Vibe. Match.</Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.registerBtn}
-            onPress={() => router.push('/(auth)/register')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.registerText}>
-              No account yet?{' '}
-              <Text style={styles.registerLink}>Create one</Text>
+          <View style={styles.panel}>
+            <Text style={styles.heading}>Welcome back</Text>
+            <Text style={styles.subheading}>
+              Continue with Google. If your account exists, we will sign you in.
+              If not, we will create it and take you to onboarding.
             </Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.forgotBtn}
-            onPress={() => router.push('/(auth)/forgot-password')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <GoogleAuthButton
+              label="Login with Google"
+              onStart={clearError}
+              onToken={handleGoogleToken}
+              onError={setServerError}
+            />
+
+            {serverError ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorBannerText}>{serverError}</Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.switchButton}
+              onPress={() => router.push("/(auth)/register")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.switchText}>
+                New here? <Text style={styles.switchLink}>Create account</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </ImageBackground>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: Colors.bg },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.xl,
-  },
-
-  brand: { alignItems: 'center', marginTop: 100, marginBottom: Spacing.xl },
-  logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  logoLetter: {
-    fontSize: 38,
-    fontFamily: FontFamily.bold,
-    color: Colors.black,
-  },
   appName: {
-    fontSize: FontSize['2xl'],
-    fontFamily: FontFamily.bold,
     color: Colors.white,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize["3xl"],
     letterSpacing: 1.5,
   },
-  tagline: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.regular,
-    color: Colors.textSecondary,
-    marginTop: 4,
-    letterSpacing: 0.5,
+  background: {
+    flex: 1,
   },
-
-  card: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  backgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    height: "100%",
+    width: "100%",
   },
-  heading: {
-    fontSize: FontSize.xl,
-    fontFamily: FontFamily.bold,
-    color: Colors.white,
-    marginBottom: 4,
+  bottomOverlay: {
+    backgroundColor: Colors.overlayDark,
+    bottom: 0,
+    height: "48%",
+    left: 0,
+    position: "absolute",
+    right: 0,
   },
-  subheading: {
-    fontSize: FontSize.base,
-    fontFamily: FontFamily.regular,
-    color: Colors.textSecondary,
+  brand: {
+    alignItems: "flex-start",
     marginBottom: Spacing.lg,
   },
-
-  fieldGroup: { marginBottom: Spacing.md },
-  label: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.medium,
-    color: Colors.textSecondary,
-    marginBottom: 6,
+  content: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: Spacing.lg,
+    paddingBottom: Spacing["2xl"],
   },
-  input: {
-    backgroundColor: Colors.bgInput,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 14,
-    fontSize: FontSize.base,
-    fontFamily: FontFamily.regular,
-    color: Colors.white,
-  },
-  inputError: { borderColor: Colors.error },
-  otpInput: {
-    fontFamily: FontFamily.bold,
-    letterSpacing: 6,
-    textAlign: 'center',
-  },
-  fieldError: {
-    fontSize: FontSize.xs,
-    fontFamily: FontFamily.regular,
-    color: Colors.error,
-    marginTop: 4,
-  },
-  otpRequestBtn: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.full,
-    paddingVertical: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  otpRequestText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.bold,
-    color: Colors.white,
-  },
-  noticeText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.regular,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-  },
-
   errorBanner: {
-    backgroundColor: '#330000',
-    borderWidth: 1,
+    backgroundColor: Colors.error + "12",
     borderColor: Colors.error,
     borderRadius: Radius.sm,
+    borderWidth: 1,
+    marginTop: Spacing.md,
     padding: Spacing.sm,
-    marginBottom: Spacing.md,
   },
   errorBannerText: {
-    fontSize: FontSize.sm,
-    fontFamily: FontFamily.regular,
     color: Colors.error,
-  },
-
-  submitBtn: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.full,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-    marginTop: Spacing.sm,
-  },
-  submitText: {
-    fontSize: FontSize.md,
-    fontFamily: FontFamily.bold,
-    color: Colors.black,
-    letterSpacing: 0.3,
-  },
-
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.md,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: {
+    fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
-    fontFamily: FontFamily.regular,
-    color: Colors.textMuted,
-    marginHorizontal: Spacing.sm,
   },
-
-  registerBtn: { alignItems: 'center' },
-  registerText: {
-    fontSize: FontSize.base,
-    fontFamily: FontFamily.regular,
-    color: Colors.textSecondary,
-  },
-  registerLink: {
-    fontFamily: FontFamily.bold,
+  heading: {
     color: Colors.white,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xl,
+    marginBottom: Spacing.xs,
   },
-  forgotBtn: {
-    alignItems: 'center',
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.overlayDarkSoft,
+  },
+  logoCircle: {
+    alignItems: "center",
+    backgroundColor: Colors.overlayLightSoft,
+    borderColor: Colors.overlayLightSoft,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    height: 72,
+    justifyContent: "center",
+    marginBottom: Spacing.sm,
+    width: 72,
+  },
+  panel: {
+    backgroundColor: Colors.overlay,
+    borderColor: Colors.overlayLightSoft,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    padding: Spacing.lg,
+  },
+  screen: {
+    backgroundColor: Colors.bg,
+    flex: 1,
+  },
+  subheading: {
+    color: Colors.onImageMuted,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.base,
+    lineHeight: 22,
+    marginBottom: Spacing.lg,
+  },
+  switchButton: {
+    alignItems: "center",
     marginTop: Spacing.md,
   },
-  forgotText: {
-    color: Colors.textSecondary,
-    fontFamily: FontFamily.medium,
+  switchLink: {
+    color: Colors.white,
+    fontFamily: FontFamily.bold,
+  },
+  switchText: {
+    color: Colors.onImageMuted,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.base,
+  },
+  tagline: {
+    color: Colors.onImageMuted,
+    fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
+    letterSpacing: 0.5,
+    marginTop: Spacing.xs,
   },
 });

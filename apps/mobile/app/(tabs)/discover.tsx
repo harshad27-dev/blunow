@@ -232,10 +232,10 @@ export default function DiscoverScreen() {
           />
           <LinearGradient
             colors={[
-              "rgba(0,0,0,0.18)",
-              "rgba(0,0,0,0.08)",
-              "rgba(0,0,0,0.72)",
-              "rgba(0,0,0,0.96)",
+              Colors.overlayDarkSoft,
+              Colors.transparent,
+              Colors.overlayDark,
+              Colors.overlayDarkStrong,
             ]}
             locations={[0, 0.36, 0.7, 1]}
             style={styles.heroGradient}
@@ -648,8 +648,8 @@ const styles = StyleSheet.create({
   },
   livePill: {
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: Colors.overlayDark,
+    borderColor: Colors.overlayLightSoft,
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
@@ -724,7 +724,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   introText: {
-    color: "rgba(255,255,255,0.84)",
+    color: Colors.onImageMuted,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.base,
     lineHeight: 22,
@@ -737,8 +737,8 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   interestTag: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: Colors.overlayLightSoft,
+    borderColor: Colors.overlayLightSoft,
     borderRadius: 13,
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -757,8 +757,8 @@ const styles = StyleSheet.create({
   },
   secondaryAction: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: Colors.overlayLightSoft,
+    borderColor: Colors.overlayLightSoft,
     borderRadius: 23,
     borderWidth: 1,
     height: 46,

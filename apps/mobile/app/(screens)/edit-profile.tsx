@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Pressable,
@@ -15,17 +16,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
 import { Toast } from "@/components/common/Toast";
+import { Colors } from "@/constants/colors";
 import { useUpdateProfileMutation } from "@/hooks/queries";
 import { postService } from "@/services/post.service";
 import { useAuthStore } from "@/store/authStore";
-
-const ACCENT = "#FF7A5C";
-const ACCENT_SOFT = "#FFC857";
-const INK = "#071011";
 
 const GENDER_OPTIONS = ["MALE", "FEMALE", "NON_BINARY", "OTHER"];
 const INTERESTED_IN_OPTIONS = ["Men", "Women", "Non-binary", "Everyone"];
@@ -107,7 +106,7 @@ const toggleValue = (values: string[], value: string) =>
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { refreshUser, user } = useAuthStore();
   const profile = user?.profile;
   const updateProfileMutation = useUpdateProfileMutation();
 
@@ -120,6 +119,7 @@ export default function EditProfileScreen() {
   );
   const [coverMimeType, setCoverMimeType] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [activeSheet, setActiveSheet] = useState<SheetField | null>(null);
 
   const [username, setUsername] = useState(
@@ -150,6 +150,18 @@ export default function EditProfileScreen() {
     message: string;
     type: "success" | "error" | "info";
   }>({ visible: false, message: "", type: "info" });
+  const completion = useMemo(
+    () =>
+      getProfileCompletion({
+        avatarUrl: avatarUri,
+        bannerUrl: coverUri,
+        bio,
+        interests,
+        location: profile?.location,
+        lookingFor,
+      }),
+    [avatarUri, bio, coverUri, interests, lookingFor, profile?.location],
+  );
 
   const profileItems: SettingItem[] = useMemo(
     () => [
@@ -240,34 +252,74 @@ export default function EditProfileScreen() {
     if (result.canceled) return;
 
     const asset = result.assets[0];
+    const compressedUri = await compressImage(asset.uri, type);
     if (type === "avatar") {
-      setAvatarUri(asset.uri);
+      setAvatarUri(compressedUri);
       setAvatarMimeType(asset.mimeType || "image/jpeg");
       return;
     }
 
-    setCoverUri(asset.uri);
+    setCoverUri(compressedUri);
     setCoverMimeType(asset.mimeType || "image/jpeg");
+  };
+
+  const openPhotoActions = (type: "avatar" | "cover") => {
+    const hasPhoto = type === "avatar" ? Boolean(avatarUri) : Boolean(coverUri);
+    const label = type === "avatar" ? "avatar" : "banner";
+
+    Alert.alert(`${formatOption(label)} photo`, undefined, [
+      { text: hasPhoto ? "Change photo" : "Add photo", onPress: () => pickPhoto(type) },
+      ...(hasPhoto
+        ? [
+            {
+              text: "Remove photo",
+              style: "destructive" as const,
+              onPress: () => {
+                if (type === "avatar") setAvatarUri(null);
+                else setCoverUri(null);
+              },
+            },
+          ]
+        : []),
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const saveProfile = async () => {
     try {
       setIsUploading(true);
-      let finalAvatarUrl = profile?.avatarUrl;
-      let finalCoverUrl = profile?.bannerUrl;
+      setUploadProgress(0);
+      let finalAvatarUrl: string | null | undefined = avatarUri ? profile?.avatarUrl : null;
+      let finalCoverUrl: string | null | undefined = coverUri ? profile?.bannerUrl : null;
+      const uploadTasks = [
+        avatarUri && avatarUri !== profile?.avatarUrl ? "avatar" : null,
+        coverUri && coverUri !== profile?.bannerUrl ? "cover" : null,
+      ].filter(Boolean);
+      const progressStep = uploadTasks.length ? 100 / uploadTasks.length : 100;
+      let completedUploads = 0;
 
       if (avatarUri && avatarUri !== profile?.avatarUrl) {
         finalAvatarUrl = await postService.uploadMedia(
           avatarUri,
           avatarMimeType || "image/jpeg",
+          (progress) =>
+            setUploadProgress(
+              Math.round(completedUploads * progressStep + progress * (progressStep / 100)),
+            ),
         );
+        completedUploads += 1;
       }
 
       if (coverUri && coverUri !== profile?.bannerUrl) {
         finalCoverUrl = await postService.uploadMedia(
           coverUri,
           coverMimeType || "image/jpeg",
+          (progress) =>
+            setUploadProgress(
+              Math.round(completedUploads * progressStep + progress * (progressStep / 100)),
+            ),
         );
+        completedUploads += 1;
       }
 
       await updateProfileMutation.mutateAsync({
@@ -282,9 +334,10 @@ export default function EditProfileScreen() {
         maxAge: Number(maxAge),
         maxDistance: Number(maxDistance),
         zodiac,
-        avatarUrl: finalAvatarUrl || undefined,
-        bannerUrl: finalCoverUrl || undefined,
+        avatarUrl: finalAvatarUrl ?? null,
+        bannerUrl: finalCoverUrl ?? null,
       });
+      await refreshUser();
 
       setToast({
         visible: true,
@@ -300,51 +353,54 @@ export default function EditProfileScreen() {
       });
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#071011]">
-      <StatusBar style="light" backgroundColor={INK} />
+    <SafeAreaView className="flex-1" style={styles.screen}>
+      <StatusBar style="dark" backgroundColor={Colors.bg} />
       <LinearGradient
-        colors={["#071011", "#0B171A", "#101116"]}
+        colors={Colors.gradientBg}
         style={styles.fill}
       >
         <View className="flex-row items-center justify-between px-5 pb-5 pt-2">
           <TouchableOpacity
-            className="h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]"
+            className="h-11 w-11 items-center justify-center rounded-2xl border"
+            style={styles.iconButton}
             onPress={() => router.back()}
             activeOpacity={0.78}
           >
-            <Ionicons name="chevron-back" size={24} color="#F4FAF8" />
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
 
           <View className="items-center">
-            <Text className="text-[22px] font-extrabold text-[#F4FAF8]">
+            <Text className="text-[22px] font-extrabold" style={styles.titleText}>
               Edit profile
             </Text>
-            <View className="mt-2 flex-row items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
-              <View className="rounded-full bg-[#FF7A5C] px-3 py-1">
-                <Text className="text-xs font-extrabold text-[#130908]">
+            <View className="mt-2 flex-row items-center rounded-full border p-1" style={styles.segment}>
+              <View className="rounded-full px-3 py-1" style={styles.segmentActive}>
+                <Text className="text-xs font-extrabold" style={styles.primaryButtonText}>
                   Edit
                 </Text>
               </View>
-              <Text className="px-3 text-xs font-semibold text-[#91A5A9]">
+              <Text className="px-3 text-xs font-semibold" style={styles.mutedText}>
                 Preview
               </Text>
             </View>
           </View>
 
           <TouchableOpacity
-            className="h-11 min-w-[68px] items-center justify-center rounded-2xl bg-[#F4FAF8] px-4"
+            className="h-11 min-w-[68px] items-center justify-center rounded-2xl px-4"
+            style={styles.primaryButton}
             onPress={saveProfile}
             disabled={isUploading || updateProfileMutation.isPending}
             activeOpacity={0.78}
           >
             {isUploading || updateProfileMutation.isPending ? (
-              <ActivityIndicator size="small" color="#071011" />
+              <ActivityIndicator size="small" color={Colors.textInverse} />
             ) : (
-              <Text className="text-sm font-extrabold text-[#071011]">
+              <Text className="text-sm font-extrabold" style={styles.primaryButtonText}>
                 Done
               </Text>
             )}
@@ -356,33 +412,35 @@ export default function EditProfileScreen() {
           contentContainerClassName="px-5 pb-10"
           showsVerticalScrollIndicator={false}
         >
-          <View className="overflow-hidden rounded-[30px] border border-white/10 bg-[#0D1B1E] shadow-2xl">
+          <View className="overflow-hidden rounded-[30px] border shadow-2xl" style={styles.card}>
             <TouchableOpacity
-              className="relative h-[178px] bg-[#12262A]"
-              onPress={() => pickPhoto("cover")}
+              className="relative h-[178px]"
+              style={styles.coverTouchable}
+              onPress={() => openPhotoActions("cover")}
               activeOpacity={0.88}
             >
               {coverUri ? (
                 <Image source={{ uri: coverUri }} className="h-full w-full" />
               ) : (
                 <LinearGradient
-                  colors={["#164E53", "#213036", "#31233A"]}
+                  colors={Colors.gradientPrimary}
                   style={styles.coverPlaceholder}
                 />
               )}
               <LinearGradient
-                colors={["rgba(7,16,17,0.05)", "rgba(7,16,17,0.72)"]}
+                colors={[Colors.transparent, Colors.primary + "B8"]}
                 style={StyleSheet.absoluteFillObject}
               />
-              <View className="absolute bottom-4 right-4 h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-[#071011]/75">
-                <Ionicons name="camera-outline" size={18} color="#F4FAF8" />
+              <View className="absolute bottom-4 right-4 h-11 w-11 items-center justify-center rounded-2xl border" style={styles.photoButton}>
+                <Ionicons name={coverUri ? "ellipsis-horizontal" : "camera-outline"} size={18} color={Colors.textInverse} />
               </View>
             </TouchableOpacity>
 
             <View className="px-5 pb-6">
               <TouchableOpacity
-                className="-mt-12 h-24 w-24 rounded-[28px] border-2 border-[#0D1B1E] bg-[#071011] p-1"
-                onPress={() => pickPhoto("avatar")}
+                className="-mt-12 h-24 w-24 rounded-[28px] border-2 p-1"
+                style={styles.avatarButton}
+                onPress={() => openPhotoActions("avatar")}
                 activeOpacity={0.88}
               >
                 {avatarUri ? (
@@ -392,21 +450,41 @@ export default function EditProfileScreen() {
                   />
                 ) : (
                   <LinearGradient
-                    colors={["#1E4144", "#182428"]}
+                    colors={Colors.gradientCard}
                     style={styles.avatarPlaceholder}
                   >
-                    <Ionicons name="person" size={42} color="#91A5A9" />
+                    <Ionicons name="person" size={42} color={Colors.textMuted} />
                   </LinearGradient>
                 )}
-                <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-2xl bg-[#FF7A5C] shadow-lg">
-                  <Ionicons name="add" size={18} color="#130908" />
+                <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-2xl shadow-lg" style={styles.addBadge}>
+                  <Ionicons name={avatarUri ? "ellipsis-horizontal" : "add"} size={18} color={Colors.textInverse} />
                 </View>
               </TouchableOpacity>
 
-              <Text className="mt-4 text-xl font-extrabold text-[#F4FAF8]">
+              <View style={styles.completionCard}>
+                <View style={styles.completionRow}>
+                  <Text style={styles.completionTitle}>{completion}% complete</Text>
+                  <Text style={styles.completionHint}>{getCompletionHint(completion)}</Text>
+                </View>
+                <View style={styles.completionTrack}>
+                  <View
+                    style={[
+                      styles.completionFill,
+                      { width: `${completion}%` },
+                    ]}
+                  />
+                </View>
+                {isUploading ? (
+                  <Text style={styles.uploadText}>
+                    Uploading photos... {uploadProgress}%
+                  </Text>
+                ) : null}
+              </View>
+
+              <Text className="mt-4 text-xl font-extrabold" style={styles.titleText}>
                 {username || "Your profile"}
               </Text>
-              <Text className="mt-1 text-sm font-medium leading-5 text-[#91A5A9]">
+              <Text className="mt-1 text-sm font-medium leading-5" style={styles.bodyText}>
                 Tune your profile details and dating preferences.
               </Text>
               <View className="mt-4 flex-row flex-wrap gap-2">
@@ -424,7 +502,7 @@ export default function EditProfileScreen() {
           </View>
 
           <SectionTitle title="Profile" />
-          <View className="overflow-hidden rounded-[26px] border border-white/10 bg-[#0D1B1E] shadow-xl">
+          <View className="overflow-hidden rounded-[26px] border shadow-xl" style={styles.card}>
             {profileItems.map((item, index) => (
               <SettingRow
                 key={item.key}
@@ -436,7 +514,7 @@ export default function EditProfileScreen() {
           </View>
 
           <SectionTitle title="Dating Preferences" />
-          <View className="overflow-hidden rounded-[26px] border border-white/10 bg-[#0D1B1E] shadow-xl">
+          <View className="overflow-hidden rounded-[26px] border shadow-xl" style={styles.card}>
             {datingItems.map((item, index) => (
               <SettingRow
                 key={item.key}
@@ -491,7 +569,7 @@ export default function EditProfileScreen() {
 }
 
 const SectionTitle = ({ title }: { title: string }) => (
-  <Text className="mb-3 ml-1 mt-7 text-sm font-extrabold uppercase tracking-wider text-[#FFC857]">
+  <Text className="mb-3 ml-1 mt-7 text-sm font-extrabold uppercase tracking-wider" style={styles.sectionTitle}>
     {title}
   </Text>
 );
@@ -503,9 +581,9 @@ const InfoPill = ({
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
 }) => (
-  <View className="flex-row items-center rounded-full border border-white/10 bg-white/[0.06] px-3 py-2">
-    <Ionicons name={icon} size={14} color={ACCENT_SOFT} />
-    <Text className="ml-1.5 text-xs font-bold text-[#DCE9E6]">{label}</Text>
+  <View className="flex-row items-center rounded-full border px-3 py-2" style={styles.infoPill}>
+    <Ionicons name={icon} size={14} color={Colors.primaryLight} />
+    <Text className="ml-1.5 text-xs font-bold" style={styles.titleText}>{label}</Text>
   </View>
 );
 
@@ -519,25 +597,25 @@ const SettingRow = ({
   onPress: () => void;
 }) => (
   <TouchableOpacity
-    className={`min-h-[78px] flex-row items-center gap-4 px-4 active:bg-white/[0.03] ${
-      isLast ? "" : "border-b border-white/[0.07]"
-    }`}
+    className="min-h-[78px] flex-row items-center gap-4 px-4"
+    style={!isLast && styles.rowBorder}
     onPress={onPress}
     activeOpacity={0.78}
   >
-    <View className="h-11 w-11 items-center justify-center rounded-[17px] border border-[#FF7A5C]/20 bg-[#FF7A5C]/10">
-      <Ionicons name={item.icon} size={20} color={ACCENT} />
+    <View className="h-11 w-11 items-center justify-center rounded-[17px] border" style={styles.rowIconBox}>
+      <Ionicons name={item.icon} size={20} color={Colors.primary} />
     </View>
     <View className="flex-1">
-      <Text className="text-[15px] font-bold text-[#F4FAF8]">{item.title}</Text>
+      <Text className="text-[15px] font-bold" style={styles.titleText}>{item.title}</Text>
       <Text
-        className="mt-1 text-sm font-medium text-[#91A5A9]"
+        className="mt-1 text-sm font-medium"
+        style={styles.bodyText}
         numberOfLines={1}
       >
         {item.value}
       </Text>
     </View>
-    <Ionicons name="chevron-forward" size={20} color="#577074" />
+    <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
   </TouchableOpacity>
 );
 
@@ -582,24 +660,26 @@ const EditDrawer = ({
     animationType="slide"
     onRequestClose={onClose}
   >
-    <Pressable className="flex-1 bg-[#071011]/80" onPress={onClose} />
-    <View className="absolute bottom-0 left-0 right-0 max-h-[74%] rounded-t-[32px] border border-white/15 bg-[#0D1B1E] pt-3 shadow-2xl">
-      <View className="mb-3 h-1.5 w-12 self-center rounded-full bg-[#355155]" />
+    <Pressable className="flex-1" style={styles.drawerBackdrop} onPress={onClose} />
+    <View className="absolute bottom-0 left-0 right-0 max-h-[74%] rounded-t-[32px] border pt-3 shadow-2xl" style={styles.drawer}>
+      <View className="mb-3 h-1.5 w-12 self-center rounded-full" style={styles.drawerHandle} />
       <View className="flex-row items-center justify-between px-5 pb-3">
         <TouchableOpacity
-          className="h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]"
+          className="h-10 w-10 items-center justify-center rounded-2xl border"
+          style={styles.iconButton}
           onPress={onClose}
         >
-          <Ionicons name="close" size={22} color="#F4FAF8" />
+          <Ionicons name="close" size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text className="flex-1 text-center text-lg font-extrabold text-[#F4FAF8]">
+        <Text className="flex-1 text-center text-lg font-extrabold" style={styles.titleText}>
           {getSheetTitle(activeSheet)}
         </Text>
         <TouchableOpacity
-          className="h-10 min-w-[62px] items-center justify-center rounded-2xl bg-[#FF7A5C] px-4"
+          className="h-10 min-w-[62px] items-center justify-center rounded-2xl px-4"
+          style={styles.primaryButton}
           onPress={onClose}
         >
-          <Text className="text-sm font-extrabold text-[#130908]">Done</Text>
+          <Text className="text-sm font-extrabold" style={styles.primaryButtonText}>Done</Text>
         </TouchableOpacity>
       </View>
 
@@ -714,12 +794,13 @@ const ProfileInput = ({
     value={value}
     onChangeText={onChangeText}
     placeholder={placeholder}
-    placeholderTextColor="#577074"
+    placeholderTextColor={Colors.textMuted}
     multiline={multiline}
     autoCapitalize={autoCapitalize}
-    className={`rounded-[22px] border border-white/10 bg-[#12262A] px-5 py-4 text-base font-semibold text-[#F4FAF8] ${
+    className={`rounded-[22px] border px-5 py-4 text-base font-semibold ${
       multiline ? "min-h-[140px]" : "h-[58px]"
     }`}
+    style={styles.profileInput}
     textAlignVertical={multiline ? "top" : "center"}
   />
 );
@@ -779,7 +860,7 @@ const ListSelector = ({
             {formatLabel(option)}
           </Text>
           {active ? (
-            <Ionicons name="checkmark-circle" size={21} color={ACCENT} />
+            <Ionicons name="checkmark-circle" size={21} color={Colors.primary} />
           ) : null}
         </TouchableOpacity>
       );
@@ -816,7 +897,97 @@ const getSheetTitle = (field: SheetField | null) => {
   }
 };
 
+const compressImage = async (uri: string, type: "avatar" | "cover") => {
+  const result = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: type === "avatar" ? { width: 900 } : { width: 1600 } }],
+    {
+      compress: type === "avatar" ? 0.78 : 0.72,
+      format: ImageManipulator.SaveFormat.JPEG,
+    },
+  );
+
+  return result.uri;
+};
+
+const getProfileCompletion = ({
+  avatarUrl,
+  bannerUrl,
+  bio,
+  interests,
+  location,
+  lookingFor,
+}: {
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  bio?: string | null;
+  interests?: string[];
+  location?: string | null;
+  lookingFor?: string[];
+}) => {
+  const checks = [
+    avatarUrl,
+    bannerUrl,
+    bio?.trim(),
+    interests?.length ? "interests" : null,
+    location,
+    lookingFor?.length ? "lookingFor" : null,
+  ];
+
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+};
+
+const getCompletionHint = (completion: number) =>
+  completion >= 100 ? "Looking sharp" : "Add avatar, bio, interests, location, looking for";
+
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: Colors.bg,
+  },
+  titleText: {
+    color: Colors.textPrimary,
+  },
+  bodyText: {
+    color: Colors.textSecondary,
+  },
+  mutedText: {
+    color: Colors.textMuted,
+  },
+  sectionTitle: {
+    color: Colors.primaryLight,
+  },
+  iconButton: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  primaryButton: {
+    backgroundColor: Colors.primary,
+  },
+  primaryButtonText: {
+    color: Colors.textInverse,
+  },
+  segment: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  segmentActive: {
+    backgroundColor: Colors.primary,
+  },
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  coverTouchable: {
+    backgroundColor: Colors.bgElevated,
+  },
+  photoButton: {
+    backgroundColor: Colors.primary + "BF",
+    borderColor: Colors.textInverse + "26",
+  },
+  avatarButton: {
+    backgroundColor: Colors.bg,
+    borderColor: Colors.bgCard,
+  },
   avatarPlaceholder: {
     alignItems: "center",
     borderRadius: 24,
@@ -831,9 +1002,82 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
   },
+  addBadge: {
+    backgroundColor: Colors.primary,
+  },
+  infoPill: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+  },
+  completionCard: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginTop: 16,
+    padding: 14,
+  },
+  completionFill: {
+    backgroundColor: Colors.primary,
+    borderRadius: 999,
+    height: "100%",
+  },
+  completionHint: {
+    color: Colors.textSecondary,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  completionRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  completionTitle: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  completionTrack: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 999,
+    height: 8,
+    marginTop: 10,
+    overflow: "hidden",
+  },
+  uploadText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 8,
+  },
+  rowBorder: {
+    borderBottomColor: Colors.border,
+    borderBottomWidth: 1,
+  },
+  rowIconBox: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+  },
+  drawerBackdrop: {
+    backgroundColor: Colors.primary + "CC",
+  },
+  drawer: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  drawerHandle: {
+    backgroundColor: Colors.border,
+  },
+  profileInput: {
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+    color: Colors.textPrimary,
+  },
   chipButton: {
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderColor: "rgba(255,255,255,0.15)",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
     borderRadius: 16,
     borderWidth: 1,
     justifyContent: "center",
@@ -841,11 +1085,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   chipButtonActive: {
-    backgroundColor: "rgba(255,122,92,0.15)",
-    borderColor: ACCENT,
-    shadowColor: ACCENT,
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.primary,
+    shadowColor: Colors.primary,
     shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.12,
     shadowRadius: 14,
   },
   chipGrid: {
@@ -854,17 +1098,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   chipText: {
-    color: "#91A5A9",
+    color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: "700",
   },
   chipTextActive: {
-    color: "#F4FAF8",
+    color: Colors.textPrimary,
   },
   selectorButton: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
     borderRadius: 20,
     borderWidth: 1,
     flexDirection: "row",
@@ -873,18 +1117,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   selectorButtonActive: {
-    backgroundColor: "rgba(255,122,92,0.15)",
-    borderColor: ACCENT,
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.primary,
   },
   selectorList: {
     gap: 10,
   },
   selectorText: {
-    color: "#91A5A9",
+    color: Colors.textSecondary,
     fontSize: 15,
     fontWeight: "700",
   },
   selectorTextActive: {
-    color: "#F4FAF8",
+    color: Colors.textPrimary,
   },
 });

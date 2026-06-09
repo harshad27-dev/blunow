@@ -1,33 +1,19 @@
-export type Gender = "MALE" | "FEMALE" | "NON_BINARY" | "OTHER";
-
-export interface RegisterPayload {
-  email: string;
-  password: string;
-  username: string;
-  birthDate: string; // ISO 8601 e.g. "2000-01-01"
-  gender: Gender;
-  location?: string;
-  latitude?: number;
-  longitude?: number;
+export interface GoogleLoginPayload {
+  idToken: string;
 }
 
-export interface LoginPayload {
-  email: string;
-  otp: string;
-}
-
-export interface RequestLoginOtpPayload {
+export interface EmailAuthPayload {
   email: string;
 }
 
-export interface RequestLoginOtpResponse {
+export interface EmailAuthResponse {
   message: string;
   devOtp?: string;
 }
 
-export type RequestPasswordResetPayload = RequestLoginOtpPayload;
+export type RequestPasswordResetPayload = EmailAuthPayload;
 
-export type RequestPasswordResetResponse = RequestLoginOtpResponse;
+export type RequestPasswordResetResponse = EmailAuthResponse;
 
 export interface ResetPasswordPayload {
   email: string;
@@ -74,4 +60,6 @@ export interface AuthResponse {
   user: AuthUser;
   accessToken: string;
   refreshToken?: string;
+  isNewUser?: boolean;
+  onboardingRequired?: boolean;
 }

@@ -23,6 +23,15 @@ export class AuthController {
     }
   };
 
+  googleMobileLogin = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.authService.googleMobileLogin(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 401).json({ success: false, message: error.message });
+    }
+  };
+
   requestLoginOtp = async (req: Request, res: Response): Promise<void> => {
     try {
       const result = await this.authService.requestLoginOtp(req.body);

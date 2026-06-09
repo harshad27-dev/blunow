@@ -30,11 +30,58 @@ export class AuthRepository {
     });
   }
 
+  async createGoogleUser(data: {
+    email: string;
+    googleId: string;
+    username: string;
+    avatarUrl?: string;
+  }) {
+    const fallbackBirthDate = new Date();
+    fallbackBirthDate.setFullYear(fallbackBirthDate.getFullYear() - 18);
+
+    return prisma.user.create({
+      data: {
+        email: data.email,
+        googleId: data.googleId,
+        isVerified: true,
+        profile: {
+          create: {
+            username: data.username,
+            birthDate: fallbackBirthDate,
+            gender: "OTHER",
+            avatarUrl: data.avatarUrl,
+          },
+        },
+      },
+      include: { profile: true },
+    });
+  }
+
   async findByEmail(email: string) {
     return prisma.user.findUnique({
       where: { email },
       include: { profile: true },
     });
+  }
+
+  async findByGoogleId(googleId: string) {
+    return prisma.user.findUnique({
+      where: { googleId },
+      include: { profile: true },
+    });
+  }
+
+  async linkGoogleAccount(userId: string, googleId: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { googleId, isVerified: true },
+      include: { profile: true },
+    });
+  }
+
+  async isUsernameTaken(username: string) {
+    const profile = await prisma.profile.findUnique({ where: { username } });
+    return Boolean(profile);
   }
 
   async findById(id: string) {

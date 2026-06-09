@@ -58,7 +58,7 @@ export const DiscoverUserCard: React.FC<DiscoverUserCardProps> = ({
           </View>
         )}
         <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.72)']}
+          colors={[Colors.transparent, Colors.overlayDark]}
           style={styles.avatarGradient}
         />
         {user.isActive ? (
@@ -210,8 +210,8 @@ const styles = StyleSheet.create({
   },
   activeBadge: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.62)',
-    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: Colors.overlayDark,
+    borderColor: Colors.overlayLightSoft,
     borderRadius: 14,
     borderWidth: 1,
     bottom: 8,
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   name: {
-    color: Colors.white,
+    color: Colors.textPrimary,
     flex: 1,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.md,
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   moreText: {
-    color: 'rgba(255,255,255,0.72)',
+    color: Colors.onImageMuted,
     fontFamily: FontFamily.semiBold,
     fontSize: FontSize.xs,
   },

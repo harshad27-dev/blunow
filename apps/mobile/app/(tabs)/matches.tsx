@@ -28,8 +28,6 @@ import {
 import type { MatchRecommendation, MatchRequest } from "@/types/match.types";
 
 const bottomActionHeight = 94;
-const actionBackdropColor = "rgba(5, 5, 5, 0.92)";
-const matchOverlayBackdropColor = "rgba(0, 0, 0, 0.92)";
 const fallbackProfileImage =
   "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
 
@@ -217,9 +215,9 @@ export default function MatchesScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#050505]">
-        <ActivityIndicator color="#FFFFFF" size="large" />
-        <Text className="mt-4 text-sm font-semibold text-[#888]">
+      <View className="flex-1 items-center justify-center" style={styles.screen}>
+        <ActivityIndicator color={Colors.primary} size="large" />
+        <Text className="mt-4 text-sm font-semibold" style={styles.mutedText}>
           Finding real profiles...
         </Text>
       </View>
@@ -229,40 +227,46 @@ export default function MatchesScreen() {
   if (!profile) {
     return (
       <SafeAreaView
-        className="flex-1 bg-[#050505]"
+        className="flex-1"
+        style={styles.screen}
         edges={["top", "left", "right"]}
       >
         <View className="flex-row items-center justify-between px-[18px] pt-2">
           <TouchableOpacity
-            className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/45"
+            className="h-10 w-10 items-center justify-center rounded-full border"
+            style={styles.overlayIconButton}
             onPress={() => router.back()}
             activeOpacity={0.82}
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
         </View>
         <View className="flex-1 items-center justify-center px-7">
-          <View className="h-20 w-20 items-center justify-center rounded-full border border-[#222] bg-[#111]">
-            <Ionicons name="people-outline" size={34} color="#888" />
+          <View
+            className="h-20 w-20 items-center justify-center rounded-full border"
+            style={styles.emptyIconWrap}
+          >
+            <Ionicons name="people-outline" size={34} color={Colors.textMuted} />
           </View>
-          <Text className="mt-5 text-center text-2xl font-bold text-white">
+          <Text className="mt-5 text-center text-2xl font-bold" style={styles.titleText}>
             No profiles yet
           </Text>
-          <Text className="mt-2 text-center text-sm leading-5 text-[#888]">
+          <Text className="mt-2 text-center text-sm leading-5" style={styles.mutedText}>
             Real users will appear here after they create an account and
             complete their profile.
           </Text>
           <TouchableOpacity
-            className="mt-6 h-12 flex-row items-center rounded-full bg-white px-5"
+            className="mt-6 h-12 flex-row items-center rounded-full px-5"
+            style={styles.primaryButton}
             onPress={() => router.push("/(screens)/edit-profile")}
             activeOpacity={0.84}
           >
             <Ionicons
               name="person-circle-outline"
               size={20}
-              color={Colors.black}
+              color={Colors.textInverse}
             />
-            <Text className="ml-2 text-sm font-bold text-black">
+            <Text className="ml-2 text-sm font-bold" style={styles.primaryButtonText}>
               Complete profile
             </Text>
           </TouchableOpacity>
@@ -274,7 +278,7 @@ export default function MatchesScreen() {
   const profileImage = profile.imageUrl || fallbackProfileImage;
 
   return (
-    <View className="flex-1 bg-[#050505]">
+    <View className="flex-1" style={styles.screen}>
       <StatusBar
         barStyle="light-content"
         translucent
@@ -292,10 +296,10 @@ export default function MatchesScreen() {
 
       <LinearGradient
         colors={[
-          "rgba(0,0,0,0.58)",
-          "rgba(0,0,0,0.12)",
-          "rgba(0,0,0,0.28)",
-          "rgba(0,0,0,0.96)",
+          Colors.overlayDark,
+          Colors.overlayDarkSoft,
+          Colors.overlayDarkSoft,
+          Colors.overlayDarkStrong,
         ]}
         locations={[0, 0.28, 0.54, 1]}
         className="absolute inset-0"
@@ -306,50 +310,44 @@ export default function MatchesScreen() {
         <View className="flex-row items-start justify-between px-[18px] pt-2">
           <View className="flex-row items-start">
             <TouchableOpacity
-              className="mr-3 h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/45"
+              className="mr-3 h-10 w-10 items-center justify-center rounded-full border"
+              style={styles.floatingIconButton}
               onPress={() => router.back()}
               activeOpacity={0.82}
             >
-              <Ionicons name="arrow-back" size={24} color="white" />
+              <Ionicons name="arrow-back" size={24} color={Colors.textInverse} />
             </TouchableOpacity>
 
-            {/* <View>
-              <Text className="text-xs font-semibold uppercase text-white/70">
-                Daily deck
-              </Text>
-              <Text className="mt-0.5 text-[30px] font-bold leading-9 text-white">
-                Matches
-              </Text>
-            </View> */}
           </View>
 
           <View className="flex-row items-center gap-2.5">
-            <View className="h-9 flex-row items-center rounded-full bg-white px-3">
-              <Ionicons name="people" size={15} color={Colors.black} />
-              <Text className="ml-1.5 text-xs font-bold text-black">
+            <View className="h-9 flex-row items-center rounded-full px-3" style={styles.photoPrimaryPill}>
+              <Ionicons name="people" size={15} color={Colors.textInverse} />
+              <Text className="ml-1.5 text-xs font-bold" style={styles.photoPrimaryText}>
                 {profiles.length} profiles
               </Text>
             </View>
             <TouchableOpacity
-              className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/45"
+              className="h-10 w-10 items-center justify-center rounded-full border"
+              style={styles.floatingIconButton}
               activeOpacity={0.82}
             >
               <Ionicons
                 name="options-outline"
                 size={20}
-                color={Colors.textPrimary}
+                color={Colors.textInverse}
               />
             </TouchableOpacity>
           </View>
         </View>
 
         {incomingRequests.length ? (
-          <View className="mx-[18px] mt-4 rounded-[24px] border border-white/10 bg-black/70 p-3">
+          <View className="mx-[18px] mt-4 rounded-[24px] border p-3" style={styles.requestPanel}>
             <View className="mb-2 flex-row items-center justify-between">
-              <Text className="text-sm font-extrabold text-white">
+              <Text className="text-sm font-extrabold" style={styles.photoText}>
                 Requests
               </Text>
-              <Text className="text-xs font-bold text-white/55">
+              <Text className="text-xs font-bold" style={styles.photoMutedText}>
                 {incomingRequests.length} waiting
               </Text>
             </View>
@@ -376,7 +374,7 @@ export default function MatchesScreen() {
         >
           <LinearGradient
             pointerEvents="none"
-            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.78)", "rgba(0,0,0,0.98)"]}
+            colors={[Colors.transparent, Colors.overlayDark, Colors.overlayDarkStrong]}
             locations={[0, 0.42, 1]}
             style={styles.bottomContentShade}
           />
@@ -388,9 +386,10 @@ export default function MatchesScreen() {
                 <Image
                   key={item.id}
                   source={{ uri: item.imageUrl || fallbackProfileImage }}
-                  className={`absolute h-[42px] w-[42px] rounded-[15px] border-2 border-white/80 ${
+                  className={`absolute h-[42px] w-[42px] rounded-[15px] border-2 ${
                     index === 0 ? "right-[26px] z-10" : "right-0"
                   }`}
+                  style={styles.nextProfileImage}
                 />
               ))}
             </View>
@@ -404,7 +403,7 @@ export default function MatchesScreen() {
 
             <View className="mt-4 flex-row items-center">
               <Text
-                className="flex-1 text-white"
+                className="flex-1"
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 style={{
@@ -412,24 +411,26 @@ export default function MatchesScreen() {
                   fontSize: 58,
                   includeFontPadding: false,
                   lineHeight: 66,
+                  color: Colors.textInverse,
                 }}
               >
                 {profile.name}
               </Text>
-              <View className="ml-3 flex-row items-center rounded-full bg-white/15 px-3 py-2">
-                <Text className="text-base font-bold text-white">
+              <View className="ml-3 flex-row items-center rounded-full px-3 py-2" style={styles.photoSoftPill}>
+                <Text className="text-base font-bold" style={styles.photoText}>
                   {profile.age}
                 </Text>
                 {profile.verified ? (
-                  <View className="ml-1.5 h-[18px] w-[18px] items-center justify-center rounded-full bg-white">
-                    <Ionicons name="checkmark" size={11} color={Colors.black} />
+                  <View className="ml-1.5 h-[18px] w-[18px] items-center justify-center rounded-full" style={styles.photoPrimaryPill}>
+                    <Ionicons name="checkmark" size={11} color={Colors.textInverse} />
                   </View>
                 ) : null}
               </View>
             </View>
 
             <Text
-              className="-mt-1 text-sm font-semibold text-white/75"
+              className="-mt-1 text-sm font-semibold"
+              style={styles.photoSecondaryText}
               numberOfLines={1}
             >
               {profile.name} {profile.lastName}
@@ -449,24 +450,25 @@ export default function MatchesScreen() {
             </View>
 
             <TouchableOpacity
-              className="mt-4 h-12 flex-row items-center justify-center rounded-full bg-white"
+              className="mt-4 h-12 flex-row items-center justify-center rounded-full"
+              style={styles.photoPrimaryPill}
               onPress={openProfileDetail}
               activeOpacity={0.84}
             >
-              <Text className="mr-2 text-sm font-bold text-black">
+              <Text className="mr-2 text-sm font-bold" style={styles.photoPrimaryText}>
                 View profile
               </Text>
-              <Ionicons name="arrow-forward" size={16} color={Colors.black} />
+              <Ionicons name="arrow-forward" size={16} color={Colors.textInverse} />
             </TouchableOpacity>
           </Animated.View>
         </View>
 
         <View
-          className="absolute left-[18px] right-[18px] h-[94px] flex-row items-center justify-between rounded-[30px] border border-white/10 px-3.5 shadow-2xl"
-          style={{
-            backgroundColor: actionBackdropColor,
-            bottom: Math.max(insets.bottom + 12, 24),
-          }}
+          className="absolute left-[18px] right-[18px] h-[94px] flex-row items-center justify-between rounded-[30px] border px-3.5 shadow-2xl"
+          style={[
+            styles.actionBar,
+            { bottom: Math.max(insets.bottom + 12, 24) },
+          ]}
         >
           <RoundAction
             icon="close"
@@ -494,23 +496,24 @@ export default function MatchesScreen() {
       {matchBanner ? (
         <View
           className="absolute inset-0 z-20 items-center justify-center px-7"
-          style={{ backgroundColor: matchOverlayBackdropColor }}
+          style={styles.matchOverlay}
         >
           <LinearGradient
-            colors={["#FFFFFF", "#A0A0A0"]}
+            colors={Colors.gradientCard}
             className="h-24 w-24 items-center justify-center rounded-full"
           >
-            <Ionicons name="heart" size={46} color="#050505" />
+            <Ionicons name="heart" size={46} color={Colors.primary} />
           </LinearGradient>
-          <Text className="mt-6 text-center text-[38px] font-bold text-white">
+          <Text className="mt-6 text-center text-[38px] font-bold" style={styles.photoText}>
             {"It's a Match!"}
           </Text>
-          <Text className="mt-3 text-center text-base leading-[23px] text-[#BDBDBD]">
+          <Text className="mt-3 text-center text-base leading-[23px]" style={styles.photoSecondaryText}>
             {matchBanner.name} already liked you. Chat is ready to open.
           </Text>
           <View className="mt-7 flex-row gap-2.5">
             <TouchableOpacity
-              className="h-[54px] flex-row items-center rounded-full bg-white px-5"
+              className="h-[54px] flex-row items-center rounded-full px-5"
+              style={styles.photoPrimaryPill}
               onPress={() => {
                 const matched = matchBanner;
                 setMatchBanner(null);
@@ -518,20 +521,21 @@ export default function MatchesScreen() {
               }}
               activeOpacity={0.86}
             >
-              <Ionicons name="chatbubble" size={20} color="#050505" />
-              <Text className="ml-2 text-base font-bold text-black">
+              <Ionicons name="chatbubble" size={20} color={Colors.textInverse} />
+              <Text className="ml-2 text-base font-bold" style={styles.photoPrimaryText}>
                 Open Chat
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              className="h-[54px] items-center justify-center rounded-full border border-[#222] bg-[#111] px-[18px]"
+              className="h-[54px] items-center justify-center rounded-full border px-[18px]"
+              style={styles.floatingButton}
               onPress={() => {
                 setMatchBanner(null);
                 moveToNextCard();
               }}
               activeOpacity={0.86}
             >
-              <Text className="text-base font-bold text-white">
+              <Text className="text-base font-bold" style={styles.photoText}>
                 Keep Matching
               </Text>
             </TouchableOpacity>
@@ -549,33 +553,44 @@ const ProgressDots = ({
   activeIndex: number;
   total: number;
 }) => (
-  <View className="h-8 flex-row items-center gap-1.5 rounded-full border border-white/10 bg-black/50 px-3">
+  <View
+    className="h-8 flex-row items-center gap-1.5 rounded-full border px-3"
+    style={styles.floatingButton}
+  >
     {Array.from({ length: total }).map((_, index) => (
       <View
         key={index}
-        className={`h-2 rounded-full ${
-          index === activeIndex ? "w-[26px] bg-white" : "w-2 bg-white/35"
-        }`}
+        className={`h-2 rounded-full ${index === activeIndex ? "w-[26px]" : "w-2"}`}
+        style={index === activeIndex ? styles.activeDot : styles.inactiveDot}
       />
     ))}
   </View>
 );
 
 const StatusPill = ({ online }: { online: boolean }) => (
-  <View className="flex-row items-center rounded-full border border-white/10 bg-black/45 px-3 py-2">
+  <View
+    className="flex-row items-center rounded-full border px-3 py-2"
+    style={styles.floatingButton}
+  >
     <View
-      className={`mr-2 h-2 w-2 rounded-full ${online ? "bg-[#6FBF8A]" : "bg-[#888888]"}`}
+      className="mr-2 h-2 w-2 rounded-full"
+      style={{ backgroundColor: online ? Colors.success : Colors.textMuted }}
     />
-    <Text className="text-xs font-bold text-white">
+    <Text className="text-xs font-bold" style={styles.photoText}>
       {online ? "Online now" : "Away"}
     </Text>
   </View>
 );
 
 const ScorePill = ({ score }: { score: number }) => (
-  <View className="flex-row items-center rounded-full bg-white px-3 py-2">
-    <Ionicons name="sparkles" size={14} color={Colors.black} />
-    <Text className="ml-1.5 text-xs font-bold text-black">{score}% match</Text>
+  <View
+    className="flex-row items-center rounded-full px-3 py-2"
+    style={styles.photoPrimaryPill}
+  >
+    <Ionicons name="sparkles" size={14} color={Colors.textInverse} />
+    <Text className="ml-1.5 text-xs font-bold" style={styles.photoPrimaryText}>
+      {score}% match
+    </Text>
   </View>
 );
 
@@ -589,14 +604,17 @@ const ProfileInfo = ({
   value: string;
 }) => (
   <View className="flex-row items-center">
-    <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-black/35">
-      <Ionicons name={icon} size={15} color={Colors.textPrimary} />
+    <View
+      className="mr-3 h-9 w-9 items-center justify-center rounded-full"
+      style={styles.photoIconCircle}
+    >
+      <Ionicons name={icon} size={15} color={Colors.textInverse} />
     </View>
     <View className="flex-1">
-      <Text className="text-xs font-bold text-white/55" numberOfLines={1}>
+      <Text className="text-xs font-bold" style={styles.photoMutedText} numberOfLines={1}>
         {label}
       </Text>
-      <Text className="mt-0.5 text-sm font-bold text-white" numberOfLines={1}>
+      <Text className="mt-0.5 text-sm font-bold" style={styles.photoText} numberOfLines={1}>
         {value}
       </Text>
     </View>
@@ -617,7 +635,11 @@ const RoundAction = ({
   tone: "muted" | "chat" | "boost";
 }) => {
   const color =
-    tone === "chat" ? "#38BDF8" : tone === "boost" ? "#FBBF24" : "#FFFFFF";
+    tone === "chat"
+      ? Colors.primaryLight
+      : tone === "boost"
+        ? Colors.warning
+        : Colors.textInverse;
 
   return (
     <TouchableOpacity
@@ -625,17 +647,23 @@ const RoundAction = ({
       onPress={onPress}
       activeOpacity={0.82}
     >
-      <View className="h-[50px] w-[50px] items-center justify-center rounded-full border border-white/10 bg-white/10">
+      <View
+        className="h-[50px] w-[50px] items-center justify-center rounded-full border"
+        style={styles.actionIconCircle}
+      >
         <Ionicons name={icon} size={23} color={color} />
         {badge ? (
-          <View className="absolute -right-1 -top-1 min-w-5 items-center rounded-full bg-white px-1">
-            <Text className="text-[10px] font-bold leading-[18px] text-black">
+          <View
+            className="absolute -right-1 -top-1 min-w-5 items-center rounded-full px-1"
+            style={styles.badge}
+          >
+            <Text className="text-[10px] font-bold leading-[18px]" style={styles.primaryButtonText}>
               {badge}
             </Text>
           </View>
         ) : null}
       </View>
-      <Text className="mt-1 text-[11px] font-bold text-[#BDBDBD]">{label}</Text>
+      <Text className="mt-1 text-[11px] font-bold" style={styles.photoSecondaryText}>{label}</Text>
     </TouchableOpacity>
   );
 };
@@ -647,14 +675,14 @@ const HeartAction = ({ onPress }: { onPress: () => void }) => (
     onPress={onPress}
   >
     <LinearGradient
-      colors={["#FFFFFF", "#C0C0C0"]}
+      colors={Colors.gradientCard}
       start={{ x: 0.08, y: 0.08 }}
       end={{ x: 1, y: 1 }}
-      className="h-[70px] w-[70px] items-center justify-center rounded-full shadow-white"
+      className="h-[70px] w-[70px] items-center justify-center rounded-full"
     >
-      <Ionicons name="heart" size={33} color="#050505" />
+      <Ionicons name="heart" size={33} color={Colors.primary} />
     </LinearGradient>
-    <Text className="mt-1 text-[11px] font-bold text-white">Like</Text>
+    <Text className="mt-1 text-[11px] font-bold" style={styles.photoText}>Like</Text>
   </TouchableOpacity>
 );
 
@@ -677,45 +705,136 @@ const IncomingRequestRow = ({
   const avatarUrl = request.sender?.profile?.avatarUrl;
 
   return (
-    <View className="mt-2 flex-row items-center rounded-[18px] bg-white/10 p-2">
+    <View className="mt-2 flex-row items-center rounded-[18px] p-2" style={styles.incomingRow}>
       {avatarUrl ? (
         <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-[15px]" />
       ) : (
-        <View className="h-11 w-11 items-center justify-center rounded-[15px] bg-white/15">
-          <Text className="text-base font-extrabold text-white">
+        <View className="h-11 w-11 items-center justify-center rounded-[15px]" style={styles.avatarFallback}>
+          <Text className="text-base font-extrabold" style={styles.photoText}>
             {name.charAt(0).toUpperCase()}
           </Text>
         </View>
       )}
       <View className="ml-3 flex-1">
-        <Text className="text-sm font-extrabold text-white" numberOfLines={1}>
+        <Text className="text-sm font-extrabold" style={styles.photoText} numberOfLines={1}>
           {name}
         </Text>
-        <Text className="mt-0.5 text-xs font-semibold text-white/55" numberOfLines={1}>
+        <Text className="mt-0.5 text-xs font-semibold" style={styles.photoMutedText} numberOfLines={1}>
           {request.message || "Wants to connect"}
         </Text>
       </View>
       <TouchableOpacity
-        className="mr-2 h-9 w-9 items-center justify-center rounded-full bg-white"
+        className="mr-2 h-9 w-9 items-center justify-center rounded-full"
+        style={styles.photoPrimaryPill}
         disabled={disabled}
         onPress={onAccept}
         activeOpacity={0.84}
       >
-        <Ionicons name="checkmark" size={18} color="#050505" />
+        <Ionicons name="checkmark" size={18} color={Colors.textInverse} />
       </TouchableOpacity>
       <TouchableOpacity
-        className="h-9 w-9 items-center justify-center rounded-full bg-white/10"
+        className="h-9 w-9 items-center justify-center rounded-full"
+        style={styles.actionIconCircle}
         disabled={disabled}
         onPress={onReject}
         activeOpacity={0.84}
       >
-        <Ionicons name="close" size={18} color="#FFFFFF" />
+        <Ionicons name="close" size={18} color={Colors.textInverse} />
       </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: Colors.bg,
+  },
+  titleText: {
+    color: Colors.textPrimary,
+  },
+  mutedText: {
+    color: Colors.textSecondary,
+  },
+  overlayIconButton: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  emptyIconWrap: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+  },
+  primaryButton: {
+    backgroundColor: Colors.primary,
+  },
+  primaryButtonText: {
+    color: Colors.textInverse,
+  },
+  floatingIconButton: {
+    backgroundColor: Colors.primary + "A6",
+    borderColor: Colors.textInverse + "22",
+  },
+  floatingButton: {
+    backgroundColor: Colors.primary + "B8",
+    borderColor: Colors.textInverse + "22",
+  },
+  floatingButtonLight: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  requestPanel: {
+    backgroundColor: Colors.primary + "D9",
+    borderColor: Colors.textInverse + "22",
+  },
+  actionBar: {
+    backgroundColor: Colors.primary + "EB",
+    borderColor: Colors.textInverse + "22",
+  },
+  actionIconCircle: {
+    backgroundColor: Colors.textInverse + "18",
+    borderColor: Colors.textInverse + "22",
+  },
+  badge: {
+    backgroundColor: Colors.primaryLight,
+  },
+  activeDot: {
+    backgroundColor: Colors.textInverse,
+  },
+  inactiveDot: {
+    backgroundColor: Colors.textInverse + "59",
+  },
+  incomingRow: {
+    backgroundColor: Colors.textInverse + "18",
+  },
+  avatarFallback: {
+    backgroundColor: Colors.textInverse + "24",
+  },
+  photoText: {
+    color: Colors.textInverse,
+  },
+  photoSecondaryText: {
+    color: Colors.textInverse + "BF",
+  },
+  photoMutedText: {
+    color: Colors.textInverse + "8C",
+  },
+  photoPrimaryPill: {
+    backgroundColor: Colors.primary,
+  },
+  photoPrimaryText: {
+    color: Colors.textInverse,
+  },
+  photoSoftPill: {
+    backgroundColor: Colors.textInverse + "24",
+  },
+  photoIconCircle: {
+    backgroundColor: Colors.primary + "8F",
+  },
+  nextProfileImage: {
+    borderColor: Colors.textInverse + "CC",
+  },
+  matchOverlay: {
+    backgroundColor: Colors.primary + "EB",
+  },
   bottomContentShade: {
     bottom: 0,
     height: 420,
