@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { makeRedirectUri } from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +11,11 @@ import { FontFamily, FontSize } from "@/constants/typography";
 import { Radius, Spacing } from "@/constants/spacing";
 
 WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_REDIRECT_URI = makeRedirectUri({
+  path: "oauthredirect",
+  scheme: "com.datebl.mobile",
+});
 
 type GoogleAuthButtonProps = {
   label?: string;
@@ -55,6 +61,7 @@ function GoogleAuthButtonCore({
     androidClientId: Config.GOOGLE_ANDROID_CLIENT_ID,
     clientId: Config.GOOGLE_EXPO_CLIENT_ID ?? Config.GOOGLE_WEB_CLIENT_ID,
     iosClientId: Config.GOOGLE_IOS_CLIENT_ID,
+    redirectUri: GOOGLE_REDIRECT_URI,
     webClientId: Config.GOOGLE_WEB_CLIENT_ID,
   });
 

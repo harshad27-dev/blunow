@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "com.datebl.mobile",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#050505",
     "newArchEnabled": true,
@@ -22,7 +22,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.flameconnect.mobile"
+      "package": "com.datebl.mobile"
     },
     "web": {
       "bundler": "metro",

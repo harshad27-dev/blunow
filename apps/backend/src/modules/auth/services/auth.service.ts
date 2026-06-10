@@ -13,6 +13,8 @@ export class AuthService {
   private mailService = new MailService();
   private otpExpiresInMs = 10 * 60 * 1000;
   private maxOtpAttempts = 5;
+  private defaultGoogleClientId =
+    "211313668261-l1j7397jievqoc4lancnj108jsfl8kp0.apps.googleusercontent.com";
 
   async register(dto: {
     email: string;
@@ -393,6 +395,7 @@ export class AuthService {
       process.env.GOOGLE_IOS_CLIENT_ID,
       process.env.GOOGLE_ANDROID_CLIENT_ID,
       process.env.GOOGLE_WEB_CLIENT_ID,
+      this.defaultGoogleClientId,
     ].filter(Boolean);
 
     if (!allowedAudiences.length) {
