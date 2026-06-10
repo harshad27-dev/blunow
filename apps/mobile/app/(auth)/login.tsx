@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   ImageBackground,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -20,16 +22,67 @@ import { useAuthStore } from "@/store/authStore";
 export default function LoginScreen() {
   const router = useRouter();
   const googleLogin = useAuthStore((state) => state.googleLogin);
+  const requestLoginOtp = useAuthStore((state) => state.requestLoginOtp);
+  const emailLogin = useAuthStore((state) => state.emailLogin);
   const [serverError, setServerError] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(28)).current;
   const backgroundFadeAnim = useRef(new Animated.Value(0)).current;
 
-  const clearError = useCallback(() => setServerError(""), []);
+  const clearError = useCallback(() => {
+    setServerError("");
+    setEmailMessage("");
+  }, []);
   const handleGoogleToken = useCallback(
     (idToken: string) => googleLogin({ idToken }),
     [googleLogin],
   );
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const handleSendOtp = useCallback(async () => {
+    clearError();
+    if (!normalizedEmail) {
+      setServerError("Enter your email first.");
+      return;
+    }
+
+    setEmailLoading(true);
+    try {
+      const response = await requestLoginOtp({ email: normalizedEmail });
+      setOtpSent(true);
+      setEmailMessage(response.devOtp ? `Dev OTP: ${response.devOtp}` : response.message);
+    } catch (err: any) {
+      setServerError(
+        err?.response?.data?.message || "Unable to send OTP. Please try again.",
+      );
+    } finally {
+      setEmailLoading(false);
+    }
+  }, [clearError, normalizedEmail, requestLoginOtp]);
+
+  const handleVerifyOtp = useCallback(async () => {
+    clearError();
+    if (!normalizedEmail || otp.trim().length !== 6) {
+      setServerError("Enter your email and 6-digit OTP.");
+      return;
+    }
+
+    setEmailLoading(true);
+    try {
+      await emailLogin({ email: normalizedEmail, otp: otp.trim() });
+    } catch (err: any) {
+      setServerError(
+        err?.response?.data?.message || "Invalid OTP. Please try again.",
+      );
+    } finally {
+      setEmailLoading(false);
+    }
+  }, [clearError, emailLogin, normalizedEmail, otp]);
 
   useEffect(() => {
     Animated.parallel([
@@ -115,6 +168,69 @@ export default function LoginScreen() {
               onError={setServerError}
             />
 
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Email address"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              editable={!emailLoading}
+            />
+
+            {otpSent ? (
+              <TextInput
+                style={styles.input}
+                value={otp}
+                onChangeText={(value) => setOtp(value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="6-digit OTP"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={6}
+                editable={!emailLoading}
+              />
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.emailButton}
+              onPress={otpSent ? handleVerifyOtp : handleSendOtp}
+              disabled={emailLoading}
+              activeOpacity={0.84}
+            >
+              {emailLoading ? (
+                <ActivityIndicator color={Colors.textInverse} />
+              ) : (
+                <Text style={styles.emailButtonText}>
+                  {otpSent ? "Verify OTP" : "Send Email OTP"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {otpSent ? (
+              <TouchableOpacity
+                style={styles.resendButton}
+                onPress={handleSendOtp}
+                disabled={emailLoading}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.resendText}>Resend code</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {emailMessage ? (
+              <View style={styles.successBanner}>
+                <Text style={styles.successBannerText}>{emailMessage}</Text>
+              </View>
+            ) : null}
+
             {serverError ? (
               <View style={styles.errorBanner}>
                 <Text style={styles.errorBannerText}>{serverError}</Text>
@@ -178,6 +294,35 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     padding: Spacing.sm,
   },
+  divider: {
+    alignItems: "center",
+    flexDirection: "row",
+    marginVertical: Spacing.md,
+  },
+  dividerLine: {
+    backgroundColor: Colors.overlayLightSoft,
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    color: Colors.onImageMuted,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.sm,
+    marginHorizontal: Spacing.sm,
+  },
+  emailButton: {
+    alignItems: "center",
+    backgroundColor: Colors.primaryLight,
+    borderRadius: Radius.full,
+    justifyContent: "center",
+    minHeight: 52,
+    marginTop: Spacing.sm,
+  },
+  emailButtonText: {
+    color: Colors.textInverse,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.base,
+  },
   errorBannerText: {
     color: Colors.error,
     fontFamily: FontFamily.regular,
@@ -192,6 +337,18 @@ const styles = StyleSheet.create({
   imageOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.overlayDarkSoft,
+  },
+  input: {
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.base,
+    marginBottom: Spacing.sm,
+    minHeight: 52,
+    paddingHorizontal: Spacing.md,
   },
   logoCircle: {
     alignItems: "center",
@@ -215,12 +372,34 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     flex: 1,
   },
+  resendButton: {
+    alignItems: "center",
+    marginTop: Spacing.sm,
+  },
+  resendText: {
+    color: Colors.onImageMuted,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+  },
   subheading: {
     color: Colors.onImageMuted,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.base,
     lineHeight: 22,
     marginBottom: Spacing.lg,
+  },
+  successBanner: {
+    backgroundColor: Colors.success + "18",
+    borderColor: Colors.success,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    marginTop: Spacing.md,
+    padding: Spacing.sm,
+  },
+  successBannerText: {
+    color: Colors.success,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
   },
   switchButton: {
     alignItems: "center",

@@ -96,7 +96,11 @@ export default function MatchDetailScreen() {
             resizeMode="cover"
           />
           <LinearGradient
-            colors={["rgba(0,0,0,0.2)", "rgba(0,0,0,0.06)", "rgba(0,0,0,0.92)"]}
+            colors={[
+              Colors.overlayDarkSoft,
+              Colors.transparent,
+              Colors.overlayDarkStrong,
+            ]}
             locations={[0, 0.42, 1]}
             style={StyleSheet.absoluteFillObject}
           />
@@ -104,10 +108,10 @@ export default function MatchDetailScreen() {
           <SafeAreaView style={styles.heroSafe} edges={["top", "left", "right"]}>
             <View style={styles.topBar}>
               <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-                <Ionicons name="chevron-back" size={24} color={Colors.white} />
+                <Ionicons name="chevron-back" size={24} color={Colors.textInverse} />
               </TouchableOpacity>
               <View style={styles.matchPill}>
-                <Ionicons name="sparkles" size={14} color={Colors.black} />
+                <Ionicons name="sparkles" size={14} color={Colors.textPrimary} />
                 <Text style={styles.matchText}>{profile.matchScore}% match</Text>
               </View>
             </View>
@@ -119,7 +123,7 @@ export default function MatchDetailScreen() {
                 </Text>
                 {profile.verified ? (
                   <View style={styles.verifiedBadge}>
-                    <Ionicons name="checkmark" size={14} color={Colors.black} />
+                    <Ionicons name="checkmark" size={14} color={Colors.textPrimary} />
                   </View>
                 ) : null}
               </View>
@@ -160,7 +164,7 @@ export default function MatchDetailScreen() {
               activeOpacity={0.84}
               onPress={() => router.back()}
             >
-              <Ionicons name="close" size={22} color={Colors.white} />
+              <Ionicons name="close" size={22} color={Colors.textPrimary} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.primaryAction}
@@ -168,7 +172,7 @@ export default function MatchDetailScreen() {
               disabled={sendMatchRequest.isPending}
               onPress={() => sendRequest("I would like to connect with you.")}
             >
-              <Ionicons name="heart" size={21} color={Colors.black} />
+              <Ionicons name="heart" size={21} color={Colors.textInverse} />
               <Text style={styles.primaryActionText}>Like</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -177,7 +181,7 @@ export default function MatchDetailScreen() {
               disabled={sendMatchRequest.isPending}
               onPress={() => sendRequest("Hi, I would like to chat with you.")}
             >
-              <Ionicons name="chatbubble-ellipses" size={22} color={Colors.white} />
+              <Ionicons name="chatbubble-ellipses" size={22} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -194,7 +198,7 @@ const DetailStat = ({
   label: string;
 }) => (
   <View style={styles.statItem}>
-    <Ionicons name={icon} size={17} color={Colors.white} />
+    <Ionicons name={icon} size={17} color={Colors.textPrimary} />
     <Text style={styles.statText} numberOfLines={1}>
       {label}
     </Text>
@@ -244,17 +248,17 @@ const getInterestMeta = (label: string) => {
     string,
     { icon: keyof typeof Ionicons.glyphMap; color: string }
   > = {
-    art: { icon: "color-palette", color: "#F97316" },
-    coffee: { icon: "cafe", color: "#C8A86B" },
-    design: { icon: "sparkles", color: "#A855F7" },
-    fashion: { icon: "shirt", color: "#EC4899" },
-    fitness: { icon: "barbell", color: "#2DD4BF" },
-    football: { icon: "football", color: "#6FBF8A" },
-    food: { icon: "restaurant", color: "#F97316" },
-    music: { icon: "musical-notes", color: "#EC4899" },
-    movies: { icon: "videocam", color: "#38BDF8" },
-    startups: { icon: "rocket", color: "#A855F7" },
-    travel: { icon: "airplane", color: "#38BDF8" },
+    art: { icon: "color-palette", color: Colors.warning },
+    coffee: { icon: "cafe", color: Colors.primaryLight },
+    design: { icon: "sparkles", color: Colors.accent },
+    fashion: { icon: "shirt", color: Colors.secondaryLight },
+    fitness: { icon: "barbell", color: Colors.success },
+    football: { icon: "football", color: Colors.success },
+    food: { icon: "restaurant", color: Colors.warning },
+    music: { icon: "musical-notes", color: Colors.secondary },
+    movies: { icon: "videocam", color: Colors.primaryLight },
+    startups: { icon: "rocket", color: Colors.accent },
+    travel: { icon: "airplane", color: Colors.primaryLight },
   };
 
   return interestMeta[label.toLowerCase()] || {
@@ -293,8 +297,8 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.48)",
-    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: Colors.overlayDark,
+    borderColor: Colors.overlayLightSoft,
     borderRadius: 22,
     borderWidth: 1,
     height: 44,
@@ -303,14 +307,14 @@ const styles = StyleSheet.create({
   },
   matchPill: {
     alignItems: "center",
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.bgInput,
     borderRadius: 18,
     flexDirection: "row",
     height: 36,
     paddingHorizontal: 12,
   },
   matchText: {
-    color: Colors.black,
+    color: Colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.xs,
     marginLeft: 6,
@@ -323,7 +327,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   name: {
-    color: Colors.white,
+    color: Colors.textInverse,
     flexShrink: 1,
     fontFamily: FontFamily.bold,
     fontSize: 36,
@@ -331,7 +335,7 @@ const styles = StyleSheet.create({
   },
   verifiedBadge: {
     alignItems: "center",
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.bgInput,
     borderRadius: 13,
     height: 26,
     justifyContent: "center",
@@ -339,7 +343,7 @@ const styles = StyleSheet.create({
     width: 26,
   },
   fullName: {
-    color: "rgba(255,255,255,0.7)",
+    color: Colors.onImageMuted,
     fontFamily: FontFamily.semiBold,
     fontSize: FontSize.base,
     marginTop: 4,
@@ -385,7 +389,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   quote: {
-    color: "rgba(255,255,255,0.82)",
+    color: Colors.textSecondary,
     fontFamily: FontFamily.medium,
     fontSize: FontSize.base,
     lineHeight: 23,
@@ -435,7 +439,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   interestText: {
-    color: Colors.white,
+    color: Colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.xs,
     marginLeft: 7,
@@ -458,7 +462,7 @@ const styles = StyleSheet.create({
   },
   primaryAction: {
     alignItems: "center",
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.primary,
     borderRadius: 24,
     flex: 1,
     flexDirection: "row",
@@ -466,7 +470,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primaryActionText: {
-    color: Colors.black,
+    color: Colors.textInverse,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.base,
     marginLeft: 8,

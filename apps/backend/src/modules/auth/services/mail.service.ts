@@ -36,6 +36,28 @@ export class MailService {
     });
   }
 
+  async sendRegistrationOtp(to: string, otp: string) {
+    const fromEmail = process.env.SMTP_FROM_EMAIL ?? process.env.SMTP_USER;
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !fromEmail) {
+      throw new AppError('SMTP is not configured', 500);
+    }
+
+    await this.transporter.sendMail({
+      from: `"Blunow" <${fromEmail}>`,
+      to,
+      subject: 'Verify your Blunow account',
+      text: `Your Blunow registration OTP is ${otp}. It expires in 10 minutes.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>Verify your Blunow account</h2>
+          <p>Use this code to create your account:</p>
+          <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">${otp}</p>
+          <p>This code expires in 10 minutes.</p>
+        </div>
+      `,
+    });
+  }
+
   async sendPasswordResetOtp(to: string, otp: string) {
     const fromEmail = process.env.SMTP_FROM_EMAIL ?? process.env.SMTP_USER;
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !fromEmail) {

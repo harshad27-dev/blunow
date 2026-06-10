@@ -28,6 +28,24 @@ const requestLoginOtpSchema = z.object({
   email: z.string().email(),
 });
 
+const registerWithOtpSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().regex(/^\d{6}$/, "OTP must be 6 digits"),
+  username: z
+    .string()
+    .min(3)
+    .max(20)
+    .regex(/^[a-z0-9]+([._]?[a-z0-9]+)*$/, "Invalid username format"),
+  birthDate: z
+    .string()
+    .datetime({ offset: true })
+    .or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
+  gender: z.enum(["MALE", "FEMALE", "NON_BINARY", "OTHER"]),
+  location: z.string().max(120).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+});
+
 const googleMobileSchema = z.object({
   idToken: z.string().min(20),
 });
@@ -80,6 +98,22 @@ export const validateRequestLoginOtp = (
   next: NextFunction,
 ): void => {
   const result = requestLoginOtpSchema.safeParse(req.body);
+  if (!result.success) {
+    res
+      .status(400)
+      .json({ success: false, errors: result.error.flatten().fieldErrors });
+    return;
+  }
+  req.body = result.data;
+  next();
+};
+
+export const validateRegisterWithOtp = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  const result = registerWithOtpSchema.safeParse(req.body);
   if (!result.success) {
     res
       .status(400)

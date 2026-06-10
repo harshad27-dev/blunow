@@ -6,7 +6,13 @@ import type {
   RequestPasswordResetResponse,
   ResetPasswordPayload,
   AuthResponse,
+  EmailLoginPayload,
   GoogleLoginPayload,
+  RegisterWithOtpPayload,
+  RequestLoginOtpPayload,
+  RequestLoginOtpResponse,
+  RequestRegisterOtpPayload,
+  RequestRegisterOtpResponse,
 } from "@/types/auth.types";
 
 interface ApiWrapper<T> {
@@ -18,6 +24,44 @@ export const authService = {
   googleLogin: async (payload: GoogleLoginPayload): Promise<AuthResponse> => {
     const { data } = await api.post<ApiWrapper<AuthResponse>>(
       "/auth/google/mobile",
+      payload,
+    );
+    return data.data;
+  },
+
+  requestLoginOtp: async (
+    payload: RequestLoginOtpPayload,
+  ): Promise<RequestLoginOtpResponse> => {
+    const { data } = await api.post<ApiWrapper<RequestLoginOtpResponse>>(
+      "/auth/login/otp",
+      payload,
+    );
+    return data.data;
+  },
+
+  emailLogin: async (payload: EmailLoginPayload): Promise<AuthResponse> => {
+    const { data } = await api.post<ApiWrapper<AuthResponse>>(
+      "/auth/login",
+      payload,
+    );
+    return data.data;
+  },
+
+  requestRegisterOtp: async (
+    payload: RequestRegisterOtpPayload,
+  ): Promise<RequestRegisterOtpResponse> => {
+    const { data } = await api.post<ApiWrapper<RequestRegisterOtpResponse>>(
+      "/auth/register/otp",
+      payload,
+    );
+    return data.data;
+  },
+
+  registerWithOtp: async (
+    payload: RegisterWithOtpPayload,
+  ): Promise<AuthResponse> => {
+    const { data } = await api.post<ApiWrapper<AuthResponse>>(
+      "/auth/register/otp/verify",
       payload,
     );
     return data.data;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -22,6 +22,7 @@ import {
 import type { ChatConversation, ChatParticipant } from "@/types/chat.types";
 import { useAuthStore } from "@/store/authStore";
 import { Colors } from "@/constants/colors";
+import { useChatSocket } from "@/hooks/useSocket";
 
 type ConversationItem = {
   id: string;
@@ -159,6 +160,7 @@ export default function ChatListScreen() {
     refetch,
   } = useChatConversationsQuery();
   const deleteChatMutation = useDeleteChatMutation();
+  const socket = useChatSocket();
 
   const allItems = useMemo(
     () => conversations.map((chat) => normalizeConversation(chat, user?.id)),
@@ -194,6 +196,20 @@ export default function ChatListScreen() {
   );
   const hasSearch = searchQuery.trim().length > 0;
   const matchStories = activeItems.slice(0, 12);
+
+  useEffect(() => {
+    const refreshConversations = () => {
+      refetch();
+    };
+
+    socket.on("chat:message:new", refreshConversations);
+    socket.on("chat:read", refreshConversations);
+
+    return () => {
+      socket.off("chat:message:new", refreshConversations);
+      socket.off("chat:read", refreshConversations);
+    };
+  }, [refetch, socket]);
 
   const openConversation = (item: ConversationItem) => {
     router.push({
@@ -382,13 +398,13 @@ const MatchStories = ({
       showsHorizontalScrollIndicator={false}
       contentContainerClassName="pr-5"
     >
-      <TouchableOpacity className="mr-4 w-[76px]" activeOpacity={0.84}>
+      <TouchableOpacity className="mr-3 w-[64px]" activeOpacity={0.84}>
         <View
-          className="h-[76px] w-[76px] items-center justify-center rounded-full border border-primary-light bg-bg-card"
+          className="h-[64px] w-[64px] items-center justify-center rounded-full border border-primary-light bg-bg-card"
           style={CARD_SHADOW}
         >
-          <View className="h-[62px] w-[62px] items-center justify-center rounded-full bg-primary-light">
-            <Ionicons name="heart" size={24} color={Colors.white} />
+          <View className="h-[52px] w-[52px] items-center justify-center rounded-full bg-primary-light">
+            <Ionicons name="heart" size={21} color={Colors.white} />
           </View>
         </View>
         <Text
@@ -402,27 +418,27 @@ const MatchStories = ({
       {items.map((item) => (
         <TouchableOpacity
           key={item.id}
-          className="mr-4 w-[76px]"
+          className="mr-3 w-[64px]"
           onPress={() => onPress(item)}
           activeOpacity={0.84}
         >
           <View
-            className="h-[76px] w-[76px] items-center justify-center rounded-full border border-primary-light bg-bg-card"
+            className="h-[64px] w-[64px] items-center justify-center rounded-full border border-primary-light bg-bg-card"
             style={CARD_SHADOW}
           >
             {item.avatarUrl ? (
               <Image
                 source={{ uri: item.avatarUrl }}
-                className="h-[66px] w-[66px] rounded-full bg-bg-elevated"
+                className="h-[56px] w-[56px] rounded-full bg-bg-elevated"
               />
             ) : (
-              <View className="h-[66px] w-[66px] items-center justify-center rounded-full bg-primary-light">
-                <Text className="text-lg font-extrabold text-inverse">
+              <View className="h-[56px] w-[56px] items-center justify-center rounded-full bg-primary-light">
+                <Text className="text-base font-extrabold text-inverse">
                   {getInitials(item.name)}
                 </Text>
               </View>
             )}
-            <View className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-bg-card bg-success" />
+            <View className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-bg-card bg-success" />
           </View>
           <Text
             className="mt-2 text-center text-xs font-bold text-text-secondary"

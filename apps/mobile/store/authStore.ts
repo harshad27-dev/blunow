@@ -4,9 +4,15 @@ import { storage } from "@/utils/storage";
 import { Config } from "@/constants/config";
 import type {
   AuthUser,
+  EmailLoginPayload,
   GoogleLoginPayload,
+  RegisterWithOtpPayload,
+  RequestLoginOtpPayload,
+  RequestLoginOtpResponse,
   RequestPasswordResetPayload,
   RequestPasswordResetResponse,
+  RequestRegisterOtpPayload,
+  RequestRegisterOtpResponse,
   ResetPasswordPayload,
 } from "@/types/auth.types";
 
@@ -17,6 +23,14 @@ interface AuthState {
   isLoading: boolean;
 
   // Actions
+  requestLoginOtp: (
+    payload: RequestLoginOtpPayload,
+  ) => Promise<RequestLoginOtpResponse>;
+  emailLogin: (payload: EmailLoginPayload) => Promise<void>;
+  requestRegisterOtp: (
+    payload: RequestRegisterOtpPayload,
+  ) => Promise<RequestRegisterOtpResponse>;
+  registerWithOtp: (payload: RegisterWithOtpPayload) => Promise<void>;
   requestPasswordReset: (
     payload: RequestPasswordResetPayload,
   ) => Promise<RequestPasswordResetResponse>;
@@ -34,6 +48,34 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
 
+  requestLoginOtp: async (payload) => {
+    return authService.requestLoginOtp(payload);
+  },
+
+  emailLogin: async (payload) => {
+    const response = await authService.emailLogin(payload);
+    await persistAuthResponse(response);
+    set({
+      user: response.user,
+      token: response.accessToken,
+      isAuthenticated: true,
+    });
+  },
+
+  requestRegisterOtp: async (payload) => {
+    return authService.requestRegisterOtp(payload);
+  },
+
+  registerWithOtp: async (payload) => {
+    const response = await authService.registerWithOtp(payload);
+    await persistAuthResponse(response);
+    set({
+      user: response.user,
+      token: response.accessToken,
+      isAuthenticated: true,
+    });
+  },
+
   requestPasswordReset: async (payload) => {
     return authService.requestPasswordReset(payload);
   },
@@ -44,10 +86,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   googleLogin: async (payload) => {
     const response = await authService.googleLogin(payload);
-    await storage.set(Config.TOKEN_KEY, response.accessToken);
-    if (response.refreshToken) {
-      await storage.set(Config.REFRESH_TOKEN_KEY, response.refreshToken);
-    }
+    await persistAuthResponse(response);
     set({
       user: response.user,
       token: response.accessToken,
@@ -110,3 +149,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user, isAuthenticated: true });
   },
 }));
+
+const persistAuthResponse = async (response: {
+  accessToken: string;
+  refreshToken?: string;
+}) => {
+  await storage.set(Config.TOKEN_KEY, response.accessToken);
+  if (response.refreshToken) {
+    await storage.set(Config.REFRESH_TOKEN_KEY, response.refreshToken);
+  }
+};

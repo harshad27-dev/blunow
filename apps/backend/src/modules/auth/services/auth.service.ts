@@ -97,6 +97,105 @@ export class AuthService {
     };
   }
 
+  async requestRegistrationOtp(dto: { email: string }) {
+    const existingUser = await this.authRepository.findByEmail(dto.email);
+
+    if (existingUser) {
+      throw new AppError("Email already in use", 409);
+    }
+
+    const otp = randomInt(100000, 1000000).toString();
+    const otpHash = await bcrypt.hash(otp, 12);
+    const expiresAt = new Date(Date.now() + this.otpExpiresInMs);
+
+    await this.authRepository.upsertLoginOtp({
+      email: dto.email,
+      otpHash,
+      expiresAt,
+    });
+
+    try {
+      await this.mailService.sendRegistrationOtp(dto.email, otp);
+    } catch (error) {
+      await this.authRepository.deleteLoginOtp(dto.email);
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[Registration OTP] Failed to send email:", error);
+      }
+      throw new AppError("Unable to send OTP email. Check SMTP settings.", 500);
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[Registration OTP] ${dto.email}: ${otp}`);
+    }
+
+    return {
+      message: "OTP sent. Check your email and enter the code below.",
+      ...(process.env.NODE_ENV !== "production" && { devOtp: otp }),
+    };
+  }
+
+  async registerWithOtp(dto: {
+    email: string;
+    otp: string;
+    username: string;
+    birthDate: string;
+    gender: string;
+    location?: string;
+    latitude?: number;
+    longitude?: number;
+  }) {
+    const existingUser = await this.authRepository.findByEmail(dto.email);
+    if (existingUser) {
+      throw new AppError("Email already in use", 409);
+    }
+
+    if (await this.authRepository.isUsernameTaken(dto.username)) {
+      throw new AppError("Username already in use", 409);
+    }
+
+    const registerOtp = await this.authRepository.findLoginOtpByEmail(dto.email);
+    if (!registerOtp || registerOtp.expiresAt.getTime() < Date.now()) {
+      await this.authRepository.deleteLoginOtp(dto.email);
+      throw new AppError("OTP expired. Please request a new one.", 401);
+    }
+
+    if (registerOtp.attempts >= this.maxOtpAttempts) {
+      await this.authRepository.deleteLoginOtp(dto.email);
+      throw new AppError(
+        "Too many OTP attempts. Please request a new one.",
+        429,
+      );
+    }
+
+    const isOtpValid = await bcrypt.compare(dto.otp, registerOtp.otpHash);
+    if (!isOtpValid) {
+      await this.authRepository.incrementLoginOtpAttempts(dto.email);
+      throw new AppError("Invalid OTP", 401);
+    }
+
+    await this.authRepository.deleteLoginOtp(dto.email);
+
+    const user = await this.authRepository.createUser({
+      email: dto.email,
+      username: dto.username,
+      birthDate: new Date(dto.birthDate),
+      gender: dto.gender as any,
+      location: dto.location,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      isVerified: true,
+    });
+
+    const tokens = await this.tokenService.generateTokens(user);
+
+    eventBus.emit(EVENTS.AUTH.USER_REGISTERED, {
+      userId: user.id,
+      email: user.email,
+    });
+
+    return { user: this.sanitizeUser(user), ...tokens };
+  }
+
   async requestPasswordReset(dto: { email: string }) {
     const user = await this.authRepository.findByEmail(dto.email);
 

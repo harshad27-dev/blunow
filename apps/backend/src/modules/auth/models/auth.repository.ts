@@ -3,18 +3,20 @@ import { prisma } from "../../../prisma/prisma";
 export class AuthRepository {
   async createUser(data: {
     email: string;
-    passwordHash: string;
+    passwordHash?: string;
     username: string;
     birthDate: Date;
     gender: any;
     location?: string;
     latitude?: number;
     longitude?: number;
+    isVerified?: boolean;
   }) {
     return prisma.user.create({
       data: {
         email: data.email,
         passwordHash: data.passwordHash,
+        isVerified: data.isVerified,
         profile: {
           create: {
             username: data.username,

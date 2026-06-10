@@ -27,8 +27,8 @@ export class StoriesRepository {
   async findActiveStories(userId: string) {
     return prisma.story.findMany({
       where: {
+        isDeleted: false,
         expiresAt: { gt: new Date() },
-        authorId: { not: userId },
       },
       include: {
         author: { include: { profile: { select: { username: true, avatarUrl: true } } } },

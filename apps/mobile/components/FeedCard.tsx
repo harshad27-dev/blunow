@@ -177,7 +177,7 @@ export default function FeedCard({
 
       <View className="px-5 pb-4 pt-4">
         {hasImage && (
-          <Text className="text-[15px] leading-6 text-text-secondary">
+          <Text className="text-base leading-6 text-text-secondary">
             <Text className="font-extrabold text-text-primary">
               {displayName}{" "}
             </Text>
@@ -216,7 +216,6 @@ export default function FeedCard({
         </View>
       </View>
 
-      <View className="mx-4 mb-4 h-px bg-border" />
 
       <View className="flex-row items-center justify-between px-4 pb-4">
         <View className="flex-row items-center">
@@ -224,63 +223,62 @@ export default function FeedCard({
             activeOpacity={0.75}
             onPress={() => onLikePress?.(post.id, post.isLiked)}
             className={`mr-2 flex-row items-center rounded-full px-4 py-3 ${
-              post.isLiked ? "bg-primary" : "bg-bg-elevated"
+              post.isLiked ? "border border-primary-light bg-primary-light" : "border border-border bg-bg-elevated"
             }`}
           >
             <Ionicons
               name={post.isLiked ? "heart" : "heart-outline"}
               size={18}
-              color={post.isLiked ? Colors.white : Colors.textPrimary}
+              color={post.isLiked ? Colors.textInverse : Colors.textSecondary}
             />
-            <Text
-              className={`ml-2 text-sm font-extrabold ${
-                post.isLiked ? "text-white" : "text-text-primary"
-              }`}
-            >
-              {post.likesCount}
-            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.75}
             onPress={() => onCommentPress?.(post.id)}
-            className="flex-row items-center rounded-full bg-bg-elevated px-4 py-3"
+            className="flex-row items-center rounded-full border border-border bg-bg-elevated px-4 py-3"
           >
             <Ionicons
               name="chatbubble-outline"
               size={18}
-              color={Colors.textPrimary}
+              color={Colors.textSecondary}
             />
-            <Text className="ml-2 text-sm font-extrabold text-text-primary">
-              {post.commentsCount}
-            </Text>
+    
           </TouchableOpacity>
         </View>
 
         <View className="flex-row items-center">
           <TouchableOpacity
             activeOpacity={0.75}
-            className="mr-2 h-11 w-11 items-center justify-center rounded-full bg-bg-elevated"
+            className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-elevated"
           >
             <Ionicons
               name="paper-plane-outline"
               size={18}
-              color={Colors.textPrimary}
+              color={Colors.textSecondary}
             />
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.75}
             onPress={() => onSavePress?.(post.id, post.isSaved)}
-            className="h-11 w-11 items-center justify-center rounded-full bg-bg-elevated"
+            className={`h-11 w-11 items-center justify-center rounded-full ${
+              post.isSaved
+                ? "border border-primary-light bg-primary-light"
+                : "border border-border bg-bg-elevated"
+            }`}
           >
             <Ionicons
               name={post.isSaved ? "bookmark" : "bookmark-outline"}
               size={18}
-              color={Colors.textPrimary}
+              color={post.isSaved ? Colors.textPrimary : Colors.textSecondary}
             />
           </TouchableOpacity>
         </View>
+
+        
       </View>
+            <View className="mx-4 mb-4 h-px bg-border" />
+
     </View>
   );
 }

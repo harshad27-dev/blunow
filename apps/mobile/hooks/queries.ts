@@ -189,6 +189,7 @@ export const useStoriesQuery = () => {
 
       return response.data.map((story: any) => ({
         id: story.id,
+        authorId: story.authorId || story.author?.id,
         name:
           story.author?.profile?.username ||
           story.author?.username ||

@@ -4,6 +4,7 @@ import {
   Alert,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -22,6 +23,9 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/authStore";
 import { matchService } from "@/services/match.service";
+import { Colors } from "@/constants/colors";
+import { FontFamily, FontSize } from "@/constants/typography";
+import { Radius, Spacing } from "@/constants/spacing";
 
 const calculateAge = (birthDateString?: string | null) => {
   if (!birthDateString) return 0;
@@ -206,38 +210,40 @@ export default function UserDetailScreen() {
 
   if (profileLoading && !refreshing) {
     return (
-      <SafeAreaView className="flex-1 bg-[#050505] items-center justify-center">
-        <ActivityIndicator color="#FFFFFF" size="large" />
+      <SafeAreaView style={styles.emptyState}>
+        <ActivityIndicator color={Colors.primary} size="large" />
       </SafeAreaView>
     );
   }
 
   if (!userProfile) {
     return (
-      <SafeAreaView className="flex-1 bg-[#050505] items-center justify-center px-5">
-        <Text className="text-[#888888] font-medium text-lg mb-5">
-          User not found
+      <SafeAreaView style={styles.emptyState}>
+        <View style={styles.emptyIcon}>
+          <Ionicons name="person-circle-outline" size={42} color={Colors.textMuted} />
+        </View>
+        <Text style={styles.emptyTitle}>User not found</Text>
+        <Text style={styles.emptySubtitle}>
+          This profile may have moved or is no longer available.
         </Text>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="bg-[#111] px-6 py-3 rounded-full border border-[#222]"
-        >
-          <Text className="text-[#F5F5F5] font-semibold text-sm">Go Back</Text>
+        <TouchableOpacity style={styles.emptyButton} onPress={() => router.back()}>
+          <Text style={styles.emptyButtonText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#050505]">
+    <SafeAreaView style={styles.screen} edges={[]}>
       <ScrollView
-        className="flex-1"
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#FFFFFF"
+            tintColor={Colors.primary}
           />
         }
       >
@@ -254,7 +260,7 @@ export default function UserDetailScreen() {
         />
 
         {/* Stats Section */}
-        <View className="mt-2">
+        <View style={styles.statsWrap}>
           <ProfileStats
             postsCount={stats?.postsCount || 0}
             followersCount={stats?.followers || 0}
@@ -263,45 +269,56 @@ export default function UserDetailScreen() {
         </View>
 
         {/* About & Info Section */}
-        <View className="px-5 mt-6">
-          <View className="bg-[#111] p-5 rounded-2xl border border-[#222]">
-            <Text className="text-[#F5F5F5] font-bold text-lg mb-4">About</Text>
+        <View style={styles.sectionWrap}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>About</Text>
 
-            <View className="flex-row items-center mb-3">
-              <View className="w-8 items-center">
-                <Ionicons name="calendar-outline" size={18} color="#888" />
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
               </View>
-              <Text className="text-[#888888] text-sm ml-2">
-                Age:{" "}
-                <Text className="text-[#F5F5F5] font-medium">
-                  {calculateAge(userProfile.profile?.birthDate)}
+              <View style={styles.infoBody}>
+                <Text style={styles.infoLabel}>Age</Text>
+                <Text style={styles.infoValue}>
+                  {calculateAge(userProfile.profile?.birthDate) || "Not specified"}
                 </Text>
-              </Text>
+              </View>
             </View>
 
-            <View className="flex-row items-center mb-3">
-              <View className="w-8 items-center">
-                <Ionicons name="location-outline" size={18} color="#888" />
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <Ionicons
+                  name="location-outline"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
               </View>
-              <Text className="text-[#888888] text-sm ml-2">
-                Location:{" "}
-                <Text className="text-[#F5F5F3] font-medium">
+              <View style={styles.infoBody}>
+                <Text style={styles.infoLabel}>Location</Text>
+                <Text style={styles.infoValue}>
                   {userProfile.profile?.location || "Not specified"}
                 </Text>
-              </Text>
+              </View>
             </View>
 
-            <View className="flex-row items-start">
-              <View className="w-8 items-center mt-0.5">
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
                 <Ionicons
                   name="information-circle-outline"
                   size={18}
-                  color="#888"
+                  color={Colors.textSecondary}
                 />
               </View>
-              <Text className="flex-1 text-[#888888] text-sm ml-2 leading-5">
-                {userProfile.profile?.bio || "No bio provided."}
-              </Text>
+              <View style={styles.infoBody}>
+                <Text style={styles.infoLabel}>Bio</Text>
+                <Text style={styles.bioText}>
+                  {userProfile.profile?.bio || "No bio provided."}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -309,19 +326,17 @@ export default function UserDetailScreen() {
         {/* Interests Section */}
         {userProfile.profile?.interests &&
           userProfile.profile.interests.length > 0 && (
-            <View className="px-5 mt-4">
-              <View className="bg-[#111] p-5 rounded-2xl border border-[#222]">
-                <Text className="text-[#F5F5F5] font-bold text-lg mb-4">
-                  Interests
-                </Text>
-                <View className="flex-row flex-wrap">
+            <View style={styles.sectionWrap}>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Interests</Text>
+                <View style={styles.chipRow}>
                   {userProfile.profile.interests.map(
                     (interest: string, index: number) => (
                       <View
                         key={`${interest}-${index}`}
-                        className="bg-[#050505] px-4 py-2 rounded-xl mr-2 mb-2 border border-[#222]"
+                        style={styles.interestChip}
                       >
-                        <Text className="text-[#F5F5F5] font-medium text-xs">
+                        <Text style={styles.interestText}>
                           #{interest}
                         </Text>
                       </View>
@@ -334,59 +349,253 @@ export default function UserDetailScreen() {
 
         {/* Action Buttons (Sticky-like feel but in scroll) */}
         {!isOwnProfile && (
-          <View className="flex-row px-5 mt-6 gap-3">
+          <View style={styles.actionRow}>
             <TouchableOpacity
-              className="flex-1 bg-[#F5F5F5] h-14 rounded-2xl items-center justify-center flex-row"
+              style={[styles.primaryAction, !!actionLoading && styles.disabledAction]}
               onPress={handleConnect}
               disabled={!!actionLoading}
               activeOpacity={0.84}
             >
               {actionLoading === "connect" ? (
-                <ActivityIndicator color="#050505" size="small" />
+                <ActivityIndicator color={Colors.textInverse} size="small" />
               ) : (
                 <>
-                  <Ionicons name="heart" size={20} color="#050505" />
-                  <Text className="text-[#050505] font-bold text-base ml-2">
-                    Connect
-                  </Text>
+                  <Ionicons name="heart" size={20} color={Colors.textInverse} />
+                  <Text style={styles.primaryActionText}>Connect</Text>
                 </>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              className="w-14 h-14 bg-[#111] rounded-2xl items-center justify-center border border-[#222]"
+              style={[styles.secondaryAction, !!actionLoading && styles.disabledAction]}
               onPress={handleMessage}
               disabled={!!actionLoading}
               activeOpacity={0.84}
             >
               {actionLoading === "message" ? (
-                <ActivityIndicator color="#F5F5F5" size="small" />
+                <ActivityIndicator color={Colors.textPrimary} size="small" />
               ) : (
-                <Ionicons name="chatbubble-outline" size={24} color="#F5F5F5" />
+                <Ionicons
+                  name="chatbubble-outline"
+                  size={24}
+                  color={Colors.textPrimary}
+                />
               )}
             </TouchableOpacity>
           </View>
         )}
 
         {/* Tabs / Post Section */}
-        <View className="mt-8 px-5 border-b border-[#222]">
-          <View className="pb-3 border-b-2 border-[#F5F5F5] self-start px-2">
-            <Text className="text-[#F5F5F5] font-bold text-base">Posts</Text>
+        <View style={styles.tabsWrap}>
+          <View style={styles.activeTab}>
+            <Text style={styles.activeTabText}>Posts</Text>
           </View>
         </View>
 
-        <View className="flex-1">
+        <View style={styles.postsWrap}>
           {postsLoading && !refreshing ? (
-            <View className="py-20 items-center">
-              <ActivityIndicator color="#F5F5F5" size="small" />
+            <View style={styles.postsLoading}>
+              <ActivityIndicator color={Colors.primary} size="small" />
             </View>
           ) : (
             <ProfilePostGrid posts={posts || []} onPostPress={openPost} />
           )}
         </View>
 
-        <View className="h-10" />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: Colors.bg,
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: Spacing.xl,
+  },
+  statsWrap: {
+    marginTop: Spacing.sm,
+  },
+  sectionWrap: {
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md + 4,
+  },
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    padding: Spacing.md,
+  },
+  cardTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.lg,
+    marginBottom: Spacing.md,
+  },
+  infoRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    paddingVertical: Spacing.sm,
+  },
+  infoIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: Radius.full,
+    height: 38,
+    justifyContent: "center",
+    marginRight: Spacing.md,
+    width: 38,
+  },
+  infoBody: {
+    flex: 1,
+  },
+  infoLabel: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.xs,
+    textTransform: "uppercase",
+  },
+  infoValue: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.base,
+    marginTop: 2,
+  },
+  bioText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    marginTop: 3,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  interestChip: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  interestText: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.xs,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: Spacing.sm + 4,
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.md + 4,
+  },
+  primaryAction: {
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    flex: 1,
+    flexDirection: "row",
+    height: 56,
+    justifyContent: "center",
+  },
+  primaryActionText: {
+    color: Colors.textInverse,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.base,
+    marginLeft: Spacing.sm,
+  },
+  secondaryAction: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    height: 56,
+    justifyContent: "center",
+    width: 56,
+  },
+  disabledAction: {
+    opacity: 0.62,
+  },
+  tabsWrap: {
+    borderBottomColor: Colors.border,
+    borderBottomWidth: 1,
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.md + 4,
+  },
+  activeTab: {
+    alignSelf: "flex-start",
+    borderBottomColor: Colors.textPrimary,
+    borderBottomWidth: 2,
+    paddingBottom: Spacing.sm + 4,
+    paddingHorizontal: Spacing.sm,
+  },
+  activeTabText: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.base,
+  },
+  postsWrap: {
+    flex: 1,
+  },
+  postsLoading: {
+    alignItems: "center",
+    paddingVertical: 80,
+  },
+  bottomSpacer: {
+    height: 40,
+  },
+  emptyState: {
+    alignItems: "center",
+    backgroundColor: Colors.bg,
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.lg,
+  },
+  emptyIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    height: 82,
+    justifyContent: "center",
+    marginBottom: Spacing.md,
+    width: 82,
+  },
+  emptyTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xl,
+    marginBottom: Spacing.xs,
+  },
+  emptySubtitle: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    marginBottom: Spacing.lg,
+    textAlign: "center",
+  },
+  emptyButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm + 4,
+  },
+  emptyButtonText: {
+    color: Colors.textInverse,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+  },
+});

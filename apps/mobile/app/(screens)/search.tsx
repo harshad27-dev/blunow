@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
+  Alert,
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
-  Alert
+  StyleSheet,
+  View, 
+  Text, 
+  TouchableOpacity, 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/common/Input';
 import { DiscoverUserCard } from '@/components/discover/DiscoverUserCard';
+import { Colors } from '@/constants/colors';
+import { FontFamily, FontSize } from '@/constants/typography';
+import { Radius, Spacing } from '@/constants/spacing';
 import {
   useSearchQuery,
   useSendMatchRequestMutation,
@@ -114,54 +118,71 @@ export default function SearchScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#050505]">
+    <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+        style={styles.keyboard}
       >
-        {/* Header */}
-        <View className="flex-row items-center px-5 pt-2 pb-1">
+        <View style={styles.header}>
           <TouchableOpacity 
-            className="w-11 h-11 rounded-full bg-[#111] items-center justify-center mr-3 border border-[#222]" 
+            style={styles.backButton}
             onPress={() => router.back()}
+            activeOpacity={0.82}
           >
-            <Ionicons name="arrow-back" size={24} color="#F5F5F5" />
+            <Ionicons name="arrow-back" size={23} color={Colors.textPrimary} />
           </TouchableOpacity>
           
-          <View className="flex-1">
+          <View style={styles.searchBox}>
             <Input
               value={searchQuery}
               onChangeText={runSearch}
               placeholder="Search people or interests..."
               autoFocus
-              icon={<Ionicons name="search" size={20} color="#FFFFFF" />}
+              icon={<Ionicons name="search" size={20} color={Colors.textSecondary} />}
               containerStyle={{ marginBottom: 0 }}
             />
           </View>
         </View>
 
-        <View className="flex-1 px-5 mt-5">
+        <View style={styles.content}>
           {searchQuery.length < 2 ? (
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.suggestionsContent}
+            >
               {recentSearches.length ? (
-                <View className="mb-8">
-                <View className="flex-row justify-between items-center mb-4">
-                  <Text className="text-[#F5F5F3] font-bold text-lg">Recent</Text>
-                  <TouchableOpacity onPress={() => setRecentSearches([])}>
-                    <Text className="text-[#888888] font-medium text-sm">Clear all</Text>
+                <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Recent</Text>
+                  <TouchableOpacity onPress={() => setRecentSearches([])} activeOpacity={0.8}>
+                    <Text style={styles.clearText}>Clear all</Text>
                   </TouchableOpacity>
                 </View>
-                <View>
+                <View style={styles.recentList}>
                   {recentSearches.map((item, index) => (
                     <TouchableOpacity 
                       key={index} 
-                      className="flex-row items-center py-3 border-b border-[#222]"
+                      style={[
+                        styles.recentItem,
+                        index === recentSearches.length - 1 && styles.recentItemLast,
+                      ]}
                       onPress={() => setSearchQuery(item)}
+                      activeOpacity={0.82}
                     >
-                      <Ionicons name="time-outline" size={18} color="#444" />
-                      <Text className="flex-1 text-[#888888] font-normal text-base ml-3">{item}</Text>
-                      <TouchableOpacity className="p-1">
-                        <Ionicons name="close" size={16} color="#444" />
+                      <View style={styles.recentIcon}>
+                        <Ionicons name="time-outline" size={17} color={Colors.textSecondary} />
+                      </View>
+                      <Text style={styles.recentText}>{item}</Text>
+                      <TouchableOpacity
+                        style={styles.removeRecentButton}
+                        onPress={() =>
+                          setRecentSearches((current) =>
+                            current.filter((_, itemIndex) => itemIndex !== index),
+                          )
+                        }
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="close" size={16} color={Colors.textMuted} />
                       </TouchableOpacity>
                     </TouchableOpacity>
                   ))}
@@ -169,18 +190,19 @@ export default function SearchScreen() {
                 </View>
               ) : null}
 
-              {/* Trending Topics */}
               {trendingTopics.length ? (
-                <View className="mb-8">
-                <Text className="text-[#F5F5F3] font-bold text-lg mb-4">Trending</Text>
-                <View className="flex-row flex-wrap">
+                <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Trending</Text>
+                <View style={styles.topicRow}>
                   {trendingTopics.map((topic, index) => (
                     <TouchableOpacity 
                       key={index} 
-                      className="bg-[#111] px-4 py-2.5 rounded-full mr-2.5 mb-2.5 border border-[#222]"
+                      style={styles.topicChip}
                       onPress={() => setSearchQuery(topic)}
+                      activeOpacity={0.82}
                     >
-                      <Text className="text-[#F5F5F3] font-medium text-sm">#{topic}</Text>
+                      <Ionicons name="trending-up" size={14} color={Colors.textSecondary} />
+                      <Text style={styles.topicText}>#{topic}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -188,11 +210,11 @@ export default function SearchScreen() {
               ) : null}
             </ScrollView>
           ) : (
-            <View className="flex-1">
+            <View style={styles.results}>
               {isLoading ? (
-                <View className="flex-1 items-center justify-center pt-20">
-                  <ActivityIndicator size="large" color="#FFFFFF" />
-                  <Text className="text-[#888888] font-medium text-base mt-4 text-center">
+                <View style={styles.stateWrap}>
+                  <ActivityIndicator size="large" color={Colors.primary} />
+                  <Text style={styles.stateText}>
                     {`Searching for "${searchQuery}"...`}
                   </Text>
                 </View>
@@ -202,7 +224,7 @@ export default function SearchScreen() {
                   keyExtractor={(item) => item.id}
                   showsVerticalScrollIndicator={false}
                   renderItem={({ item }) => (
-                    <View className="mb-5 -mx-5 items-center">
+                    <View style={styles.resultCardWrap}>
                       <DiscoverUserCard 
                         user={item} 
                         onPress={() => router.push(`/(screens)/user/${item.id}`)}
@@ -212,14 +234,17 @@ export default function SearchScreen() {
                     </View>
                   )}
                   ListEmptyComponent={() => (
-                    <View className="flex-1 items-center justify-center pt-20">
-                      <Ionicons name="search-outline" size={48} color="#444" />
-                      <Text className="text-[#444] font-medium text-base mt-4 text-center">
+                    <View style={styles.stateWrap}>
+                      <View style={styles.emptyIcon}>
+                        <Ionicons name="search-outline" size={34} color={Colors.textMuted} />
+                      </View>
+                      <Text style={styles.stateTitle}>No results</Text>
+                      <Text style={styles.stateText}>
                         {`No results found for "${searchQuery}"`}
                       </Text>
                     </View>
                   )}
-                  contentContainerStyle={{ paddingBottom: 40 }}
+                  contentContainerStyle={styles.resultsContent}
                 />
               )}
             </View>
@@ -229,3 +254,165 @@ export default function SearchScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: Colors.bg,
+    flex: 1,
+  },
+  keyboard: {
+    flex: 1,
+  },
+  header: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingBottom: Spacing.xs,
+    paddingHorizontal: Spacing.md + 4,
+    paddingTop: Spacing.sm,
+  },
+  backButton: {
+    alignItems: 'center',
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    marginRight: Spacing.sm + 4,
+    width: 44,
+  },
+  searchBox: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: Spacing.md + 4,
+    paddingTop: Spacing.md,
+  },
+  suggestionsContent: {
+    paddingBottom: Spacing.xl,
+  },
+  section: {
+    marginBottom: Spacing.xl,
+  },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+  },
+  sectionTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.lg,
+    marginBottom: Spacing.md,
+  },
+  clearText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.sm,
+  },
+  recentList: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  recentItem: {
+    alignItems: 'center',
+    borderBottomColor: Colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    minHeight: 54,
+    paddingHorizontal: Spacing.md,
+  },
+  recentItemLast: {
+    borderBottomWidth: 0,
+  },
+  recentIcon: {
+    alignItems: 'center',
+    backgroundColor: Colors.bgElevated,
+    borderRadius: Radius.full,
+    height: 32,
+    justifyContent: 'center',
+    marginRight: Spacing.sm + 4,
+    width: 32,
+  },
+  recentText: {
+    color: Colors.textPrimary,
+    flex: 1,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.base,
+  },
+  removeRecentButton: {
+    alignItems: 'center',
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  topicRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  topicChip: {
+    alignItems: 'center',
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+  },
+  topicText: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.sm,
+    marginLeft: Spacing.xs,
+  },
+  results: {
+    flex: 1,
+  },
+  resultsContent: {
+    paddingBottom: Spacing.xl,
+  },
+  resultCardWrap: {
+    alignItems: 'center',
+    marginBottom: Spacing.md + 4,
+    marginHorizontal: -(Spacing.md + 4),
+  },
+  stateWrap: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 80,
+  },
+  emptyIcon: {
+    alignItems: 'center',
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    height: 76,
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+    width: 76,
+  },
+  stateTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.lg,
+    marginBottom: Spacing.xs,
+  },
+  stateText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.base,
+    lineHeight: 22,
+    marginTop: Spacing.md,
+    textAlign: 'center',
+  },
+});

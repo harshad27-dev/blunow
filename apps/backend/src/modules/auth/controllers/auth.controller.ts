@@ -41,6 +41,24 @@ export class AuthController {
     }
   };
 
+  requestRegistrationOtp = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.authService.requestRegistrationOtp(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
+  registerWithOtp = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.authService.registerWithOtp(req.body);
+      res.status(201).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
   requestPasswordReset = async (req: Request, res: Response): Promise<void> => {
     try {
       const result = await this.authService.requestPasswordReset(req.body);

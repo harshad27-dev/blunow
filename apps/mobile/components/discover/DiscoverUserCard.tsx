@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'rea
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import { Radius, Spacing } from '@/constants/spacing';
 import { FontFamily, FontSize } from '@/constants/typography';
 
 const { width } = Dimensions.get('window');
@@ -69,7 +70,7 @@ export const DiscoverUserCard: React.FC<DiscoverUserCardProps> = ({
         ) : null}
         {typeof user.matchScore === 'number' ? (
           <View style={styles.matchBadge}>
-            <Ionicons name="sparkles" size={11} color={Colors.black} />
+            <Ionicons name="sparkles" size={11} color={Colors.textPrimary} />
             <Text style={styles.matchText}>{user.matchScore}%</Text>
           </View>
         ) : null}
@@ -84,7 +85,7 @@ export const DiscoverUserCard: React.FC<DiscoverUserCardProps> = ({
               </Text>
               {user.isVerified ? (
                 <View style={styles.verifiedBadge}>
-                  <Ionicons name="checkmark" size={11} color={Colors.black} />
+                  <Ionicons name="checkmark" size={11} color={Colors.textInverse} />
                 </View>
               ) : null}
             </View>
@@ -150,7 +151,7 @@ export const DiscoverUserCard: React.FC<DiscoverUserCardProps> = ({
               onConnectPress?.();
             }}
           >
-            <Ionicons name={actionIcon} size={18} color={Colors.black} />
+            <Ionicons name={actionIcon} size={18} color={Colors.textInverse} />
             <Text style={styles.connectText}>{actionLabel}</Text>
           </TouchableOpacity>
         </View>
@@ -164,22 +165,22 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
-    borderRadius: 24,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     flexDirection: 'row',
-    marginBottom: 16,
-    marginHorizontal: 20,
-    minHeight: 176,
+    marginBottom: Spacing.md,
+    marginHorizontal: Spacing.md + 4,
+    minHeight: 170,
     overflow: 'hidden',
-    padding: 10,
+    padding: Spacing.sm,
     width: CARD_WIDTH,
   },
   avatarFrame: {
     backgroundColor: Colors.bgElevated,
-    borderRadius: 20,
-    height: 156,
+    borderRadius: Radius.lg,
+    height: 154,
     overflow: 'hidden',
-    width: 112,
+    width: 116,
   },
   image: {
     height: '100%',
@@ -210,35 +211,37 @@ const styles = StyleSheet.create({
   },
   activeBadge: {
     alignItems: 'center',
-    backgroundColor: Colors.overlayDark,
-    borderColor: Colors.overlayLightSoft,
-    borderRadius: 14,
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
     borderWidth: 1,
-    bottom: 8,
+    bottom: Spacing.sm,
     flexDirection: 'row',
-    left: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    left: Spacing.sm,
+    paddingHorizontal: Spacing.sm + 1,
+    paddingVertical: Spacing.xs + 1,
     position: 'absolute',
   },
   activeText: {
-    color: Colors.textPrimary,
+    color: Colors.success,
     fontFamily: FontFamily.semiBold,
     fontSize: FontSize.xs,
   },
   matchBadge: {
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 13,
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    borderWidth: 1,
     flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs + 1,
     position: 'absolute',
-    right: 8,
-    top: 8,
+    right: Spacing.sm,
+    top: Spacing.sm,
   },
   matchText: {
-    color: Colors.black,
+    color: Colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.xs,
     marginLeft: 4,
@@ -246,9 +249,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingBottom: 2,
-    paddingLeft: 14,
-    paddingTop: 2,
+    paddingBottom: Spacing.xs,
+    paddingLeft: Spacing.md,
+    paddingTop: Spacing.xs,
   },
   headerRow: {
     alignItems: 'flex-start',
@@ -256,7 +259,7 @@ const styles = StyleSheet.create({
   },
   titleBlock: {
     flex: 1,
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   nameRow: {
     alignItems: 'center',
@@ -266,36 +269,36 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     flex: 1,
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.md,
+    fontSize: FontSize.lg,
     letterSpacing: 0,
     textTransform: 'capitalize',
   },
   verifiedBadge: {
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 9,
-    height: 18,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.full,
+    height: 20,
     justifyContent: 'center',
-    marginLeft: 6,
-    width: 18,
+    marginLeft: Spacing.xs + 2,
+    width: 20,
   },
   metaRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    marginTop: 6,
+    marginTop: Spacing.xs + 2,
   },
   distanceText: {
     color: Colors.textSecondary,
     flex: 1,
     fontFamily: FontFamily.medium,
     fontSize: FontSize.xs,
-    marginLeft: 5,
+    marginLeft: Spacing.xs + 1,
   },
   iconAction: {
     alignItems: 'center',
     backgroundColor: Colors.bgElevated,
     borderColor: Colors.border,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     borderWidth: 1,
     height: 36,
     justifyContent: 'center',
@@ -306,21 +309,21 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
     lineHeight: 20,
-    marginTop: 10,
+    marginTop: Spacing.sm,
   },
   interestsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
+    gap: Spacing.xs + 2,
+    marginTop: Spacing.sm + 2,
   },
   interestTag: {
     backgroundColor: Colors.bgElevated,
     borderColor: Colors.border,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.xs + 1,
   },
   interestText: {
     color: Colors.textPrimary,
@@ -328,27 +331,27 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
   },
   moreTag: {
-    backgroundColor: Colors.bgInput,
-    borderRadius: 12,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.xs + 1,
   },
   moreText: {
-    color: Colors.onImageMuted,
+    color: Colors.textPrimary,
     fontFamily: FontFamily.semiBold,
     fontSize: FontSize.xs,
   },
   actions: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
   },
   messageButton: {
     alignItems: 'center',
     backgroundColor: Colors.bgElevated,
     borderColor: Colors.border,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     borderWidth: 1,
     height: 40,
     justifyContent: 'center',
@@ -356,18 +359,18 @@ const styles = StyleSheet.create({
   },
   connectButton: {
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 20,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.full,
     flex: 1,
     flexDirection: 'row',
     height: 40,
     justifyContent: 'center',
   },
   connectedButton: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.success,
   },
   connectText: {
-    color: Colors.black,
+    color: Colors.textInverse,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.base,
     marginLeft: 8,

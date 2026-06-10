@@ -5,6 +5,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -15,6 +16,9 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { useCreateStoryMutation } from "@/hooks/queries";
+import { Colors } from "@/constants/colors";
+import { FontFamily, FontSize } from "@/constants/typography";
+import { Radius, Spacing } from "@/constants/spacing";
 
 export default function CreateStoryScreen() {
   const router = useRouter();
@@ -94,37 +98,38 @@ export default function CreateStoryScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-[#050505]"
-      style={{ paddingTop: insets.top }}
+      style={[styles.screen, { paddingTop: insets.top }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View className="flex-row items-center justify-between px-5 py-4">
+      <View style={styles.header}>
         <TouchableOpacity
-          className="h-10 w-10 items-center justify-center rounded-full border border-[#222222] bg-[#111111]"
+          style={styles.iconButton}
           onPress={() => router.back()}
           disabled={isLoading}
           activeOpacity={0.78}
         >
-          <Ionicons name="close" size={23} color="#FFFFFF" />
+          <Ionicons name="close" size={23} color={Colors.textPrimary} />
         </TouchableOpacity>
 
-        <Text className="text-lg font-extrabold text-white">Create Story</Text>
+        <Text style={styles.headerTitle}>Create Story</Text>
 
         <TouchableOpacity
-          className={`h-10 rounded-full px-5 items-center justify-center ${
-            imageUri && !isLoading ? "bg-white" : "bg-[#151515]"
-          }`}
+          style={[
+            styles.shareButton,
+            (!imageUri || isLoading) && styles.shareButtonDisabled,
+          ]}
           onPress={publishStory}
           disabled={!imageUri || isLoading}
           activeOpacity={0.82}
         >
           {isLoading ? (
-            <ActivityIndicator color="#000000" />
+            <ActivityIndicator color={Colors.textInverse} />
           ) : (
             <Text
-              className={`text-sm font-extrabold ${
-                imageUri ? "text-black" : "text-[#666666]"
-              }`}
+              style={[
+                styles.shareButtonText,
+                !imageUri && styles.shareButtonTextDisabled,
+              ]}
             >
               Share
             </Text>
@@ -132,45 +137,43 @@ export default function CreateStoryScreen() {
         </TouchableOpacity>
       </View>
 
-      <View className="flex-1 px-4 pb-4">
-        <View className="flex-1 overflow-hidden rounded-[32px] border border-[#242424] bg-[#0F0F0F]">
+      <View style={styles.previewWrap}>
+        <View style={styles.previewCard}>
           {imageUri ? (
             <>
               <Image
                 source={{ uri: imageUri }}
-                className="absolute inset-0 h-full w-full"
+                style={styles.previewImage}
                 resizeMode="cover"
               />
-              <View className="absolute inset-x-0 bottom-0 bg-black/60 px-4 pb-4 pt-5">
+              <View style={styles.captionOverlay}>
                 <TextInput
-                  className="max-h-28 rounded-[20px] border border-white/10 bg-black/55 px-4 py-3 text-base font-semibold text-white"
+                  style={styles.captionInput}
                   placeholder="Add a caption..."
-                  placeholderTextColor="#A0A0A0"
+                  placeholderTextColor={Colors.onImageMuted}
                   multiline
                   value={caption}
                   onChangeText={setCaption}
                   editable={!isLoading}
-                  selectionColor="#FFFFFF"
+                  selectionColor={Colors.textInverse}
                 />
               </View>
               <TouchableOpacity
-                className="absolute right-4 top-4 h-10 w-10 items-center justify-center rounded-full bg-black/60"
+                style={styles.deleteButton}
                 onPress={() => setImageUri(null)}
                 disabled={isLoading}
                 activeOpacity={0.78}
               >
-                <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                <Ionicons name="trash-outline" size={20} color={Colors.textInverse} />
               </TouchableOpacity>
             </>
           ) : (
-            <View className="flex-1 items-center justify-center px-8">
-              <View className="h-20 w-20 items-center justify-center rounded-[28px] border border-[#2A2A2A] bg-[#151515]">
-                <Ionicons name="images-outline" size={34} color="#FFFFFF" />
+            <View style={styles.emptyPreview}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="images-outline" size={34} color={Colors.textPrimary} />
               </View>
-              <Text className="mt-5 text-center text-xl font-extrabold text-white">
-                Add a moment
-              </Text>
-              <Text className="mt-2 text-center text-sm leading-5 text-[#888888]">
+              <Text style={styles.emptyTitle}>Add a moment</Text>
+              <Text style={styles.emptySubtitle}>
                 Stories stay active for 24 hours and appear at the top of the feed.
               </Text>
             </View>
@@ -179,29 +182,28 @@ export default function CreateStoryScreen() {
       </View>
 
       <View
-        className="mx-4 mb-4 flex-row items-center gap-3 rounded-[28px] border border-[#222222] bg-[#0F0F0F] p-2"
-        style={{ paddingBottom: Math.max(insets.bottom - 8, 8) }}
+        style={[styles.toolbar, { paddingBottom: Math.max(insets.bottom - 8, 8) }]}
       >
         <TouchableOpacity
-          className="h-12 flex-1 flex-row items-center justify-center rounded-full bg-white"
+          style={styles.primaryToolButton}
           onPress={pickImage}
           disabled={isLoading}
           activeOpacity={0.82}
         >
-          <Ionicons name="image-outline" size={20} color="#050505" />
-          <Text className="ml-2 text-sm font-extrabold text-[#050505]">
+          <Ionicons name="image-outline" size={20} color={Colors.textInverse} />
+          <Text style={styles.primaryToolText}>
             Gallery
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          className="h-12 flex-1 flex-row items-center justify-center rounded-full bg-[#1A1A1A]"
+          style={styles.secondaryToolButton}
           onPress={takePhoto}
           disabled={isLoading}
           activeOpacity={0.82}
         >
-          <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
-          <Text className="ml-2 text-sm font-extrabold text-white">
+          <Ionicons name="camera-outline" size={20} color={Colors.textPrimary} />
+          <Text style={styles.secondaryToolText}>
             Camera
           </Text>
         </TouchableOpacity>
@@ -209,3 +211,182 @@ export default function CreateStoryScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: Colors.bg,
+    flex: 1,
+  },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.md + 4,
+    paddingVertical: Spacing.md,
+  },
+  iconButton: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  headerTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.lg,
+  },
+  shareButton: {
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.full,
+    height: 42,
+    justifyContent: "center",
+    minWidth: 82,
+    paddingHorizontal: Spacing.md,
+  },
+  shareButtonDisabled: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderWidth: 1,
+  },
+  shareButtonText: {
+    color: Colors.textInverse,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+  },
+  shareButtonTextDisabled: {
+    color: Colors.textMuted,
+  },
+  previewWrap: {
+    flex: 1,
+    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+  },
+  previewCard: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 32,
+    borderWidth: 1,
+    flex: 1,
+    overflow: "hidden",
+  },
+  previewImage: {
+    ...StyleSheet.absoluteFillObject,
+    height: "100%",
+    width: "100%",
+  },
+  captionOverlay: {
+    backgroundColor: Colors.overlayDark,
+    bottom: 0,
+    left: 0,
+    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md + 4,
+    position: "absolute",
+    right: 0,
+  },
+  captionInput: {
+    backgroundColor: Colors.overlayDarkStrong,
+    borderColor: Colors.overlayLightSoft,
+    borderRadius: 20,
+    borderWidth: 1,
+    color: Colors.textInverse,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.base,
+    maxHeight: 112,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 4,
+  },
+  deleteButton: {
+    alignItems: "center",
+    backgroundColor: Colors.overlayDark,
+    borderColor: Colors.overlayLightSoft,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    position: "absolute",
+    right: Spacing.md,
+    top: Spacing.md,
+    width: 42,
+  },
+  emptyPreview: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: 28,
+    borderWidth: 1,
+    height: 82,
+    justifyContent: "center",
+    width: 82,
+  },
+  emptyTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xl,
+    marginTop: Spacing.lg,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    marginTop: Spacing.sm,
+    textAlign: "center",
+  },
+  toolbar: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 28,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: Spacing.sm + 4,
+    marginBottom: Spacing.md,
+    marginHorizontal: Spacing.md,
+    padding: Spacing.sm,
+  },
+  primaryToolButton: {
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.full,
+    flex: 1,
+    flexDirection: "row",
+    height: 50,
+    justifyContent: "center",
+  },
+  primaryToolText: {
+    color: Colors.textInverse,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+    marginLeft: Spacing.sm,
+  },
+  secondaryToolButton: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    height: 50,
+    justifyContent: "center",
+  },
+  secondaryToolText: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+    marginLeft: Spacing.sm,
+  },
+});

@@ -25,6 +25,7 @@ import { Colors } from "@/constants/colors";
 
 type StoryItem = {
   id: string;
+  authorId?: string;
   name: string;
   imageUrl?: string | null;
 };
@@ -89,13 +90,26 @@ export default function FeedScreen() {
       timeAgo: p.createdAt ? getTimeAgo(p.createdAt) : "just now",
     })) || [];
 
-  const storyItems: StoryItem[] = (storiesData || []).slice(0, 12);
+  const currentUserStory = (storiesData || []).find(
+    (story: StoryItem) => story.authorId === user?.id,
+  );
+  const storyItems: StoryItem[] = (storiesData || [])
+    .filter((story: StoryItem) => story.authorId !== user?.id)
+    .slice(0, 12);
 
   const currentUserName =
     user?.profile?.username || user?.username || "Your story";
-  const currentUserAvatar = user?.profile?.avatarUrl;
+  const currentUserAvatar = currentUserStory?.mediaUrl || user?.profile?.avatarUrl;
 
   const openCreateStory = () => router.push("/(screens)/create-story");
+  const openCurrentUserStory = () => {
+    if (currentUserStory?.id) {
+      openStory(currentUserStory.id);
+      return;
+    }
+
+    openCreateStory();
+  };
 
   const openStory = (storyId: string) =>
     router.push({
@@ -155,9 +169,13 @@ export default function FeedScreen() {
         <TouchableOpacity
           className="w-[72px] items-center"
           activeOpacity={0.78}
-          onPress={openCreateStory}
+          onPress={openCurrentUserStory}
         >
-          <View className="h-[68px] w-[68px] items-center justify-center rounded-[24px] border border-border bg-bg-card">
+          <View
+            className={`h-[68px] w-[68px] items-center justify-center rounded-[24px] bg-bg-card ${
+              currentUserStory ? "border-2 border-primary-light" : "border border-border"
+            }`}
+          >
             {currentUserAvatar ? (
               <Image
                 source={{ uri: currentUserAvatar }}
@@ -166,9 +184,29 @@ export default function FeedScreen() {
             ) : (
               <Ionicons name="person" size={24} color={Colors.textMuted} />
             )}
-            <View className="absolute -bottom-1 -right-1 h-7 w-7 items-center justify-center rounded-full border-2 border-bg bg-primary">
-              <Ionicons name="add" size={18} color={Colors.white} />
-            </View>
+            {currentUserStory ? (
+              <>
+                <View className="absolute -bottom-1 rounded-full bg-primary px-2 py-0.5">
+                  <Text className="text-[9px] font-extrabold uppercase text-white">
+                    Yours
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  className="absolute -right-1 -top-1 h-7 w-7 items-center justify-center rounded-full border-2 border-bg bg-primary"
+                  activeOpacity={0.82}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    openCreateStory();
+                  }}
+                >
+                  <Ionicons name="add" size={18} color={Colors.white} />
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View className="absolute -bottom-1 -right-1 h-7 w-7 items-center justify-center rounded-full border-2 border-bg bg-primary">
+                <Ionicons name="add" size={18} color={Colors.white} />
+              </View>
+            )}
           </View>
           <Text
             className="mt-2 w-full text-center text-xs font-semibold text-text-primary"

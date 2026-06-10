@@ -6,6 +6,7 @@ import {
   validateGoogleMobileLogin,
   validateRefreshToken,
   validateRequestLoginOtp,
+  validateRegisterWithOtp,
   validateResetPassword,
 } from '../middleware/auth.validate.middleware';
 import { strictRateLimitMiddleware } from '../middleware/auth.ratelimit.middleware';
@@ -34,6 +35,22 @@ router.post(
   strictRateLimitMiddleware,
   validateRequestLoginOtp,
   controller.requestLoginOtp,
+);
+
+// POST /api/auth/register/otp
+router.post(
+  '/register/otp',
+  strictRateLimitMiddleware,
+  validateRequestLoginOtp,
+  controller.requestRegistrationOtp,
+);
+
+// POST /api/auth/register/otp/verify
+router.post(
+  '/register/otp/verify',
+  strictRateLimitMiddleware,
+  validateRegisterWithOtp,
+  controller.registerWithOtp,
 );
 
 // POST /api/auth/password-reset/otp

@@ -11,6 +11,24 @@ export interface EmailAuthResponse {
   devOtp?: string;
 }
 
+export interface EmailLoginPayload {
+  email: string;
+  otp: string;
+}
+
+export interface RegisterWithOtpPayload {
+  email: string;
+  otp: string;
+  username: string;
+  birthDate: string;
+  gender: "MALE" | "FEMALE" | "NON_BINARY" | "OTHER";
+}
+
+export type RequestLoginOtpPayload = EmailAuthPayload;
+export type RequestLoginOtpResponse = EmailAuthResponse;
+export type RequestRegisterOtpPayload = EmailAuthPayload;
+export type RequestRegisterOtpResponse = EmailAuthResponse;
+
 export type RequestPasswordResetPayload = EmailAuthPayload;
 
 export type RequestPasswordResetResponse = EmailAuthResponse;
