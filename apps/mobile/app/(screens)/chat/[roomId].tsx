@@ -1,18 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -20,7 +21,7 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import {
   useChatConversationQuery,
-  useChatMessagesQuery,
+  useInfiniteChatMessagesQuery,
   useMarkChatReadMutation,
   useUpdateChatSettingsMutation,
   chatKeys,
@@ -28,7 +29,8 @@ import {
 import { useChatSocket } from "@/hooks/useSocket";
 import { useAuthStore } from "@/store/authStore";
 import { Colors } from "@/constants/colors";
-import type { ChatMessage } from "@/types/chat.types";
+import type { ChatMessage, ChatMessageType } from "@/types/chat.types";
+import { postService } from "@/services/post.service";
 import { useQueryClient } from "@tanstack/react-query";
 
 type PendingMessage = ChatMessage & { isPending?: boolean };
@@ -60,15 +62,20 @@ export default function ChatRoomScreen() {
   const socket = useChatSocket();
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
+  const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
   const { data: conversation, isFetching: isConversationFetching } =
     useChatConversationQuery(roomId);
   const {
-    data: serverMessages = [],
+    data: messagePages,
     isLoading,
     isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
     refetch,
-  } = useChatMessagesQuery(roomId);
+  } = useInfiniteChatMessagesQuery(roomId);
   const markReadMutation = useMarkChatReadMutation(roomId);
   const updateSettingsMutation = useUpdateChatSettingsMutation(roomId);
 
@@ -79,10 +86,15 @@ export default function ChatRoomScreen() {
     fallbackName;
   const avatarUrl = otherParticipant?.profile?.avatarUrl || fallbackAvatarUrl;
 
-  const messages = useMemo(
-    () => [...serverMessages, ...pendingMessages],
-    [pendingMessages, serverMessages],
+  const serverMessages = useMemo(
+    () => messagePages?.pages.flat() ?? [],
+    [messagePages],
   );
+
+  const messages = useMemo(() => {
+    const pendingNewestFirst = [...pendingMessages].reverse();
+    return [...pendingNewestFirst, ...serverMessages];
+  }, [pendingMessages, serverMessages]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -103,21 +115,40 @@ export default function ChatRoomScreen() {
       setPendingMessages((current) =>
         current.filter(
           (pending) =>
-            pending.content !== nextMessage.content ||
-            pending.senderId !== nextMessage.senderId,
+            pending.senderId !== nextMessage.senderId ||
+            (pending.content !== nextMessage.content &&
+              pending.mediaUrl !== nextMessage.mediaUrl),
         ),
       );
 
-      queryClient.setQueryData<ChatMessage[]>(
+      queryClient.setQueryData<any>(
         chatKeys.messages(roomId),
-        (current = []) => {
-          if (current.some((item) => item.id === nextMessage.id)) {
+        (current: any) => {
+          if (!current?.pages) return current;
+          if (
+            current.pages.some((page: ChatMessage[]) =>
+              page.some((item) => item.id === nextMessage.id),
+            )
+          ) {
             return current;
           }
-          return [...current, nextMessage];
+          const pages = [...current.pages];
+          pages[0] = [nextMessage, ...(pages[0] ?? [])];
+          return { ...current, pages };
         },
       );
       queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
+    };
+
+    const handleTyping = (payload: { userId: string; isTyping: boolean }) => {
+      if (payload.userId === user?.id) return;
+      setTypingUserIds((current) => {
+        if (!payload.isTyping) {
+          return current.filter((id) => id !== payload.userId);
+        }
+        if (current.includes(payload.userId)) return current;
+        return [...current, payload.userId];
+      });
     };
 
     const handleSocketError = (payload: { message?: string }) => {
@@ -131,6 +162,7 @@ export default function ChatRoomScreen() {
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("chat:message:new", handleNewMessage);
+    socket.on("chat:typing", handleTyping);
     socket.on("chat:error", handleSocketError);
 
     if (socket.connected) {
@@ -142,9 +174,10 @@ export default function ChatRoomScreen() {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off("chat:message:new", handleNewMessage);
+      socket.off("chat:typing", handleTyping);
       socket.off("chat:error", handleSocketError);
     };
-  }, [queryClient, roomId, socket]);
+  }, [queryClient, roomId, socket, user?.id]);
 
   const isCurrentUser1 = conversation?.user1Id === user?.id;
   const isMuted = isCurrentUser1
@@ -176,13 +209,18 @@ export default function ChatRoomScreen() {
     return `${messages.length} message${messages.length === 1 ? "" : "s"}`;
   }, [isConversationFetching, isMuted, messages.length]);
 
-  const sendMessage = (content: string) => {
+  const sendMessage = (
+    content: string,
+    type: ChatMessageType = "TEXT",
+    mediaUrl?: string,
+  ) => {
     const pendingMessage: PendingMessage = {
       id: `${roomId}-${Date.now()}`,
       chatId: roomId,
       senderId: user?.id || "me",
-      type: "TEXT",
+      type,
       content,
+      mediaUrl,
       createdAt: new Date().toISOString(),
       isPending: true,
     };
@@ -202,9 +240,54 @@ export default function ChatRoomScreen() {
 
     socket.emit("chat:message", {
       chatId: roomId,
-      type: "TEXT",
+      type,
       content,
+      mediaUrl,
     });
+  };
+
+  const sendTypingState = useCallback((isTyping: boolean) => {
+    if (!roomId || !isSocketConnected) return;
+    socket.emit("chat:typing", { chatId: roomId, isTyping });
+  }, [isSocketConnected, roomId, socket]);
+
+  const pickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          "Photos permission needed",
+          "Allow photo access to send an image.",
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+
+      if (result.canceled || !result.assets[0]?.uri) return;
+
+      setIsUploadingMedia(true);
+      const asset = result.assets[0];
+      const mediaUrl = await postService.uploadMedia(
+        asset.uri,
+        asset.mimeType || "image/jpeg",
+      );
+
+      if (!mediaUrl) throw new Error("Upload did not return a media URL.");
+      sendMessage("", "IMAGE", mediaUrl);
+    } catch (error: any) {
+      Alert.alert("Image failed", error.message || "Unable to send image.");
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const loadOlderMessages = () => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    fetchNextPage();
   };
 
   const showChatActions = () => {
@@ -291,97 +374,108 @@ export default function ChatRoomScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
+        <FlatList
           className="flex-1"
+          data={messages}
+          keyExtractor={(message) => message.id}
+          inverted
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: messages.length ? "flex-end" : "center",
+            justifyContent: messages.length ? "flex-start" : "center",
             paddingHorizontal: 12,
             paddingBottom: 14,
             paddingTop: 14,
           }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View className="h-3.5" />}
+          onEndReached={loadOlderMessages}
+          onEndReachedThreshold={0.25}
           refreshControl={
             <RefreshControl
-              refreshing={isFetching}
+              refreshing={isFetching && !isFetchingNextPage}
               onRefresh={refetch}
               tintColor={Colors.primaryLight}
             />
           }
-        >
-          {isLoading ? (
-            <View className="items-center justify-center">
-              <ActivityIndicator color={Colors.primaryLight} size="large" />
-              <Text className="mt-3 text-sm font-semibold text-text-secondary">
-                Loading messages
-              </Text>
-            </View>
-          ) : messages.length === 0 ? (
-            <View className="items-center px-4">
-              {avatarUrl ? (
-                <Image
-                  source={{ uri: avatarUrl }}
-                  className="h-24 w-24 rounded-full border-4 border-bg-card bg-bg-elevated"
-                />
-              ) : (
-                <View className="h-24 w-24 items-center justify-center rounded-full bg-primary-light">
-                  <Ionicons
-                    name="chatbubble-ellipses-outline"
-                    size={34}
-                    color={Colors.textInverse}
-                  />
-                </View>
-              )}
-              <Text className="mt-5 text-center text-2xl font-extrabold text-text-primary">
-                Chat with {name}
-              </Text>
-              <Text className="mt-2 text-center text-sm font-medium leading-5 text-text-secondary">
-                Start with something warm, specific, and easy to reply to.
-              </Text>
-            </View>
-          ) : (
-            <View>
-              <View className="mb-8 items-center">
+          ListHeaderComponent={
+            <TypingIndicator visible={typingUserIds.length > 0} />
+          }
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View className="items-center py-4">
+                <ActivityIndicator color={Colors.primaryLight} />
+              </View>
+            ) : messages.length ? (
+              <View className="items-center pb-6">
                 <Text
                   className="overflow-hidden rounded-full border border-border bg-bg-card px-4 py-1.5 text-xs font-extrabold text-text-secondary"
                   style={styles.datePill}
                 >
-                  Today
+                  Recent messages
                 </Text>
               </View>
-              <View className="gap-3.5">
-                {messages.map((message, index) => {
-                  const next = messages[index + 1];
-                  const showAvatar =
-                    message.senderId !== user?.id &&
-                    next?.senderId !== message.senderId;
-                  const showReaction =
-                    message.senderId !== user?.id &&
-                    index === Math.max(0, messages.length - 2);
-
-                  return (
-                    <MessageBubble
-                      key={message.id}
-                      message={message}
-                      isMine={message.senderId === user?.id}
-                      showAvatar={showAvatar}
-                      avatarUrl={avatarUrl}
-                      reaction={showReaction ? "heart" : undefined}
-                    />
-                  );
-                })}
-                <TypingIndicator visible={false} />
+            ) : null
+          }
+          ListEmptyComponent={
+            isLoading ? (
+              <View className="items-center justify-center">
+                <ActivityIndicator color={Colors.primaryLight} size="large" />
+                <Text className="mt-3 text-sm font-semibold text-text-secondary">
+                  Loading messages
+                </Text>
               </View>
-            </View>
-          )}
-        </ScrollView>
+            ) : (
+              <View className="items-center px-4">
+                {avatarUrl ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    className="h-24 w-24 rounded-full border-4 border-bg-card bg-bg-elevated"
+                  />
+                ) : (
+                  <View className="h-24 w-24 items-center justify-center rounded-full bg-primary-light">
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={34}
+                      color={Colors.textInverse}
+                    />
+                  </View>
+                )}
+                <Text className="mt-5 text-center text-2xl font-extrabold text-text-primary">
+                  Chat with {name}
+                </Text>
+                <Text className="mt-2 text-center text-sm font-medium leading-5 text-text-secondary">
+                  Start with something warm, specific, and easy to reply to.
+                </Text>
+              </View>
+            )
+          }
+          renderItem={({ item, index }) => {
+            const next = messages[index + 1];
+            const showAvatar =
+              item.senderId !== user?.id && next?.senderId !== item.senderId;
+            const showReaction =
+              item.senderId !== user?.id && index === 0;
+
+            return (
+              <MessageBubble
+                message={item}
+                isMine={item.senderId === user?.id}
+                showAvatar={showAvatar}
+                avatarUrl={avatarUrl}
+                reaction={showReaction ? "heart" : undefined}
+              />
+            );
+          }}
+        />
 
         <SafeAreaView edges={["bottom"]} className="bg-bg">
           <ChatInput
             placeholder="Type a message..."
-            disabled={!isSocketConnected}
-            onSend={sendMessage}
+            disabled={!isSocketConnected || isUploadingMedia}
+            onSend={(content) => sendMessage(content)}
+            onPickImage={pickImage}
+            onTypingChange={sendTypingState}
           />
         </SafeAreaView>
       </KeyboardAvoidingView>

@@ -6,7 +6,12 @@ export class ChatRepository {
 
   async findByUser(userId: string) {
     const chats = await prisma.chat.findMany({
-      where: { OR: [{ user1Id: userId }, { user2Id: userId }] },
+      where: {
+        OR: [
+          { user1Id: userId, deletedBy1: false },
+          { user2Id: userId, deletedBy2: false },
+        ],
+      },
       include: {
         user1: { include: { profile: { select: { username: true, avatarUrl: true } } } },
         user2: { include: { profile: { select: { username: true, avatarUrl: true } } } },
@@ -66,7 +71,11 @@ export class ChatRepository {
     return prisma.chat.update({ where: { id: chatId }, data: dataToUpdate });
   }
 
-  async delete(id: string) {
-    return prisma.chat.delete({ where: { id } });
+  async hideForUser(id: string, user1Id: string, user2Id: string, currentUserId: string) {
+    const dataToUpdate: any = {};
+    if (currentUserId === user1Id) dataToUpdate.deletedBy1 = true;
+    if (currentUserId === user2Id) dataToUpdate.deletedBy2 = true;
+
+    return prisma.chat.update({ where: { id }, data: dataToUpdate });
   }
 }

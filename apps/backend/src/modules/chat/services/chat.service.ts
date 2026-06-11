@@ -23,7 +23,7 @@ export class ChatService {
     if (chat.user1Id !== userId && chat.user2Id !== userId) {
       throw new AppError('Forbidden', 403);
     }
-    await this.chatRepository.delete(chatId);
+    await this.chatRepository.hideForUser(chatId, chat.user1Id, chat.user2Id, userId);
   }
 
   async updateChatSettings(chatId: string, userId: string, settings: { muted?: boolean; archived?: boolean }) {

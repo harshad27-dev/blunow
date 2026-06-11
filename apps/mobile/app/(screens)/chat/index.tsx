@@ -19,7 +19,12 @@ import {
   useDeleteChatMutation,
   useUpdateChatSettingsMutation,
 } from "@/hooks/useChat";
+import {
+  useIncomingMatchRequestsQuery,
+  useRespondMatchRequestMutation,
+} from "@/hooks/queries";
 import type { ChatConversation, ChatParticipant } from "@/types/chat.types";
+import type { MatchRequest } from "@/types/match.types";
 import { useAuthStore } from "@/store/authStore";
 import { Colors } from "@/constants/colors";
 import { useChatSocket } from "@/hooks/useSocket";
@@ -36,6 +41,17 @@ type ConversationItem = {
   messageCount: number;
   raw: ChatConversation;
 };
+
+type RequestItem = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  subtitle: string;
+  timeLabel: string;
+  raw: MatchRequest;
+};
+
+type ChatListItem = ConversationItem | RequestItem;
 
 type ChatFilter = "all" | "unread" | "muted" | "archived";
 type MessageSegment = "messages" | "requests";
@@ -143,6 +159,24 @@ const normalizeConversation = (
   };
 };
 
+const normalizeRequest = (request: MatchRequest): RequestItem => {
+  const sender = request.sender;
+  const name =
+    sender?.profile?.username ||
+    sender?.username ||
+    sender?.email ||
+    "Blunow user";
+
+  return {
+    id: request.id,
+    name,
+    avatarUrl: sender?.profile?.avatarUrl || undefined,
+    subtitle: request.message || "Wants to connect with you.",
+    timeLabel: getTimeLabel(request.createdAt),
+    raw: request,
+  };
+};
+
 export default function ChatListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -159,7 +193,13 @@ export default function ChatListScreen() {
     isFetching,
     refetch,
   } = useChatConversationsQuery();
+  const {
+    data: incomingRequests = [],
+    isFetching: isRequestsFetching,
+    refetch: refetchRequests,
+  } = useIncomingMatchRequestsQuery();
   const deleteChatMutation = useDeleteChatMutation();
+  const respondRequestMutation = useRespondMatchRequestMutation();
   const socket = useChatSocket();
 
   const allItems = useMemo(
@@ -169,8 +209,6 @@ export default function ChatListScreen() {
 
   const items = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-
-    if (activeSegment === "requests") return [];
 
     return allItems
       .filter((item) => {
@@ -187,7 +225,21 @@ export default function ChatListScreen() {
           item.subtitle.toLowerCase().includes(query)
         );
       });
-  }, [activeFilter, activeSegment, allItems, searchQuery]);
+  }, [activeFilter, allItems, searchQuery]);
+
+  const requestItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return incomingRequests
+      .map(normalizeRequest)
+      .filter((item) => {
+        if (!query) return true;
+        return (
+          item.name.toLowerCase().includes(query) ||
+          item.subtitle.toLowerCase().includes(query)
+        );
+      });
+  }, [incomingRequests, searchQuery]);
 
   const activeItems = allItems.filter((item) => !item.isArchived);
   const unreadTotal = activeItems.reduce(
@@ -196,6 +248,17 @@ export default function ChatListScreen() {
   );
   const hasSearch = searchQuery.trim().length > 0;
   const matchStories = activeItems.slice(0, 12);
+  const listData = activeSegment === "requests" ? requestItems : items;
+  const isRefreshing =
+    activeSegment === "requests" ? isRequestsFetching : isFetching;
+
+  const refreshActiveList = () => {
+    if (activeSegment === "requests") {
+      refetchRequests();
+      return;
+    }
+    refetch();
+  };
 
   useEffect(() => {
     const refreshConversations = () => {
@@ -314,19 +377,17 @@ export default function ChatListScreen() {
       {isLoading ? (
         <ConversationSkeletonList />
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
+        <FlatList<ChatListItem>
           refreshControl={
             <RefreshControl
-              refreshing={isFetching}
-              onRefresh={refetch}
+              refreshing={isRefreshing}
+              onRefresh={refreshActiveList}
               tintColor={Colors.textPrimary}
             />
           }
           contentContainerClassName="px-5 pb-8"
           contentContainerStyle={
-            items.length === 0 ? { flexGrow: 1 } : undefined
+            listData.length === 0 ? { flexGrow: 1 } : undefined
           }
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
@@ -339,7 +400,7 @@ export default function ChatListScreen() {
               <MessagesSectionHeader
                 activeSegment={activeSegment}
                 onChangeSegment={setActiveSegment}
-                requestCount={0}
+                requestCount={incomingRequests.length}
                 unreadTotal={unreadTotal}
               />
             </View>
@@ -352,13 +413,34 @@ export default function ChatListScreen() {
               onClearSearch={() => setSearchQuery("")}
             />
           }
-          renderItem={({ item }) => (
-            <ConversationRow
-              item={item}
-              onPress={() => openConversation(item)}
-              onDelete={() => confirmDelete(item)}
-            />
-          )}
+          data={listData}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) =>
+            activeSegment === "requests" ? (
+              <RequestRow
+                item={item as RequestItem}
+                disabled={respondRequestMutation.isPending}
+                onAccept={() =>
+                  respondRequestMutation.mutate({
+                    requestId: item.id,
+                    status: "ACCEPTED",
+                  })
+                }
+                onReject={() =>
+                  respondRequestMutation.mutate({
+                    requestId: item.id,
+                    status: "REJECTED",
+                  })
+                }
+              />
+            ) : (
+              <ConversationRow
+                item={item as ConversationItem}
+                onPress={() => openConversation(item as ConversationItem)}
+                onDelete={() => confirmDelete(item as ConversationItem)}
+              />
+            )
+          }
         />
       )}
     </View>
@@ -570,6 +652,72 @@ const EmptyState = ({
     </View>
   );
 };
+
+const RequestRow = ({
+  item,
+  disabled,
+  onAccept,
+  onReject,
+}: {
+  item: RequestItem;
+  disabled: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+}) => (
+  <View className="flex-row items-center py-3.5">
+    {item.avatarUrl ? (
+      <Image
+        source={{ uri: item.avatarUrl }}
+        className="h-14 w-14 rounded-full bg-bg-elevated"
+      />
+    ) : (
+      <View className="h-14 w-14 items-center justify-center rounded-full bg-primary-light">
+        <Text className="text-base font-extrabold text-inverse">
+          {getInitials(item.name)}
+        </Text>
+      </View>
+    )}
+
+    <View className="ml-4 flex-1">
+      <View className="flex-row items-center justify-between">
+        <Text
+          className="mr-3 flex-1 text-[16px] font-extrabold text-text-primary"
+          numberOfLines={1}
+        >
+          {item.name}
+        </Text>
+        <Text className="text-xs font-bold text-text-secondary">
+          {item.timeLabel}
+        </Text>
+      </View>
+      <Text
+        className="mt-1.5 text-sm font-semibold leading-5 text-text-secondary"
+        numberOfLines={2}
+      >
+        {item.subtitle}
+      </Text>
+    </View>
+
+    <View className="ml-3 flex-row items-center">
+      <TouchableOpacity
+        className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-primary"
+        onPress={onAccept}
+        disabled={disabled}
+        activeOpacity={0.84}
+      >
+        <Ionicons name="checkmark" size={20} color={Colors.textInverse} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        className="h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card"
+        onPress={onReject}
+        disabled={disabled}
+        activeOpacity={0.84}
+      >
+        <Ionicons name="close" size={20} color={Colors.textPrimary} />
+      </TouchableOpacity>
+    </View>
+  </View>
+);
 
 const ConversationSkeletonList = () => (
   <View className="px-5 pb-8 pt-4">

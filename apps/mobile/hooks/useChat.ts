@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { chatService } from "@/services/chat.service";
 import type {
   ChatConversation,
@@ -48,6 +53,25 @@ export const useChatMessagesQuery = (chatId?: string) => {
       return response.data.reverse() as ChatMessage[];
     },
     enabled: Boolean(chatId),
+    staleTime: 1000 * 60,
+  });
+};
+
+export const useInfiniteChatMessagesQuery = (chatId?: string) => {
+  const limit = 30;
+
+  return useInfiniteQuery({
+    queryKey: chatKeys.messages(chatId || ""),
+    queryFn: async ({ pageParam }) => {
+      if (!chatId) return [];
+      const response = await chatService.getMessages(chatId, pageParam, limit);
+      if (!response?.success || !Array.isArray(response.data)) return [];
+      return response.data as ChatMessage[];
+    },
+    enabled: Boolean(chatId),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < limit ? undefined : allPages.length + 1,
     staleTime: 1000 * 60,
   });
 };

@@ -28,6 +28,8 @@ export class MessageRepository {
       await tx.chat.update({
         where: { id: data.chatId },
         data: {
+          deletedBy1: false,
+          deletedBy2: false,
           lastMessageAt: message.createdAt,
           lastMessageContent:
             data.content || (data.mediaUrl ? "Shared media" : null),

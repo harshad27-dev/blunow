@@ -269,6 +269,8 @@ model Chat {
   createdAt          DateTime  @default(now())
   archivedBy1        Boolean   @default(false)
   archivedBy2        Boolean   @default(false)
+  deletedBy1         Boolean   @default(false)
+  deletedBy2         Boolean   @default(false)
   lastMessageAt      DateTime?
   lastMessageContent String?
   lastMessageId      String?
