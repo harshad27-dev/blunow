@@ -96,7 +96,7 @@ const getTimeLabel = (value?: string | null) => {
 };
 
 const getParticipantName = (participant?: ChatParticipant) =>
-  participant?.profile?.username || participant?.username || "Blunow user";
+  participant?.profile?.username || participant?.username || "Datebl user";
 
 const getOtherParticipant = (chat: ChatConversation, currentUserId?: string) =>
   chat.user1Id === currentUserId ? chat.user2 : chat.user1;
@@ -165,7 +165,7 @@ const normalizeRequest = (request: MatchRequest): RequestItem => {
     sender?.profile?.username ||
     sender?.username ||
     sender?.email ||
-    "Blunow user";
+    "Datebl user";
 
   return {
     id: request.id,
@@ -825,4 +825,3 @@ const ConversationRow = ({
     </TouchableOpacity>
   );
 };
-

@@ -135,7 +135,7 @@ export default function RegisterScreen() {
 
         <Text style={styles.heading}>Create your account</Text>
         <Text style={styles.subheading}>
-          Use Google to create your Blunow account. We will check whether your
+          Use Google to create your Datebl account. We will check whether your
           Google account already exists first.
         </Text>
 

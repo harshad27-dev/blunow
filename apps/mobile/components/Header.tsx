@@ -32,8 +32,8 @@ export default function Header() {
       style={{ paddingTop: insets.top + 8 }}
     >
       <View className="flex-row items-center">
-        <Text className="text-2xl font-extrabold tracking-widest text-text-primary lowercase">
-          blunow
+        <Text className="text-2xl font-extrabold tracking-widest text-text-primary">
+          Datebl
         </Text>
       </View>
 

@@ -1,8 +1,8 @@
 import "../global.css";
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import { useFonts,
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/constants/colors';
+import { AnimatedAppSplash } from '@/components/AnimatedAppSplash';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,7 +33,7 @@ function AuthGuard() {
       isAuthenticated && !(user?.profile?.lookingFor?.length);
 
     if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/(auth)/login');
+      router.replace('/');
     } else if (needsOnboarding && !onOnboarding) {
       router.replace('/(auth)/onboarding');
     } else if (isAuthenticated && inAuthGroup && !needsOnboarding) {
@@ -45,6 +46,7 @@ function AuthGuard() {
 
 export default function RootLayout() {
   const { isLoading, rehydrate } = useAuthStore();
+  const [splashDelayDone, setSplashDelayDone] = useState(false);
 
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,
@@ -59,6 +61,12 @@ export default function RootLayout() {
   }, [rehydrate]);
 
   useEffect(() => {
+    const timer = setTimeout(() => setSplashDelayDone(true), 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
@@ -66,19 +74,10 @@ export default function RootLayout() {
 
   if (!fontsLoaded) return null;
 
-  if (isLoading) {
+  if (isLoading || !splashDelayDone) {
     return (
       <SafeAreaProvider>
-        <View
-          style={{
-            alignItems: 'center',
-            backgroundColor: Colors.bg,
-            flex: 1,
-            justifyContent: 'center',
-          }}
-        >
-          <ActivityIndicator color={Colors.primary} size="large" />
-        </View>
+        <AnimatedAppSplash />
       </SafeAreaProvider>
     );
   }

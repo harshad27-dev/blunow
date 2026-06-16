@@ -2,14 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  ImageBackground,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -32,7 +30,6 @@ export default function LoginScreen() {
   const [emailLoading, setEmailLoading] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(28)).current;
-  const backgroundFadeAnim = useRef(new Animated.Value(0)).current;
 
   const clearError = useCallback(() => {
     setServerError("");
@@ -100,43 +97,11 @@ export default function LoginScreen() {
       }),
     ]).start();
 
-    const backgroundLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(backgroundFadeAnim, {
-          delay: 1800,
-          duration: 1600,
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-        Animated.timing(backgroundFadeAnim, {
-          delay: 2600,
-          duration: 1600,
-          toValue: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    backgroundLoop.start();
-
-    return () => backgroundLoop.stop();
-  }, [backgroundFadeAnim, fadeAnim, slideAnim]);
+  }, [fadeAnim, slideAnim]);
 
   return (
     <SafeAreaView style={styles.screen} edges={[]}>
-      <ImageBackground
-        source={require("@/assets/images/authimages/cou1.png")}
-        style={styles.background}
-        resizeMode="cover"
-      >
-        <Animated.Image
-          source={require("@/assets/images/authimages/cou2.png")}
-          style={[styles.backgroundImage, { opacity: backgroundFadeAnim }]}
-          resizeMode="cover"
-        />
-        <View style={styles.imageOverlay} />
-        <View style={styles.bottomOverlay} />
-
+      <View style={styles.background}>
         <Animated.View
           style={[
             styles.content,
@@ -146,14 +111,6 @@ export default function LoginScreen() {
             },
           ]}
         >
-          <View style={styles.brand}>
-            <View style={styles.logoCircle}>
-              <Ionicons name="heart" size={34} color={Colors.textInverse} />
-            </View>
-            <Text style={styles.appName}>blunow</Text>
-            <Text style={styles.tagline}>Connect. Vibe. Match.</Text>
-          </View>
-
           <View style={styles.panel}>
             <Text style={styles.heading}>Welcome back</Text>
             <Text style={styles.subheading}>
@@ -248,37 +205,15 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
         </Animated.View>
-      </ImageBackground>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  appName: {
-    color: Colors.white,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize["3xl"],
-    letterSpacing: 1.5,
-  },
   background: {
     flex: 1,
-  },
-  backgroundImage: {
-    ...StyleSheet.absoluteFillObject,
-    height: "100%",
-    width: "100%",
-  },
-  bottomOverlay: {
-    backgroundColor: Colors.overlayDark,
-    bottom: 0,
-    height: "48%",
-    left: 0,
-    position: "absolute",
-    right: 0,
-  },
-  brand: {
-    alignItems: "flex-start",
-    marginBottom: Spacing.lg,
+    backgroundColor: Colors.primaryDark,
   },
   content: {
     flex: 1,
@@ -334,10 +269,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xl,
     marginBottom: Spacing.xs,
   },
-  imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.overlayDarkSoft,
-  },
   input: {
     backgroundColor: Colors.bgInput,
     borderColor: Colors.border,
@@ -350,19 +281,8 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: Spacing.md,
   },
-  logoCircle: {
-    alignItems: "center",
-    backgroundColor: Colors.overlayLightSoft,
-    borderColor: Colors.overlayLightSoft,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    height: 72,
-    justifyContent: "center",
-    marginBottom: Spacing.sm,
-    width: 72,
-  },
   panel: {
-    backgroundColor: Colors.overlay,
+    backgroundColor: "rgba(28,28,28,0.82)",
     borderColor: Colors.overlayLightSoft,
     borderRadius: Radius.xl,
     borderWidth: 1,
@@ -413,12 +333,5 @@ const styles = StyleSheet.create({
     color: Colors.onImageMuted,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.base,
-  },
-  tagline: {
-    color: Colors.onImageMuted,
-    fontFamily: FontFamily.regular,
-    fontSize: FontSize.sm,
-    letterSpacing: 0.5,
-    marginTop: Spacing.xs,
   },
 });

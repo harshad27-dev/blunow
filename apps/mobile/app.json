@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "Datebl",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -48,7 +48,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Blunow uses your location during signup to help show nearby people and rooms."
+          "locationWhenInUsePermission": "Datebl uses your location during signup to help show nearby people and rooms."
         }
       ]
     ],

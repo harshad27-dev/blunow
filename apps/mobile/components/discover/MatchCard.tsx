@@ -25,7 +25,7 @@ export const MatchCard = ({
     user?.profile?.username ||
     user?.username ||
     user?.email ||
-    "Blunow user";
+    "Datebl user";
   const avatarUrl = user?.profile?.avatarUrl;
 
   return (

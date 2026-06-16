@@ -22,7 +22,7 @@ export const MatchRequestCard = ({
     sender?.profile?.username ||
     sender?.username ||
     sender?.email ||
-    "Blunow user";
+    "Datebl user";
   const avatarUrl = sender?.profile?.avatarUrl;
 
   return (

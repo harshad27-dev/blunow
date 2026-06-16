@@ -701,7 +701,7 @@ const IncomingRequestRow = ({
     request.sender?.profile?.username ||
     request.sender?.username ||
     request.sender?.email ||
-    "Blunow user";
+    "Datebl user";
   const avatarUrl = request.sender?.profile?.avatarUrl;
 
   return (

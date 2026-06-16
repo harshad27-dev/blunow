@@ -119,10 +119,10 @@ export default function SettingsScreen() {
         },
         {
           id: '6',
-          title: 'About Blunow',
+          title: 'About Datebl',
           icon: 'information-circle-outline',
           onPress: () =>
-            Alert.alert('About Blunow', 'Blunow Version 1.0.0'),
+            Alert.alert('About Datebl', 'Datebl Version 1.0.0'),
         },
       ]
     },
@@ -191,8 +191,8 @@ export default function SettingsScreen() {
         ))}
         
         <View style={styles.footer}>
-          <Text style={styles.versionText}>Blunow Version 1.0.0 (Build 42)</Text>
-          <Text style={styles.copyrightText}>© 2026 Blunow Team. All rights reserved.</Text>
+          <Text style={styles.versionText}>Datebl Version 1.0.0 (Build 42)</Text>
+          <Text style={styles.copyrightText}>© 2026 Datebl Team. All rights reserved.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
