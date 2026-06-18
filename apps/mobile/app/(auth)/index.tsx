@@ -239,49 +239,80 @@ export default function AuthWelcomeScreen() {
         <View style={styles.content}>
           <Animated.View
             style={[
-              styles.brand,
+              styles.topBrand,
               {
                 opacity: brandOpacity,
-                transform: [{ translateY: brandTranslate }],
+                transform: [
+                  {
+                    translateY: brandTranslate.interpolate({
+                      inputRange: [0, 180],
+                      outputRange: [0, -20],
+                    }),
+                  },
+                ],
               },
             ]}
           >
-            <View style={styles.logoWrap}>
-              <Image
-                source={require("@/assets/images/logo.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
-
-            <Text style={styles.tagline}>Meet real people. Feel the spark.</Text>
+            <Image
+              source={require("@/assets/images/logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </Animated.View>
 
-          <Animated.View
-            style={[
-              styles.actions,
-              {
-                opacity: actionsOpacity,
-                transform: [{ translateY: actionsTranslate }],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => router.push("/(auth)/login")}
-              activeOpacity={0.86}
+          <View style={styles.bottomContent}>
+            <Animated.View
+              style={[
+                styles.copyBlock,
+                {
+                  opacity: brandOpacity,
+                  transform: [{ translateY: brandTranslate }],
+                },
+              ]}
             >
-              <Text style={styles.primaryButtonText}>Login</Text>
-            </TouchableOpacity>
+              <Text style={styles.eyebrow}>Dating that feels natural</Text>
+              <Text style={styles.title}>Meet people who match your energy.</Text>
+              <Text style={styles.caption}>
+                Discover real profiles, start easy conversations, and move at
+                your own pace.
+              </Text>
 
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => router.push("/(auth)/register")}
-              activeOpacity={0.86}
+              <View style={styles.highlights}>
+                <View style={styles.highlightPill}>
+                  <Text style={styles.highlightText}>Real profiles</Text>
+                </View>
+                <View style={styles.highlightPill}>
+                  <Text style={styles.highlightText}>Easy chats</Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.actions,
+                {
+                  opacity: actionsOpacity,
+                  transform: [{ translateY: actionsTranslate }],
+                },
+              ]}
             >
-              <Text style={styles.secondaryButtonText}>Sign up</Text>
-            </TouchableOpacity>
-          </Animated.View>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => router.push("/(auth)/register")}
+                activeOpacity={0.86}
+              >
+                <Text style={styles.primaryButtonText}>Create account</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => router.push("/(auth)/login")}
+                activeOpacity={0.86}
+              >
+                <Text style={styles.secondaryButtonText}>Log in</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -332,37 +363,80 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     justifyContent: "space-between",
-    paddingBottom: Spacing.xl,
+    paddingBottom: Spacing["2xl"],
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing["3xl"],
+    paddingTop: Spacing["2xl"],
   },
 
-  brand: {
+  topBrand: {
     alignItems: "center",
-    minHeight: SCREEN_WIDTH * 0.72,
-  },
-
-  logoWrap: {
-    alignItems: "center",
-    justifyContent: "center",
+    alignSelf: "stretch",
   },
 
   logo: {
-    height: 124,
-    width: 152,
+    height: 86,
+    width: 124,
   },
 
-  tagline: {
+  bottomContent: {
+    alignSelf: "stretch",
+    gap: Spacing.lg,
+  },
+
+  copyBlock: {
+    alignItems: "flex-start",
+  },
+
+  eyebrow: {
     color: Colors.onImageMuted,
-    fontFamily: FontFamily.medium,
-    fontSize: FontSize.base,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
     letterSpacing: 0.3,
-    marginTop: -Spacing.md,
+    marginBottom: Spacing.sm,
+    textTransform: "uppercase",
+  },
+
+  title: {
+    color: Colors.white,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize["3xl"],
+    lineHeight: 42,
+    maxWidth: 340,
+  },
+
+  caption: {
+    color: Colors.onImageMuted,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.base,
+    lineHeight: 23,
+    marginTop: Spacing.sm,
+    maxWidth: 320,
+  },
+
+  highlights: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+
+  highlightPill: {
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.22)",
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+
+  highlightText: {
+    color: Colors.white,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.sm,
   },
 
   actions: {
-    flexDirection: "row",
-    gap: Spacing.md,
+    gap: Spacing.sm,
     width: "100%",
   },
 
@@ -370,9 +444,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: Colors.primaryLight,
     borderRadius: Radius.full,
-    flex: 1,
     justifyContent: "center",
-    minHeight: 56,
+    minHeight: 58,
     elevation: 8,
     shadowColor: Colors.black,
     shadowOffset: { height: 12, width: 0 },
@@ -392,7 +465,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.34)",
     borderRadius: Radius.full,
     borderWidth: 1,
-    flex: 1,
     justifyContent: "center",
     minHeight: 56,
   },

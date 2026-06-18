@@ -54,6 +54,7 @@ export default function RootLayout() {
     Outfit_600SemiBold,
     Outfit_700Bold,
     Darleston_400Regular: require('../assets/fonts/Darleston.otf'),
+    BirdHouse_400Regular: require('../assets/fonts/Bird House.ttf'),
   });
 
   useEffect(() => {
