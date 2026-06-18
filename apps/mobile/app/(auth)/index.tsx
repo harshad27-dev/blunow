@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -20,6 +20,7 @@ import { FontFamily, FontSize } from "@/constants/typography";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const AUTH_BACKGROUNDS = [
+  require("@/assets/images/authimages/cou1.png"),
   require("@/assets/images/authimages/cou2.png"),
   require("@/assets/images/authimages/cou3.png"),
   require("@/assets/images/authimages/cou4.png"),
@@ -37,13 +38,23 @@ export default function AuthWelcomeScreen() {
 
   const slideProgress = useRef(new Animated.Value(0)).current;
   const isAnimating = useRef(false);
-  const shouldResetSlide = useRef(false);
+  const resetAnimationFrame = useRef<number | null>(null);
 
   const brandOpacity = useRef(new Animated.Value(0)).current;
   const brandTranslate = useRef(new Animated.Value(180)).current;
 
   const actionsOpacity = useRef(new Animated.Value(0)).current;
   const actionsTranslate = useRef(new Animated.Value(24)).current;
+
+  useEffect(() => {
+    AUTH_BACKGROUNDS.forEach((image) => {
+      const source = Image.resolveAssetSource(image);
+
+      if (source?.uri) {
+        Image.prefetch(source.uri);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     Animated.sequence([
@@ -98,12 +109,23 @@ export default function AuthWelcomeScreen() {
           return;
         }
 
-        shouldResetSlide.current = true;
-        setNextBackgroundIndex(
-          (nextBackgroundIndex + 1) % AUTH_BACKGROUNDS.length
-        );
-        setCurrentBackgroundIndex(nextBackgroundIndex);
-        setIsSlidingBackground(false);
+        setCurrentBackgroundIndex((previousIndex) => {
+          const newCurrentIndex =
+            (previousIndex + 1) % AUTH_BACKGROUNDS.length;
+
+          setNextBackgroundIndex(
+            (newCurrentIndex + 1) % AUTH_BACKGROUNDS.length
+          );
+
+          return newCurrentIndex;
+        });
+
+        resetAnimationFrame.current = requestAnimationFrame(() => {
+          slideProgress.setValue(0);
+          setIsSlidingBackground(false);
+          isAnimating.current = false;
+          resetAnimationFrame.current = null;
+        });
       });
     };
 
@@ -113,17 +135,13 @@ export default function AuthWelcomeScreen() {
       clearInterval(interval);
       slideProgress.stopAnimation();
       isAnimating.current = false;
-      shouldResetSlide.current = false;
+
+      if (resetAnimationFrame.current !== null) {
+        cancelAnimationFrame(resetAnimationFrame.current);
+        resetAnimationFrame.current = null;
+      }
     };
-  }, [nextBackgroundIndex, slideProgress]);
-
-  useLayoutEffect(() => {
-    if (!shouldResetSlide.current) return;
-
-    slideProgress.setValue(0);
-    shouldResetSlide.current = false;
-    isAnimating.current = false;
-  }, [currentBackgroundIndex, nextBackgroundIndex, slideProgress]);
+  }, [slideProgress]);
 
   const currentFrameTranslateX = slideProgress.interpolate({
     inputRange: [0, 1],
@@ -297,7 +315,7 @@ const styles = StyleSheet.create({
 
   parallaxShade: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.06)",
+    // backgroundColor: "rgba(0,0,0,0.06)",
     width: "115%",
   },
 
