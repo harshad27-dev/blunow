@@ -3,6 +3,8 @@ import { Config } from "@/constants/config";
 import { storage } from "@/utils/storage";
 import type {
   RequestPasswordResetPayload,
+  StartAuthPayload,
+  StartAuthResponse,
   RequestPasswordResetResponse,
   ResetPasswordPayload,
   AuthResponse,
@@ -24,6 +26,14 @@ export const authService = {
   googleLogin: async (payload: GoogleLoginPayload): Promise<AuthResponse> => {
     const { data } = await api.post<ApiWrapper<AuthResponse>>(
       "/auth/google/mobile",
+      payload,
+    );
+    return data.data;
+  },
+
+  startAuth: async (payload: StartAuthPayload): Promise<StartAuthResponse> => {
+    const { data } = await api.post<ApiWrapper<StartAuthResponse>>(
+      "/auth/start",
       payload,
     );
     return data.data;
@@ -82,7 +92,9 @@ export const authService = {
     return data.data;
   },
 
-  resetPassword: async (payload: ResetPasswordPayload): Promise<{ message: string }> => {
+  resetPassword: async (
+    payload: ResetPasswordPayload,
+  ): Promise<{ message: string }> => {
     const { data } = await api.post<ApiWrapper<{ message: string }>>(
       "/auth/password-reset",
       payload,

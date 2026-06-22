@@ -29,6 +29,14 @@ router.post(
   controller.googleMobileLogin,
 );
 
+// POST /api/auth/start
+router.post(
+  '/start',
+  strictRateLimitMiddleware,
+  validateRequestLoginOtp,
+  controller.startAuth,
+);
+
 // POST /api/auth/login/otp
 router.post(
   '/login/otp',

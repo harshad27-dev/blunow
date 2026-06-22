@@ -99,6 +99,24 @@ export class AuthService {
     };
   }
 
+  async startAuth(dto: { email: string }) {
+    const user = await this.authRepository.findByEmail(dto.email);
+
+    if (user) {
+      const result = await this.requestLoginOtp(dto);
+      return {
+        ...result,
+        flow: "login" as const,
+      };
+    }
+
+    const result = await this.requestRegistrationOtp(dto);
+    return {
+      ...result,
+      flow: "signup" as const,
+    };
+  }
+
   async requestRegistrationOtp(dto: { email: string }) {
     const existingUser = await this.authRepository.findByEmail(dto.email);
 

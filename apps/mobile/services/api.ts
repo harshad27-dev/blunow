@@ -28,6 +28,7 @@ api.interceptors.response.use(
 
     const authRefreshBlockedRoutes = [
       "/auth/login",
+      "/auth/start",
       "/auth/login/otp",
       "/auth/google/mobile",
       "/auth/password-reset",

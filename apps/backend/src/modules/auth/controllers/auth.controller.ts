@@ -41,6 +41,15 @@ export class AuthController {
     }
   };
 
+  startAuth = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.authService.startAuth(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
   requestRegistrationOtp = async (req: Request, res: Response): Promise<void> => {
     try {
       const result = await this.authService.requestRegistrationOtp(req.body);

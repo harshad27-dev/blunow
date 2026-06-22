@@ -13,6 +13,8 @@ import type {
   RequestPasswordResetResponse,
   RequestRegisterOtpPayload,
   RequestRegisterOtpResponse,
+  StartAuthPayload,
+  StartAuthResponse,
   ResetPasswordPayload,
 } from "@/types/auth.types";
 
@@ -23,6 +25,7 @@ interface AuthState {
   isLoading: boolean;
 
   // Actions
+  startAuth: (payload: StartAuthPayload) => Promise<StartAuthResponse>;
   requestLoginOtp: (
     payload: RequestLoginOtpPayload,
   ) => Promise<RequestLoginOtpResponse>;
@@ -34,7 +37,9 @@ interface AuthState {
   requestPasswordReset: (
     payload: RequestPasswordResetPayload,
   ) => Promise<RequestPasswordResetResponse>;
-  resetPassword: (payload: ResetPasswordPayload) => Promise<{ message: string }>;
+  resetPassword: (
+    payload: ResetPasswordPayload,
+  ) => Promise<{ message: string }>;
   googleLogin: (payload: GoogleLoginPayload) => Promise<void>;
   logout: (options?: { allDevices?: boolean }) => Promise<void>;
   clearSession: () => Promise<void>;
@@ -47,6 +52,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   isAuthenticated: false,
   isLoading: true,
+
+  startAuth: async (payload) => {
+    return authService.startAuth(payload);
+  },
 
   requestLoginOtp: async (payload) => {
     return authService.requestLoginOtp(payload);

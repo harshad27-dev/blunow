@@ -24,6 +24,13 @@ export interface RegisterWithOtpPayload {
   gender: "MALE" | "FEMALE" | "NON_BINARY" | "OTHER";
 }
 
+export type AuthStartFlow = "login" | "signup";
+
+export type StartAuthPayload = EmailAuthPayload;
+export type StartAuthResponse = EmailAuthResponse & {
+  flow: AuthStartFlow;
+};
+
 export type RequestLoginOtpPayload = EmailAuthPayload;
 export type RequestLoginOtpResponse = EmailAuthResponse;
 export type RequestRegisterOtpPayload = EmailAuthPayload;
