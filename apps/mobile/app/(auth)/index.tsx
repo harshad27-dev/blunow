@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
@@ -19,7 +21,6 @@ import { Colors } from "@/constants/colors";
 import { Radius, Spacing } from "@/constants/spacing";
 import { FontFamily, FontSize } from "@/constants/typography";
 import { useAuthStore } from "@/store/authStore";
-import type { AuthStartFlow } from "@/types/auth.types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -33,31 +34,16 @@ const AUTH_BACKGROUNDS = [
   require("@/assets/images/authimages/cou7.png"),
 ];
 
-const GENDER_OPTIONS = [
-  { label: "Male", value: "MALE" },
-  { label: "Female", value: "FEMALE" },
-  { label: "Other", value: "OTHER" },
-] as const;
-
 export default function AuthWelcomeScreen() {
+  const router = useRouter();
   const startAuth = useAuthStore((state) => state.startAuth);
-  const emailLogin = useAuthStore((state) => state.emailLogin);
-  const registerWithOtp = useAuthStore((state) => state.registerWithOtp);
   const googleLogin = useAuthStore((state) => state.googleLogin);
 
   const [currentBackgroundIndex, setCurrentBackgroundIndex] = useState(0);
   const [nextBackgroundIndex, setNextBackgroundIndex] = useState(1);
   const [isSlidingBackground, setIsSlidingBackground] = useState(false);
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [username, setUsername] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [gender, setGender] = useState<
-    "MALE" | "FEMALE" | "NON_BINARY" | "OTHER"
-  >("OTHER");
-  const [authFlow, setAuthFlow] = useState<AuthStartFlow | null>(null);
   const [serverError, setServerError] = useState("");
-  const [emailMessage, setEmailMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const slideProgress = useRef(new Animated.Value(0)).current;
@@ -71,38 +57,15 @@ export default function AuthWelcomeScreen() {
   const actionsTranslate = useRef(new Animated.Value(24)).current;
 
   const normalizedEmail = email.trim().toLowerCase();
-  const normalizedUsername = username.trim().toLowerCase();
-  const hasStarted = authFlow !== null;
-  const isSignup = authFlow === "signup";
 
   const clearMessages = useCallback(() => {
     setServerError("");
-    setEmailMessage("");
   }, []);
-
-  const resetFlow = useCallback(() => {
-    setAuthFlow(null);
-    setOtp("");
-    setUsername("");
-    setBirthDate("");
-    setGender("OTHER");
-    clearMessages();
-  }, [clearMessages]);
 
   const handleGoogleToken = useCallback(
     (idToken: string) => googleLogin({ idToken }),
     [googleLogin],
   );
-
-  const validateSignupFields = useCallback(() => {
-    if (!/^[a-z0-9]+([._]?[a-z0-9]+)*$/.test(normalizedUsername)) {
-      return "Username can use lowercase letters, numbers, dots, and underscores.";
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate.trim())) {
-      return "Enter birth date as YYYY-MM-DD.";
-    }
-    return "";
-  }, [birthDate, normalizedUsername]);
 
   const handleStartAuth = useCallback(async () => {
     clearMessages();
@@ -114,11 +77,16 @@ export default function AuthWelcomeScreen() {
     setIsSubmitting(true);
     try {
       const response = await startAuth({ email: normalizedEmail });
-      setAuthFlow(response.flow);
-      setOtp("");
-      setEmailMessage(
-        response.devOtp ? `Dev OTP: ${response.devOtp}` : response.message,
-      );
+      router.push({
+        pathname: "/(auth)/otp",
+        params: {
+          email: normalizedEmail,
+          flow: response.flow,
+          message: response.devOtp
+            ? `Dev OTP: ${response.devOtp}`
+            : response.message,
+        },
+      });
     } catch (err: any) {
       setServerError(
         err?.response?.data?.message || "Unable to continue. Please try again.",
@@ -126,65 +94,7 @@ export default function AuthWelcomeScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [clearMessages, normalizedEmail, startAuth]);
-
-  const handleVerifyOtp = useCallback(async () => {
-    clearMessages();
-    if (!authFlow || !normalizedEmail || otp.trim().length !== 6) {
-      setServerError("Enter your email and 6-digit OTP.");
-      return;
-    }
-
-    if (isSignup) {
-      const validationError = validateSignupFields();
-      if (validationError) {
-        setServerError(validationError);
-        return;
-      }
-    }
-
-    setIsSubmitting(true);
-    try {
-      if (authFlow === "login") {
-        await emailLogin({ email: normalizedEmail, otp: otp.trim() });
-        return;
-      }
-
-      await registerWithOtp({
-        email: normalizedEmail,
-        otp: otp.trim(),
-        username: normalizedUsername,
-        birthDate: birthDate.trim(),
-        gender,
-      });
-    } catch (err: any) {
-      setServerError(
-        err?.response?.data?.message || "Invalid OTP. Please try again.",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [
-    authFlow,
-    birthDate,
-    clearMessages,
-    emailLogin,
-    gender,
-    isSignup,
-    normalizedEmail,
-    normalizedUsername,
-    otp,
-    registerWithOtp,
-    validateSignupFields,
-  ]);
-
-  const handleEmailChange = useCallback(
-    (value: string) => {
-      setEmail(value);
-      if (hasStarted) resetFlow();
-    },
-    [hasStarted, resetFlow],
-  );
+  }, [clearMessages, normalizedEmail, router, startAuth]);
 
   useEffect(() => {
     AUTH_BACKGROUNDS.forEach((image) => {
@@ -440,112 +350,38 @@ export default function AuthWelcomeScreen() {
                 <View style={styles.dividerLine} />
               </View>
 
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={handleEmailChange}
-                placeholder="Email address"
-                placeholderTextColor={Colors.onImageMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                editable={!isSubmitting}
-              />
-
-              {isSignup ? (
-                <>
-                  <TextInput
-                    style={styles.input}
-                    value={username}
-                    onChangeText={setUsername}
-                    placeholder="Username"
-                    placeholderTextColor={Colors.onImageMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!isSubmitting}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    value={birthDate}
-                    onChangeText={setBirthDate}
-                    placeholder="Birth date YYYY-MM-DD"
-                    placeholderTextColor={Colors.onImageMuted}
-                    keyboardType="numbers-and-punctuation"
-                    editable={!isSubmitting}
-                  />
-
-                  <View style={styles.genderRow}>
-                    {GENDER_OPTIONS.map((option) => (
-                      <TouchableOpacity
-                        key={option.value}
-                        style={[
-                          styles.genderPill,
-                          gender === option.value && styles.genderPillActive,
-                        ]}
-                        onPress={() => setGender(option.value)}
-                        disabled={isSubmitting}
-                        activeOpacity={0.82}
-                      >
-                        <Text
-                          style={[
-                            styles.genderText,
-                            gender === option.value && styles.genderTextActive,
-                          ]}
-                        >
-                          {option.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              ) : null}
-
-              {hasStarted ? (
+              <View style={styles.inputWithAction}>
                 <TextInput
-                  style={styles.input}
-                  value={otp}
-                  onChangeText={(value) =>
-                    setOtp(value.replace(/\D/g, "").slice(0, 6))
-                  }
-                  placeholder="6-digit OTP"
-                  placeholderTextColor={Colors.onImageMuted}
-                  keyboardType="number-pad"
-                  maxLength={6}
+                  style={styles.inlineInput}
+                  value={email}
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    clearMessages();
+                  }}
+                  placeholder="Email address"
+                  placeholderTextColor={Colors.black}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
                   editable={!isSubmitting}
                 />
-              ) : null}
-
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={hasStarted ? handleVerifyOtp : handleStartAuth}
-                disabled={isSubmitting}
-                activeOpacity={0.86}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color={Colors.textInverse} />
-                ) : (
-                  <Text style={styles.primaryButtonText}>
-                    {hasStarted ? "Verify OTP" : "Continue"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              {hasStarted ? (
                 <TouchableOpacity
-                  style={styles.resendButton}
+                  style={styles.arrowButton}
                   onPress={handleStartAuth}
                   disabled={isSubmitting}
-                  activeOpacity={0.8}
+                  activeOpacity={0.86}
                 >
-                  <Text style={styles.resendText}>Resend code</Text>
+                  {isSubmitting ? (
+                    <ActivityIndicator color={Colors.textInverse} />
+                  ) : (
+                    <Ionicons
+                      name="arrow-forward"
+                      size={22}
+                      color={Colors.textInverse}
+                    />
+                  )}
                 </TouchableOpacity>
-              ) : null}
-
-              {emailMessage ? (
-                <View style={styles.successBanner}>
-                  <Text style={styles.successBannerText}>{emailMessage}</Text>
-                </View>
-              ) : null}
+              </View>
 
               {serverError ? (
                 <View style={styles.errorBanner}>
@@ -681,95 +517,35 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.sm,
   },
 
-  input: {
+  inputWithAction: {
+    alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.9)",
     borderColor: "rgba(255,255,255,0.34)",
-    borderRadius: Radius.lg,
+    borderRadius: Radius.full,
     borderWidth: 1,
+    flexDirection: "row",
+    marginBottom: Spacing.sm,
+    minHeight: 52,
+    overflow: "hidden",
+  },
+
+  inlineInput: {
     color: Colors.textPrimary,
+    flex: 1,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.base,
-    marginBottom: Spacing.sm,
     minHeight: 52,
     paddingHorizontal: Spacing.md,
   },
 
-  genderRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-
-  genderPill: {
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.88)",
-    borderColor: "rgba(255,255,255,0.34)",
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: "center",
-    minHeight: 42,
-    paddingHorizontal: Spacing.sm,
-  },
-
-  genderPillActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primaryLight,
-  },
-
-  genderText: {
-    color: Colors.textSecondary,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.sm,
-  },
-
-  genderTextActive: {
-    color: Colors.textInverse,
-  },
-
-  primaryButton: {
+  arrowButton: {
     alignItems: "center",
     backgroundColor: Colors.primaryLight,
     borderRadius: Radius.full,
-    elevation: 8,
+    height: 40,
     justifyContent: "center",
-    minHeight: 56,
-    shadowColor: Colors.black,
-    shadowOffset: { height: 12, width: 0 },
-    shadowOpacity: 0.24,
-    shadowRadius: 20,
-  },
-
-  primaryButtonText: {
-    color: Colors.textInverse,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.base,
-  },
-
-  resendButton: {
-    alignItems: "center",
-    marginTop: Spacing.sm,
-  },
-
-  resendText: {
-    color: Colors.onImageMuted,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.sm,
-  },
-
-  successBanner: {
-    backgroundColor: Colors.success + "18",
-    borderColor: Colors.success,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    marginTop: Spacing.md,
-    padding: Spacing.sm,
-  },
-
-  successBannerText: {
-    color: Colors.success,
-    fontFamily: FontFamily.regular,
-    fontSize: FontSize.sm,
+    marginRight: 6,
+    width: 40,
   },
 
   errorBanner: {

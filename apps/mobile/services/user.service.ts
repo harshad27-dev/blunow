@@ -4,6 +4,7 @@ export interface UpdateProfilePayload {
   username?: string;
   bio?: string;
   age?: number;
+  birthDate?: string;
   location?: string;
   latitude?: number;
   longitude?: number;
@@ -41,3 +42,5 @@ export const userService = {
     return response.data;
   },
 };
+
+

@@ -1,7 +1,6 @@
 import axios from "axios";
 import { Config } from "@/constants/config";
 import { storage } from "@/utils/storage";
-import { useAuthStore } from "@/store/authStore";
 
 export const api = axios.create({
   baseURL: `${Config.API_URL}/api`,
@@ -62,10 +61,6 @@ api.interceptors.response.use(
               if (newRefresh) {
                 await storage.set(Config.REFRESH_TOKEN_KEY, newRefresh);
               }
-              useAuthStore.setState({
-                token: newToken,
-                isAuthenticated: true,
-              });
               return newToken;
             })
             .finally(() => {
@@ -78,8 +73,9 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return api(originalRequest);
       } catch {
-        // Refresh failed, so clear local auth state.
-        useAuthStore.getState().clearSession();
+        // Refresh failed, so clear local auth tokens.
+        await storage.delete(Config.TOKEN_KEY);
+        await storage.delete(Config.REFRESH_TOKEN_KEY);
         return Promise.reject(error);
       }
     }
@@ -87,3 +83,4 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+

@@ -58,25 +58,39 @@ const LOOKING_FOR_OPTIONS = [
     icon: "compass",
   },
 ] as const;
+const GENDER_OPTIONS = [
+  { label: "Male", value: "MALE" },
+  { label: "Female", value: "FEMALE" },
+  { label: "Non-binary", value: "NON_BINARY" },
+  { label: "Other", value: "OTHER" },
+] as const;
 
 type LookingFor = (typeof LOOKING_FOR_OPTIONS)[number]["label"];
+type Gender = (typeof GENDER_OPTIONS)[number]["value"];
 type OnboardingProgress = {
+  username: string;
+  birthDate: string;
+  gender: Gender;
   bio: string;
   currentStep: number;
   permissions: { location: boolean; notifications: boolean };
   selectedInterests: string[];
   selectedLookingFor: LookingFor;
 };
-const REGISTRATION_STEPS = 4;
-const ONBOARDING_STEPS = 4;
+const REGISTRATION_STEPS = 2;
+const ONBOARDING_STEPS = 5;
 const TOTAL_FLOW_STEPS = REGISTRATION_STEPS + ONBOARDING_STEPS;
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const updateProfileMutation = useUpdateProfileMutation();
+  const user = useAuthStore((state) => state.user);
   const refreshUser = useAuthStore((state) => state.refreshUser);
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [username, setUsername] = useState(user?.profile?.username || user?.username || "");
+  const [birthDate, setBirthDate] = useState(formatBirthDate(user?.profile?.birthDate));
+  const [gender, setGender] = useState<Gender>((user?.profile?.gender as Gender) || "OTHER");
   const [bio, setBio] = useState("");
   const [selectedLookingFor, setSelectedLookingFor] = useState<LookingFor>(
     "Serious Relationship",
@@ -105,6 +119,9 @@ export default function OnboardingScreen() {
 
       try {
         const progress = JSON.parse(raw) as Partial<OnboardingProgress>;
+        if (progress.username !== undefined) setUsername(progress.username);
+        if (progress.birthDate !== undefined) setBirthDate(progress.birthDate);
+        if (progress.gender !== undefined) setGender(progress.gender);
         if (progress.bio !== undefined) setBio(progress.bio);
         if (progress.currentStep) {
           setCurrentStep(Math.min(Math.max(progress.currentStep, 1), totalSteps));
@@ -135,6 +152,9 @@ export default function OnboardingScreen() {
     if (!hasRestoredProgress) return;
 
     const progress: OnboardingProgress = {
+      username,
+      birthDate,
+      gender,
       bio,
       currentStep,
       permissions,
@@ -144,9 +164,15 @@ export default function OnboardingScreen() {
 
     storage.set(Config.ONBOARDING_PROGRESS_KEY, JSON.stringify(progress));
   }, [
+    username,
+    birthDate,
+    gender,
     bio,
     currentStep,
     hasRestoredProgress,
+    username,
+    birthDate,
+    gender,
     permissions,
     selectedInterests,
     selectedLookingFor,
@@ -164,8 +190,16 @@ export default function OnboardingScreen() {
       const locationPayload = permissions.location
         ? await getLocationPayload()
         : {};
+      const profileBasicsPayload = validateProfileBasics(username, birthDate)
+        ? {}
+        : {
+            username: username.trim().toLowerCase(),
+            birthDate: toBackendBirthDate(birthDate),
+            gender,
+          };
 
       await updateProfileMutation.mutateAsync({
+        ...profileBasicsPayload,
         bio: bio.trim(),
         interests: selectedInterests,
         lookingFor: [useDefaults ? "New friends" : selectedIntent.label],
@@ -189,6 +223,16 @@ export default function OnboardingScreen() {
   };
 
   const handleNext = async () => {
+    setServerError("");
+
+    if (currentStep === 1) {
+      const profileError = validateProfileBasics(username, birthDate);
+      if (profileError) {
+        setServerError(profileError);
+        return;
+      }
+    }
+
     if (currentStep < totalSteps) {
       setCurrentStep((step) => step + 1);
       return;
@@ -232,14 +276,25 @@ export default function OnboardingScreen() {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}
           >
-            {currentStep === 1 && <BioStep bio={bio} onChangeBio={setBio} />}
-            {currentStep === 2 && (
+            {currentStep === 1 && (
+              <ProfileBasicsStep
+                username={username}
+                birthDate={birthDate}
+                gender={gender}
+                error={serverError}
+                onChangeUsername={setUsername}
+                onChangeBirthDate={setBirthDate}
+                onChangeGender={setGender}
+              />
+            )}
+            {currentStep === 2 && <BioStep bio={bio} onChangeBio={setBio} />}
+            {currentStep === 3 && (
               <LookingForStep
                 selectedLookingFor={selectedLookingFor}
                 onSelectLookingFor={setSelectedLookingFor}
               />
             )}
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <InterestsStep
                 selectedInterests={selectedInterests}
                 onToggleInterest={(interest) =>
@@ -249,7 +304,7 @@ export default function OnboardingScreen() {
                 }
               />
             )}
-            {currentStep === 4 && (
+            {currentStep === 5 && (
               <PermissionsStep
                 permissions={permissions}
                 onChangePermissions={setPermissions}
@@ -313,6 +368,95 @@ export default function OnboardingScreen() {
   );
 }
 
+function ProfileBasicsStep({
+  username,
+  birthDate,
+  gender,
+  error,
+  onChangeUsername,
+  onChangeBirthDate,
+  onChangeGender,
+}: {
+  username: string;
+  birthDate: string;
+  gender: Gender;
+  error?: string;
+  onChangeUsername: (value: string) => void;
+  onChangeBirthDate: (value: string) => void;
+  onChangeGender: (value: Gender) => void;
+}) {
+  return (
+    <View className="flex-1 justify-center">
+      <StepHeader
+        icon="person-circle"
+        title="Tell us about you"
+        description="Choose the name and basic details people will see on your profile."
+      />
+
+      <View className="mt-8 gap-3">
+        <View className="rounded-2xl border-2 px-4 py-3" style={styles.fieldBox}>
+          <Text className="mb-2 text-xs font-bold uppercase" style={styles.mutedText}>
+            Username
+          </Text>
+          <TextInput
+            value={username}
+            onChangeText={(value) => onChangeUsername(value.toLowerCase())}
+            placeholder="username"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            className="text-base"
+            style={styles.inputText}
+          />
+        </View>
+
+        <View className="rounded-2xl border-2 px-4 py-3" style={styles.fieldBox}>
+          <Text className="mb-2 text-xs font-bold uppercase" style={styles.mutedText}>
+            Birth date
+          </Text>
+          <TextInput
+            value={birthDate}
+            onChangeText={onChangeBirthDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="numbers-and-punctuation"
+            className="text-base"
+            style={styles.inputText}
+          />
+        </View>
+
+        <View className="mt-2 flex-row flex-wrap gap-3">
+          {GENDER_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              className="min-h-11 justify-center rounded-2xl border px-4"
+              style={gender === option.value ? styles.chipActive : styles.chip}
+              onPress={() => onChangeGender(option.value)}
+              activeOpacity={0.76}
+            >
+              <Text
+                className="text-sm font-bold"
+                style={
+                  gender === option.value
+                    ? styles.primaryButtonText
+                    : styles.bodyText
+                }
+              >
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {error ? (
+        <View className="mt-4 rounded-2xl border p-4" style={styles.errorBox}>
+          <Text className="text-sm font-semibold" style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
 function BioStep({
   bio,
   onChangeBio,
@@ -685,3 +829,51 @@ const toggleValue = (values: string[], value: string) =>
   values.includes(value)
     ? values.filter((item) => item !== value)
     : [...values, value];
+
+const validateProfileBasics = (username: string, birthDate: string) => {
+  const normalizedUsername = username.trim().toLowerCase();
+
+  if (!/^[a-z0-9]+([._]?[a-z0-9]+)*$/.test(normalizedUsername)) {
+    return "Username can use lowercase letters, numbers, dots, and underscores.";
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate.trim())) {
+    return "Enter birth date as YYYY-MM-DD.";
+  }
+
+  const birthday = new Date(`${birthDate.trim()}T00:00:00.000Z`);
+  if (Number.isNaN(birthday.getTime())) {
+    return "Enter a valid birth date.";
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthday.getUTCFullYear();
+  const monthDiff = today.getMonth() - birthday.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthday.getUTCDate())) {
+    age -= 1;
+  }
+
+  if (age < 18) {
+    return "You must be at least 18 years old.";
+  }
+
+  return "";
+};
+
+const toBackendBirthDate = (birthDate: string) =>
+  new Date(`${birthDate.trim()}T00:00:00.000Z`).toISOString();
+
+const formatBirthDate = (birthDate?: string | null) => {
+  if (!birthDate) return "";
+  const date = new Date(birthDate);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+};
+
+
+
+
+
+
+
+

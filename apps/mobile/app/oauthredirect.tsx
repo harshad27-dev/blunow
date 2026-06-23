@@ -8,7 +8,7 @@ export default function OAuthRedirectScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/(auth)/login");
+    router.replace("/(auth)");
   }, [router]);
 
   return (
@@ -26,3 +26,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+

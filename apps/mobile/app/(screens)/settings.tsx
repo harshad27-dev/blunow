@@ -42,7 +42,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             await logout();
             queryClient.clear();
-            router.replace('/(auth)/login');
+            router.replace('/');
           }
         }
       ]
@@ -61,7 +61,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             await logout({ allDevices: true });
             queryClient.clear();
-            router.replace('/(auth)/login');
+            router.replace('/');
           },
         },
       ],
@@ -294,3 +294,4 @@ const styles = StyleSheet.create({
     marginTop: 4,
   }
 });
+

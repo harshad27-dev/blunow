@@ -366,7 +366,6 @@ export class AuthService {
         email: googleProfile.email,
         googleId: googleProfile.sub,
         username: await this.generateGoogleUsername(googleProfile),
-        avatarUrl: googleProfile.picture,
       });
 
       eventBus.emit(EVENTS.AUTH.USER_REGISTERED, {
@@ -481,3 +480,4 @@ export class AuthService {
     return `user${randomInt(100000, 999999)}`;
   }
 }
+

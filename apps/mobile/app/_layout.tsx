@@ -1,23 +1,24 @@
 import "../global.css";
-import { useEffect, useState } from 'react';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from '@/lib/queryClient';
-import { View } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useFonts,
+import { useEffect, useState } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { View } from "react-native";
+import { Stack, useRouter, useSegments } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  useFonts,
   Outfit_400Regular,
   Outfit_500Medium,
   Outfit_600SemiBold,
   Outfit_700Bold,
-} from '@expo-google-fonts/outfit';
-import * as SplashScreen from 'expo-splash-screen';
-import { useAuthStore } from '@/store/authStore';
-import { Colors } from '@/constants/colors';
-import { AnimatedAppSplash } from '@/components/AnimatedAppSplash';
+} from "@expo-google-fonts/outfit";
+import * as SplashScreen from "expo-splash-screen";
+import { useAuthStore } from "@/store/authStore";
+import { Colors } from "@/constants/colors";
+import { AnimatedAppSplash } from "@/components/AnimatedAppSplash";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function AuthGuard() {
   const { isAuthenticated, isLoading, user } = useAuthStore();
@@ -27,17 +28,17 @@ function AuthGuard() {
   useEffect(() => {
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-    const onOnboarding = segments[1] === 'onboarding';
+    const inAuthGroup = segments[0] === "(auth)";
+    const onOnboarding = segments[1] === "onboarding";
     const needsOnboarding =
       isAuthenticated && !(user?.profile?.lookingFor?.length);
 
     if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/');
+      router.replace("/");
     } else if (needsOnboarding && !onOnboarding) {
-      router.replace('/(auth)/onboarding');
+      router.replace("/(auth)/onboarding");
     } else if (isAuthenticated && inAuthGroup && !needsOnboarding) {
-      router.replace('/(tabs)');
+      router.replace("/(tabs)");
     }
   }, [isAuthenticated, isLoading, router, segments, user?.profile?.lookingFor]);
 
@@ -47,33 +48,40 @@ function AuthGuard() {
 export default function RootLayout() {
   const { isLoading, rehydrate } = useAuthStore();
   const [splashDelayDone, setSplashDelayDone] = useState(false);
+  const [fontTimeoutDone, setFontTimeoutDone] = useState(false);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Outfit_400Regular,
     Outfit_500Medium,
     Outfit_600SemiBold,
     Outfit_700Bold,
-    Darleston_400Regular: require('../assets/fonts/Darleston.otf'),
-    BirdHouse_400Regular: require('../assets/fonts/Bird House.ttf'),
+    Darleston_400Regular: require("../assets/fonts/Darleston.otf"),
+    BirdHouse_400Regular: require("../assets/fonts/Bird House.ttf"),
   });
+
+  const fontsReady = fontsLoaded || Boolean(fontError) || fontTimeoutDone;
 
   useEffect(() => {
     rehydrate();
   }, [rehydrate]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setSplashDelayDone(true), 3000);
+    const splashTimer = setTimeout(() => setSplashDelayDone(true), 3000);
+    const fontTimer = setTimeout(() => setFontTimeoutDone(true), 1800);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(splashTimer);
+      clearTimeout(fontTimer);
+    };
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
+    if (fontsReady) {
+      SplashScreen.hideAsync().catch(() => undefined);
     }
-  }, [fontsLoaded]);
+  }, [fontsReady]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsReady) return null;
 
   if (isLoading || !splashDelayDone) {
     return (
@@ -89,7 +97,13 @@ export default function RootLayout() {
         <View style={{ flex: 1, backgroundColor: Colors.bg }}>
           <AuthGuard />
           <StatusBar style="dark" backgroundColor={Colors.bg} />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'none' }}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: Colors.bg },
+              animation: "none",
+            }}
+          >
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="(screens)" />

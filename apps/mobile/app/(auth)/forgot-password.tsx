@@ -198,7 +198,7 @@ export default function ForgotPasswordScreen() {
           {isResetComplete ? (
             <TouchableOpacity
               className="h-13 items-center justify-center rounded-full bg-primary py-4"
-              onPress={() => router.replace("/(auth)/login")}
+              onPress={() => router.replace("/(auth)")}
               activeOpacity={0.88}
             >
               <Text className="font-extrabold text-inverse">
@@ -281,3 +281,4 @@ function Field({
     </View>
   );
 }
+

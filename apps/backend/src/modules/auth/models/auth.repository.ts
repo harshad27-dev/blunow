@@ -36,7 +36,6 @@ export class AuthRepository {
     email: string;
     googleId: string;
     username: string;
-    avatarUrl?: string;
   }) {
     const fallbackBirthDate = new Date();
     fallbackBirthDate.setFullYear(fallbackBirthDate.getFullYear() - 18);
@@ -51,7 +50,6 @@ export class AuthRepository {
             username: data.username,
             birthDate: fallbackBirthDate,
             gender: "OTHER",
-            avatarUrl: data.avatarUrl,
           },
         },
       },
@@ -155,3 +153,4 @@ export class AuthRepository {
     });
   }
 }
+
