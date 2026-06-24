@@ -1,18 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import React, {
   useCallback,
   useEffect,
-  useMemo,
-  useRef,
   useState,
 } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -24,8 +21,15 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from "react-native-reanimated";
 import {
-  SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
@@ -75,39 +79,39 @@ const GENDER_OPTIONS = [
 ] as const;
 const STEP_THEMES = [
   {
-    accent: "#9F6BFF",
-    colors: ["#F0E6FF", "#F8EDFF", "#FFFFFF"] as const,
+    accent: "#5725C4",
+    colors: ["#B98DFF", "#D0AEFF", "#FFFFFF"] as const,
     icon: "person-outline",
     title: "Tell us about you",
     description:
       "A few essentials so your profile feels real from the first hello.",
   },
   {
-    accent: "#FF7A90",
-    colors: ["#FFE1E8", "#FFF1F3", "#FFFFFF"] as const,
+    accent: "#C62547",
+    colors: ["#FF8FA8", "#FFB4C5", "#FFFFFF"] as const,
     icon: "chatbubble-ellipses-outline",
     title: "Write a short bio",
     description:
       "Keep it light, specific, and true to the way you actually talk.",
   },
   {
-    accent: "#FF8B5F",
-    colors: ["#FFE5D6", "#FFF3EA", "#FFFFFF"] as const,
+    accent: "#C74416",
+    colors: ["#FF9B66", "#FFC19B", "#FFFFFF"] as const,
     icon: "heart-outline",
     title: "What are you looking for?",
     description: "Choose the intention that best matches your mood right now.",
   },
   {
-    accent: "#42B8A5",
-    colors: ["#DAF7F1", "#EEFCF8", "#FFFFFF"] as const,
+    accent: "#0B7465",
+    colors: ["#68D8C7", "#A7EEE2", "#FFFFFF"] as const,
     icon: "sparkles-outline",
     title: "Pick your interests",
     description:
       "Select a few easy conversation starters for better discovery.",
   },
   {
-    accent: "#577CFF",
-    colors: ["#DDE6FF", "#F0F4FF", "#FFFFFF"] as const,
+    accent: "#1839C2",
+    colors: ["#84A0FF", "#B5C8FF", "#FFFFFF"] as const,
     icon: "shield-checkmark-outline",
     title: "Almost there",
     description:
@@ -130,6 +134,11 @@ type OnboardingProgress = {
   selectedLookingFor: LookingFor;
 };
 const ONBOARDING_STEPS = STEP_THEMES.length;
+const STEP_TRANSITION_DURATION = 480;
+const STEP_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+const STEP_LAYOUT_TRANSITION =
+  LinearTransition.duration(STEP_TRANSITION_DURATION).easing(STEP_EASING);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -160,8 +169,9 @@ export default function OnboardingScreen() {
   });
   const [serverError, setServerError] = useState("");
   const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
-  const stepProgress = useRef(new Animated.Value(1)).current;
-  const contentProgress = useRef(new Animated.Value(1)).current;
+  const stepProgress = useSharedValue(1);
+  const contentProgress = useSharedValue(1);
+  const animatedDirection = useSharedValue<1 | -1>(1);
   const activeTheme = STEP_THEMES[currentStep];
   const previousTheme = STEP_THEMES[previousStep];
   const headerHeight = Math.max(250, Math.min(330, height * 0.36));
@@ -233,27 +243,23 @@ export default function OnboardingScreen() {
 
   const animateToStep = useCallback(
     (nextStep: StepIndex) => {
+      if (nextStep === currentStep) return;
+      const direction = nextStep > currentStep ? 1 : -1;
+      animatedDirection.value = direction;
       setPreviousStep(currentStep);
       setCurrentStep(nextStep);
-      stepProgress.setValue(0);
-      contentProgress.setValue(0);
-      Animated.parallel([
-        Animated.timing(stepProgress, {
-          duration: 560,
-          easing: Easing.out(Easing.cubic),
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-        Animated.timing(contentProgress, {
-          delay: 80,
-          duration: 420,
-          easing: Easing.out(Easing.cubic),
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      stepProgress.value = 0;
+      contentProgress.value = 0;
+      stepProgress.value = withTiming(1, {
+        duration: STEP_TRANSITION_DURATION,
+        easing: STEP_EASING,
+      });
+      contentProgress.value = withDelay(
+        40,
+        withTiming(1, { duration: 430, easing: STEP_EASING }),
+      );
     },
-    [contentProgress, currentStep, stepProgress],
+    [animatedDirection, contentProgress, currentStep, stepProgress],
   );
   const completeOnboarding = useCallback(
     async ({ useDefaults = false }: { useDefaults?: boolean } = {}) => {
@@ -342,23 +348,39 @@ export default function OnboardingScreen() {
     animateToStep(clampStep(currentStep - 1));
   }, [animateToStep, currentStep, isLoading]);
 
-  const contentAnimatedStyle = useMemo(
-    () => ({
-      opacity: contentProgress,
-      transform: [
-        {
-          translateY: contentProgress.interpolate({
-            inputRange: [0, 1],
-            outputRange: [18, 0],
-          }),
-        },
-      ],
-    }),
-    [contentProgress],
-  );
+  const gradientAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: stepProgress.value,
+  }));
+  const contentAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: contentProgress.value,
+    transform: [
+      { translateY: (1 - contentProgress.value) * 16 * animatedDirection.value },
+      { scale: 0.996 + contentProgress.value * 0.004 },
+    ],
+  }));
+  const stepRowAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: 1,
+    transform: [
+      { translateY: (1 - stepProgress.value) * 10 * animatedDirection.value },
+      { scale: 0.996 + stepProgress.value * 0.004 },
+    ],
+  }));
+  const topBarAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: stepProgress.value,
+    transform: [
+      { translateY: (stepProgress.value - 1) * 6 * animatedDirection.value },
+    ],
+  }));
+  const bottomBarAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: contentProgress.value,
+    transform: [{ translateY: (1 - contentProgress.value) * 16 }],
+  }));
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+    <View
+      style={[styles.screen, { backgroundColor: activeTheme.colors[0] }]}
+    >
+      <StatusBar style="dark" backgroundColor={activeTheme.colors[0]} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.keyboardView}
@@ -367,26 +389,30 @@ export default function OnboardingScreen() {
           <LinearGradient
             colors={previousTheme.colors}
             locations={[0, 0.62, 1]}
-            style={[styles.gradientHeader, { height: headerHeight }]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            className="absolute left-0 right-0 top-0"
+            style={{ height: headerHeight }}
           />
           <Animated.View
             pointerEvents="none"
-            style={[
-              styles.gradientHeader,
-              { height: headerHeight, opacity: stepProgress },
-            ]}
+            className="absolute left-0 right-0 top-0"
+            style={[{ height: headerHeight }, gradientAnimatedStyle]}
           >
             <LinearGradient
               colors={activeTheme.colors}
               locations={[0, 0.62, 1]}
-              style={StyleSheet.absoluteFill}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              className="h-full w-full"
             />
           </Animated.View>
 
-          <View
+          <Animated.View
             style={[
               styles.topBar,
-              { paddingTop: Math.max(Spacing.sm, insets.top * 0.2) },
+              { paddingTop: insets.top + Spacing.md },
+              topBarAnimatedStyle,
             ]}
           >
             <View>
@@ -395,7 +421,7 @@ export default function OnboardingScreen() {
                 Step {currentStep + 1} of {ONBOARDING_STEPS}
               </Text>
             </View>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Skip onboarding"
               activeOpacity={0.78}
@@ -408,8 +434,8 @@ export default function OnboardingScreen() {
               ) : (
                 <Ionicons name="close" size={21} color={Colors.textPrimary} />
               )}
-            </TouchableOpacity>
-          </View>
+            </TouchableOpacity> */}
+          </Animated.View>
 
           <ScrollView
             contentContainerStyle={[
@@ -431,7 +457,7 @@ export default function OnboardingScreen() {
                 return (
                   <StepperItem
                     key={step.title}
-                    accent={activeTheme.accent}
+                    accent={step.accent}
                     contentStyle={
                       index === currentStep ? contentAnimatedStyle : undefined
                     }
@@ -446,12 +472,16 @@ export default function OnboardingScreen() {
                         animateToStep(stepIndex);
                       }
                     }}
+                    rowStyle={
+                      index === currentStep ? stepRowAnimatedStyle : undefined
+                    }
+                    showContent={index === currentStep}
                     state={state}
                     title={step.title}
                   >
                     {index === 0 ? (
                       <ProfileBasicsStep
-                        accent={activeTheme.accent}
+                        accent={step.accent}
                         birthDate={birthDate}
                         gender={gender}
                         onChangeBirthDate={(value) =>
@@ -466,21 +496,21 @@ export default function OnboardingScreen() {
                     ) : null}
                     {index === 1 ? (
                       <BioStep
-                        accent={activeTheme.accent}
+                        accent={step.accent}
                         bio={bio}
                         onChangeBio={setBio}
                       />
                     ) : null}
                     {index === 2 ? (
                       <LookingForStep
-                        accent={activeTheme.accent}
+                        accent={step.accent}
                         onSelectLookingFor={setSelectedLookingFor}
                         selectedLookingFor={selectedLookingFor}
                       />
                     ) : null}
                     {index === 3 ? (
                       <InterestsStep
-                        accent={activeTheme.accent}
+                        accent={step.accent}
                         onToggleInterest={(interest) =>
                           setSelectedInterests((values) =>
                             toggleValue(values, interest),
@@ -491,7 +521,7 @@ export default function OnboardingScreen() {
                     ) : null}
                     {index === 4 ? (
                       <PermissionsStep
-                        accent={activeTheme.accent}
+                        accent={step.accent}
                         onChangePermissions={setPermissions}
                         permissions={permissions}
                       />
@@ -502,7 +532,7 @@ export default function OnboardingScreen() {
             </View>
           </ScrollView>
 
-          <View style={styles.bottomBar}>
+          <Animated.View style={[styles.bottomBar, bottomBarAnimatedStyle]}>
             {currentStep > 0 ? (
               <TouchableOpacity
                 accessibilityRole="button"
@@ -547,10 +577,10 @@ export default function OnboardingScreen() {
                 </>
               )}
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -564,6 +594,8 @@ function StepperItem({
   isFirst,
   isLast,
   onPress,
+  rowStyle,
+  showContent,
   state,
   title,
 }: {
@@ -576,63 +608,75 @@ function StepperItem({
   isFirst: boolean;
   isLast: boolean;
   onPress: () => void;
+  rowStyle?: object;
+  showContent: boolean;
   state: "active" | "completed" | "inactive";
   title: string;
 }) {
   const active = state === "active";
   const completed = state === "completed";
+  const expanded = active || showContent;
+  const highlighted = active || showContent;
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       disabled={active}
+      layout={STEP_LAYOUT_TRANSITION}
       onPress={onPress}
-      style={styles.stepItem}
+      style={[styles.stepItem, rowStyle]}
     >
       <View style={styles.stepRail}>
-        {!isFirst ? (
-          <View
-            style={[styles.railLine, completed && { backgroundColor: accent }]}
-          />
-        ) : null}
+        <View
+          style={[
+            styles.railLine,
+            styles.railLineTop,
+            isFirst && styles.railLineHidden,
+          ]}
+        />
         <View
           style={[
             styles.stepIcon,
-            active && { backgroundColor: accent, borderColor: accent },
-            completed && {
+            highlighted && { backgroundColor: accent, borderColor: accent },
+            completed && !highlighted && {
               backgroundColor: Colors.textPrimary,
               borderColor: Colors.textPrimary,
             },
           ]}
         >
           <Ionicons
-            name={completed ? "checkmark" : icon}
-            size={active ? 21 : 17}
-            color={active || completed ? Colors.white : Colors.textMuted}
+            name={completed && !highlighted ? "checkmark" : icon}
+            size={highlighted ? 21 : 17}
+            color={highlighted || completed ? Colors.white : Colors.textMuted}
           />
         </View>
-        {!isLast ? (
-          <View
-            style={[
-              styles.railLine,
-              (completed || active) && {
-                backgroundColor: active ? `${accent}66` : accent,
-              },
-            ]}
-          />
-        ) : null}
-      </View>
-      <Animated.View style={[styles.stepBody, active && styles.stepBodyActive]}>
-        <Text
+        <View
           style={[
-            styles.stepTitle,
-            active && styles.stepTitleActive,
-            completed && styles.stepTitleDone,
+            styles.railLine,
+            styles.railLineBottom,
+            isLast && styles.railLineHidden,
+            (completed || active) && {
+              backgroundColor: active ? `${accent}66` : accent,
+            },
           ]}
-        >
-          {title}
-        </Text>
-        {active ? (
+        />
+      </View>
+      <Animated.View
+        layout={STEP_LAYOUT_TRANSITION}
+        style={[styles.stepBody, expanded && styles.stepBodyActive]}
+      >
+        <View style={styles.stepHeader}>
+          <Text
+            style={[
+              styles.stepTitle,
+              expanded && styles.stepTitleActive,
+              completed && !expanded && styles.stepTitleDone,
+            ]}
+          >
+            {title}
+          </Text>
+        </View>
+        {showContent ? (
           <Animated.View style={contentStyle}>
             <Text style={styles.stepDescription}>{description}</Text>
             <View
@@ -653,7 +697,7 @@ function StepperItem({
           </Animated.View>
         ) : null}
       </Animated.View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 function ProfileBasicsStep({
@@ -951,7 +995,6 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: Colors.white, flex: 1 },
   keyboardView: { flex: 1 },
   backgroundWrap: { backgroundColor: Colors.white, flex: 1 },
-  gradientHeader: { left: 0, position: "absolute", right: 0, top: 0 },
   topBar: {
     alignItems: "center",
     flexDirection: "row",
@@ -982,9 +1025,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: { flexGrow: 1, paddingHorizontal: Spacing.lg },
   stepper: { alignSelf: "stretch" },
-  stepItem: { flexDirection: "row", minHeight: 56 },
+  stepItem: { flexDirection: "row", minHeight: 62 },
   stepRail: { alignItems: "center", width: 38 },
-  railLine: { backgroundColor: "rgba(28,28,28,0.1)", flex: 1, width: 2 },
+  railLine: { backgroundColor: "rgba(28,28,28,0.1)", width: 2 },
+  railLineTop: { height: 14 },
+  railLineBottom: { flex: 1 },
+  railLineHidden: { opacity: 0 },
   stepIcon: {
     alignItems: "center",
     backgroundColor: Colors.white,
@@ -1001,11 +1047,15 @@ const styles = StyleSheet.create({
   },
   stepBody: {
     flex: 1,
-    paddingBottom: Spacing.lg,
+    paddingBottom: Spacing.md,
     paddingLeft: Spacing.md,
-    paddingTop: 5,
+    paddingTop: 0,
   },
-  stepBodyActive: { paddingBottom: Spacing.xl, paddingTop: 0 },
+  stepBodyActive: { paddingBottom: Spacing.md, paddingTop: 0 },
+  stepHeader: {
+    justifyContent: "center",
+    minHeight: 62,
+  },
   activePill: {
     alignItems: "center",
     alignSelf: "flex-start",
@@ -1032,13 +1082,13 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semiBold,
     fontSize: FontSize.base,
     lineHeight: 22,
+    maxWidth: 300,
   },
   stepTitleActive: {
     color: Colors.textPrimary,
     fontFamily: FontFamily.bold,
-    fontSize: FontSize["2xl"],
-    lineHeight: 36,
-    maxWidth: 300,
+    fontSize: FontSize.xl,
+    lineHeight: 28,
   },
   stepTitleDone: { color: Colors.textPrimary },
   stepDescription: {
@@ -1046,7 +1096,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: FontSize.base,
     lineHeight: 23,
-    marginTop: Spacing.sm,
+    marginTop: 0,
     maxWidth: 314,
   },
   activeContent: {
