@@ -5,6 +5,7 @@ import app from './app';
 import { prisma } from './prisma/prisma';
 import { registerChatGateway } from './modules/chat/gateway/chat.gateway';
 import { registerRoomsGateway } from './modules/rooms/gateway/rooms.gateway';
+import { closeWorkers, startWorkers } from './queues/workers';
 
 const PORT = process.env.PORT ?? 3001;
 
@@ -26,6 +27,7 @@ registerRoomsGateway(io);
 async function start() {
   try {
     await prisma.$connect();
+    startWorkers();
     console.log('✅ Database connected');
 
     httpServer.listen(PORT, () => {
@@ -43,6 +45,16 @@ async function start() {
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received. Shutting down gracefully...');
   httpServer.close(async () => {
+    await closeWorkers();
+    await prisma.$disconnect();
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received. Shutting down gracefully...');
+  httpServer.close(async () => {
+    await closeWorkers();
     await prisma.$disconnect();
     process.exit(0);
   });

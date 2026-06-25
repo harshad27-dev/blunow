@@ -4,14 +4,18 @@ import { z } from "zod";
 const createPostSchema = z
   .object({
     caption: z.string().max(2200).optional(),
-    mediaUrls: z.array(z.string().url()).default([]),
-    mediaTypes: z.array(z.enum(["IMAGE", "VIDEO", "AUDIO"])).default([]),
+    mediaUrls: z.array(z.string().url()).max(10, "You can attach up to 10 media items").default([]),
+    mediaTypes: z.array(z.enum(["IMAGE", "VIDEO", "AUDIO"])).max(10).default([]),
     isPublic: z.boolean().default(true),
     isAnonymous: z.boolean().default(false),
   })
   .refine((data) => data.caption?.trim() || data.mediaUrls.length > 0, {
     message: "Add text or media to create a post",
     path: ["caption"],
+  })
+  .refine((data) => data.mediaTypes.length === data.mediaUrls.length, {
+    message: "Each media URL must include a matching media type",
+    path: ["mediaTypes"],
   });
 
 const updatePostSchema = z.object({

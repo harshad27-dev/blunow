@@ -1,11 +1,22 @@
-import { View, Text, Image, TouchableOpacity, Dimensions } from "react-native";
+import { useRef, useState } from "react";
+import {
+  Animated,
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  Dimensions,
+  Modal,
+  Pressable,
+  ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/colors";
-import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
-const cardInset = 32;
-const mediaHeight = Math.min(width - cardInset, 390);
+const mediaWidth = width - 24;
 
 const getStableImageNumber = (value: string, offset: number) => {
   const total = value
@@ -41,6 +52,15 @@ export default function FeedCard({
   onCommentPress,
   onSavePress,
 }: FeedCardProps) {
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [mediaAspectRatios, setMediaAspectRatios] = useState<
+    Record<string, number>
+  >({});
+  const lastTap = useRef(0);
+  const tapTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartScale = useRef(new Animated.Value(0)).current;
+  const heartOpacity = useRef(new Animated.Value(0)).current;
   const hasImage = Boolean(post.mediaUrls?.length);
   const displayName = post.isAnonymous ? "Anonymous" : post.author.username;
   const avatarUrl = post.isAnonymous
@@ -52,6 +72,80 @@ export default function FeedCard({
     `https://i.pravatar.cc/100?img=${getStableImageNumber(post.id, 23)}`,
     `https://i.pravatar.cc/100?img=${getStableImageNumber(post.id, 34)}`,
   ];
+  const activeMediaUrl = post.mediaUrls?.[activeMediaIndex];
+  const activeAspectRatio = activeMediaUrl
+    ? mediaAspectRatios[activeMediaUrl]
+    : undefined;
+  const mediaAspectRatio = activeAspectRatio || 4 / 5;
+
+  const handleMediaScrollEnd = (
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+  ) => {
+    const nextIndex = Math.round(
+      event.nativeEvent.contentOffset.x / mediaWidth,
+    );
+    setActiveMediaIndex(nextIndex);
+  };
+
+  const handleMediaPress = () => {
+    const now = Date.now();
+    const isDoubleTap = now - lastTap.current < 280;
+    lastTap.current = now;
+
+    if (isDoubleTap) {
+      if (tapTimeout.current) {
+        clearTimeout(tapTimeout.current);
+        tapTimeout.current = null;
+      }
+      Animated.parallel([
+        Animated.sequence([
+          Animated.spring(heartScale, {
+            toValue: 1,
+            friction: 4,
+            tension: 110,
+            useNativeDriver: true,
+          }),
+          Animated.timing(heartScale, {
+            toValue: 0.82,
+            duration: 120,
+            useNativeDriver: true,
+          }),
+          Animated.timing(heartScale, {
+            toValue: 1.08,
+            duration: 120,
+            useNativeDriver: true,
+          }),
+          Animated.timing(heartScale, {
+            toValue: 0,
+            duration: 220,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(heartOpacity, {
+            toValue: 1,
+            duration: 80,
+            useNativeDriver: true,
+          }),
+          Animated.delay(520),
+          Animated.timing(heartOpacity, {
+            toValue: 0,
+            duration: 180,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+      if (!post.isLiked) {
+        onLikePress?.(post.id, post.isLiked);
+      }
+      return;
+    }
+
+    tapTimeout.current = setTimeout(() => {
+      setViewerOpen(true);
+      tapTimeout.current = null;
+    }, 220);
+  };
 
   return (
     <View className="00 overflow-hidden">
@@ -130,37 +224,73 @@ export default function FeedCard({
       {hasImage ? (
         <View
           className="mx-3 overflow-hidden rounded-[24px] bg-bg-elevated"
-          style={{ height: mediaHeight }}
+          style={{ aspectRatio: mediaAspectRatio }}
         >
-          <Image
-            source={{ uri: post.mediaUrls![0] }}
-            className="h-full w-full"
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.68)"]}
-            className="absolute bottom-0 left-0 right-0 h-32"
-          />
-
-          <View className="absolute bottom-3 left-3 right-3 flex-row items-end justify-between">
-            <View className="max-w-[74%]">
-              <Text className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">
-                Live moment
-              </Text>
-              <Text
-                className="mt-1 text-lg font-extrabold text-white"
-                numberOfLines={1}
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleMediaScrollEnd}
+          >
+            {post.mediaUrls!.map((mediaUrl) => (
+              <Pressable
+                key={mediaUrl}
+                onPress={handleMediaPress}
+                style={{ aspectRatio: mediaAspectRatio, width: mediaWidth }}
               >
-                {`${displayName}'s update`}
-              </Text>
-            </View>
+                <Image
+                  source={{ uri: mediaUrl }}
+                  className="h-full w-full"
+                  resizeMode="cover"
+                  onLoad={(event) => {
+                    const source = event.nativeEvent.source;
+                    if (!source?.width || !source?.height) return;
 
+                    setMediaAspectRatios((current) => ({
+                      ...current,
+                      [mediaUrl]: source.width / source.height,
+                    }));
+                  }}
+                />
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {post.mediaUrls!.length > 1 ? (
+            <View className="absolute right-3 top-3">
             <View className="rounded-full bg-black/55 px-3 py-1.5">
               <Text className="text-xs font-extrabold text-white">
-                1/{post.mediaUrls?.length || 1}
+                {activeMediaIndex + 1}/{post.mediaUrls?.length || 1}
               </Text>
             </View>
           </View>
+          ) : null}
+
+          {post.mediaUrls!.length > 1 ? (
+            <View className="absolute top-3 left-0 right-0 flex-row justify-center">
+              {post.mediaUrls!.map((mediaUrl, index) => (
+                <View
+                  key={`dot-${mediaUrl}`}
+                  className={`mx-1 h-1.5 rounded-full ${
+                    index === activeMediaIndex ? "w-5 bg-white" : "w-1.5 bg-white/45"
+                  }`}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          <Animated.View
+            pointerEvents="none"
+            className="absolute inset-0 items-center justify-center"
+            style={{
+              opacity: heartOpacity,
+              transform: [{ scale: heartScale }],
+            }}
+          >
+            <View className="h-24 w-24 items-center justify-center">
+              <Ionicons name="heart" size={82} color={Colors.white} />
+            </View>
+          </Animated.View>
         </View>
       ) : (
         <View className="mx-3 rounded-[24px] border border-border bg-bg-elevated px-5 py-7">
@@ -243,7 +373,9 @@ export default function FeedCard({
               size={18}
               color={Colors.textSecondary}
             />
-    
+            <Text className="ml-1.5 text-xs font-bold text-text-secondary">
+              {post.commentsCount}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -277,7 +409,53 @@ export default function FeedCard({
 
         
       </View>
-            <View className="mx-4 mb-4 h-px bg-border" />
+      <View className="mx-4 mb-4 h-px bg-border" />
+
+      <Modal
+        visible={viewerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewerOpen(false)}
+      >
+        <View className="flex-1 bg-black">
+          <View className="absolute left-0 right-0 top-0 z-10 flex-row items-center justify-between px-4 pt-12">
+            <TouchableOpacity
+              className="h-11 w-11 items-center justify-center rounded-full bg-white/15"
+              onPress={() => setViewerOpen(false)}
+              activeOpacity={0.78}
+            >
+              <Ionicons name="close" size={22} color={Colors.white} />
+            </TouchableOpacity>
+            <View className="rounded-full bg-white/15 px-3 py-2">
+              <Text className="text-xs font-extrabold text-white">
+                {activeMediaIndex + 1}/{post.mediaUrls?.length || 1}
+              </Text>
+            </View>
+          </View>
+
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleMediaScrollEnd}
+            contentOffset={{ x: activeMediaIndex * width, y: 0 }}
+          >
+            {(post.mediaUrls || []).map((mediaUrl) => (
+              <View
+                key={`viewer-${mediaUrl}`}
+                className="items-center justify-center"
+                style={{ width }}
+              >
+                <Image
+                  source={{ uri: mediaUrl }}
+                  className="h-full w-full"
+                  resizeMode="contain"
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
 
     </View>
   );

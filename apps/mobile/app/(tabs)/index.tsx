@@ -4,12 +4,12 @@ import {
   RefreshControl,
   ActivityIndicator,
   Text,
-  TextInput,
   TouchableOpacity,
   Image,
   ScrollView,
-  Modal,
   Alert,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -20,14 +20,25 @@ import { ScreenSpacing } from "@/constants/screen";
 import { postService } from "@/services/post.service";
 import { useAuthStore } from "@/store/authStore";
 import { useFeedQuery, useStoriesQuery } from "@/hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Colors } from "@/constants/colors";
+import CommentsDrawer from "@/components/feed/CommentsDrawer";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 
 type StoryItem = {
   id: string;
   authorId?: string;
   name: string;
   imageUrl?: string | null;
+  mediaUrl?: string | null;
+  expiresAt?: string;
+  isViewed?: boolean;
 };
 
 type FeedPost = {
@@ -60,21 +71,42 @@ const getTimeAgo = (dateString: string) => {
   return `${days}d ago`;
 };
 
+const getTimeLeft = (expiresAt?: string) => {
+  if (!expiresAt) return "";
+
+  const remainingMs = new Date(expiresAt).getTime() - Date.now();
+  if (remainingMs <= 0) return "Expired";
+
+  const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+  if (hours > 0) return `${hours}h left`;
+
+  const minutes = Math.max(1, Math.floor(remainingMs / (1000 * 60)));
+  return `${minutes}m left`;
+};
+
 export default function FeedScreen() {
   const router = useRouter();
-  const { data: feedData, isLoading, isFetching, refetch } = useFeedQuery();
+  const queryClient = useQueryClient();
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const scrollY = useSharedValue(0);
+  const {
+    data: feedData,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useFeedQuery();
   const {
     data: storiesData,
     isLoading: storiesLoading,
     refetch: refetchStories,
   } = useStoriesQuery();
   const { user } = useAuthStore();
-  const [commentPostId, setCommentPostId] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState("");
-  const [isCommenting, setIsCommenting] = useState(false);
 
   const posts: FeedPost[] =
-    feedData?.map((p: any) => ({
+    feedData?.pages.flatMap((page: any) => page.feed).map((p: any) => ({
       id: p.postId,
       author: {
         username: p.author?.username || "user",
@@ -117,45 +149,85 @@ export default function FeedScreen() {
       params: { storyId },
     });
 
+  const openComments = (postId: string) => setCommentPostId(postId);
+
   const onRefresh = () => {
     refetch();
     refetchStories();
   };
 
+  const updateFeedPost = (
+    postId: string,
+    updater: (post: any) => any,
+  ) => {
+    queryClient.setQueryData(["feed"], (current: any) => {
+      if (!current) return current;
+
+      if (Array.isArray(current)) {
+        return current.map((post) =>
+          post.postId === postId || post.id === postId ? updater(post) : post,
+        );
+      }
+
+      return {
+        ...current,
+        pages: current.pages.map((page: any) => ({
+          ...page,
+          feed: page.feed.map((post: any) =>
+            post.postId === postId || post.id === postId
+              ? updater(post)
+              : post,
+          ),
+        })),
+      };
+    });
+  };
+
   const handleLikePost = async (postId: string, isLiked?: boolean) => {
-    if (isLiked) {
-      await postService.unlikePost(postId);
-    } else {
-      await postService.likePost(postId);
+    const previousFeed = queryClient.getQueryData(["feed"]);
+
+    updateFeedPost(postId, (post) => ({
+      ...post,
+      isLiked: !isLiked,
+      likesCount: Math.max(0, (post.likesCount || 0) + (isLiked ? -1 : 1)),
+    }));
+
+    try {
+      if (isLiked) {
+        await postService.unlikePost(postId);
+      } else {
+        await postService.likePost(postId);
+      }
+    } catch (error: any) {
+      queryClient.setQueryData(["feed"], previousFeed);
+      Alert.alert(
+        "Like failed",
+        error?.response?.data?.message || "Unable to update this post.",
+      );
     }
-    refetch();
   };
 
   const handleSavePost = async (postId: string, isSaved?: boolean) => {
-    if (isSaved) {
-      await postService.unsavePost(postId);
-    } else {
-      await postService.savePost(postId);
-    }
-    refetch();
-  };
+    const previousFeed = queryClient.getQueryData(["feed"]);
 
-  const handleSubmitComment = async () => {
-    if (!commentPostId || !commentText.trim()) return;
+    updateFeedPost(postId, (post) => ({
+      ...post,
+      isSaved: !isSaved,
+    }));
 
     try {
-      setIsCommenting(true);
-      await postService.addComment(commentPostId, commentText.trim());
-      setCommentText("");
-      setCommentPostId(null);
-      refetch();
+      if (isSaved) {
+        await postService.unsavePost(postId);
+      } else {
+        await postService.savePost(postId);
+      }
+      queryClient.invalidateQueries({ queryKey: ["saved-posts"] });
     } catch (error: any) {
+      queryClient.setQueryData(["feed"], previousFeed);
       Alert.alert(
-        "Comment failed",
-        error?.response?.data?.message || "Unable to add your comment.",
+        "Save failed",
+        error?.response?.data?.message || "Unable to update saved posts.",
       );
-    } finally {
-      setIsCommenting(false);
     }
   };
 
@@ -214,6 +286,14 @@ export default function FeedScreen() {
           >
             {currentUserName}
           </Text>
+          {currentUserStory?.expiresAt ? (
+            <Text
+              className="mt-0.5 w-full text-center text-[10px] font-bold text-text-muted"
+              numberOfLines={1}
+            >
+              {getTimeLeft(currentUserStory.expiresAt)}
+            </Text>
+          ) : null}
         </TouchableOpacity>
 
         {storiesLoading
@@ -233,7 +313,13 @@ export default function FeedScreen() {
                 activeOpacity={0.78}
                 onPress={() => openStory(story.id)}
               >
-                <View className="h-[68px] w-[68px] items-center justify-center rounded-[24px] border-2 border-primary-light bg-bg-card">
+                <View
+                  className={`h-[68px] w-[68px] items-center justify-center rounded-[24px] bg-bg-card ${
+                    story.isViewed
+                      ? "border border-border"
+                      : "border-2 border-primary-light"
+                  }`}
+                >
                   <View className="h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-[22px] border border-bg bg-bg-elevated">
                     {story.imageUrl ? (
                       <Image
@@ -244,9 +330,13 @@ export default function FeedScreen() {
                       <Ionicons name="person" size={24} color={Colors.textMuted} />
                     )}
                   </View>
-                  <View className="absolute -bottom-1 rounded-full bg-primary px-2 py-0.5">
+                  <View
+                    className={`absolute -bottom-1 rounded-full px-2 py-0.5 ${
+                      story.isViewed ? "bg-bg-elevated" : "bg-primary"
+                    }`}
+                  >
                     <Text className="text-[9px] font-extrabold uppercase text-white">
-                      New
+                      {story.isViewed ? "Seen" : "New"}
                     </Text>
                   </View>
                 </View>
@@ -256,21 +346,63 @@ export default function FeedScreen() {
                 >
                   {story.name}
                 </Text>
+                {story.expiresAt ? (
+                  <Text
+                    className="mt-0.5 w-full text-center text-[10px] font-bold text-text-muted"
+                    numberOfLines={1}
+                  >
+                    {getTimeLeft(story.expiresAt)}
+                  </Text>
+                ) : null}
               </TouchableOpacity>
             ))}
       </ScrollView>
     </View>
   );
 
+  const handleEndReached = () => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    fetchNextPage();
+  };
+
+  const renderFooter = () =>
+    isFetchingNextPage ? (
+      <View className="items-center py-5">
+        <ActivityIndicator color={Colors.primary} />
+      </View>
+    ) : null;
+
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(
+          scrollY.value,
+          [0, 90],
+          [0, -96],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollY.value = event.nativeEvent.contentOffset.y;
+  };
+
   return (
     <Screen edges={["left", "right"]}>
-      <Header />
+      <Animated.View
+        className="absolute left-0 right-0 top-0 z-20"
+        style={headerAnimatedStyle}
+      >
+        <Header />
+      </Animated.View>
       {isLoading ? (
-        <View className="flex-1 justify-center items-center">
+        <View className="flex-1 justify-center items-center pt-24">
           <ActivityIndicator color={Colors.primary} size="large" />
         </View>
       ) : posts.length === 0 ? (
-        <View className="flex-1">
+        <View className="flex-1 pt-24">
           {renderHeader()}
           <View className="flex-1 justify-center items-center px-6">
             <Text className="text-text-primary font-medium text-lg text-center">
@@ -289,12 +421,17 @@ export default function FeedScreen() {
             <FeedCard
               post={item}
               onLikePress={handleLikePost}
-              onCommentPress={setCommentPostId}
+              onCommentPress={openComments}
               onSavePress={handleSavePost}
             />
           )}
           ListHeaderComponent={renderHeader}
+          ListFooterComponent={renderFooter}
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.7}
           refreshControl={
             <RefreshControl
               refreshing={isFetching}
@@ -302,61 +439,17 @@ export default function FeedScreen() {
               tintColor={Colors.primary}
             />
           }
-          contentContainerStyle={{ paddingBottom: ScreenSpacing.bottomTab }}
+          contentContainerStyle={{
+            paddingBottom: ScreenSpacing.bottomTab,
+            paddingTop: 96,
+          }}
         />
       )}
-      <Modal
-        visible={!!commentPostId}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCommentPostId(null)}
-      >
-        <View className="flex-1 justify-end bg-black/40 px-4 pb-6">
-          <View className="rounded-[24px] border border-border bg-bg-card p-4">
-            <View className="mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-extrabold text-text-primary">
-                Add comment
-              </Text>
-              <TouchableOpacity
-                className="h-9 w-9 items-center justify-center rounded-full bg-bg-elevated"
-                onPress={() => setCommentPostId(null)}
-                disabled={isCommenting}
-              >
-                <Ionicons name="close" size={18} color={Colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              className="min-h-[96px] rounded-[18px] border border-border bg-bg-input px-4 py-3 text-base text-text-primary"
-              placeholder="Write your comment..."
-              placeholderTextColor={Colors.textMuted}
-              multiline
-              value={commentText}
-              onChangeText={setCommentText}
-              editable={!isCommenting}
-              textAlignVertical="top"
-            />
-            <TouchableOpacity
-              className={`mt-3 h-12 items-center justify-center rounded-full ${
-                commentText.trim() ? "bg-primary" : "bg-bg-elevated"
-              }`}
-              onPress={handleSubmitComment}
-              disabled={!commentText.trim() || isCommenting}
-            >
-              {isCommenting ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text
-                  className={`font-extrabold ${
-                    commentText.trim() ? "text-white" : "text-text-muted"
-                  }`}
-                >
-                  Post comment
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <CommentsDrawer
+        visible={Boolean(commentPostId)}
+        postId={commentPostId}
+        onClose={() => setCommentPostId(null)}
+      />
     </Screen>
   );
 }

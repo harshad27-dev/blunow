@@ -37,10 +37,16 @@ export class StoriesService {
     return this.storiesRepository.findActiveStoriesByAuthorId(authorId);
   }
 
-  async getStoryById(id: string) {
-    const story = await this.storiesRepository.findById(id);
+  async getStoryById(id: string, viewerId?: string) {
+    const story = await this.storiesRepository.findById(id, viewerId);
     if (!story) throw new AppError('Story not found', 404);
-    return story;
+    return {
+      ...story,
+      isViewed:
+        story.authorId === viewerId || Boolean((story as any).views?.length),
+      viewCount: story._count?.views || 0,
+      views: undefined,
+    };
   }
 
   async deleteStory(id: string, userId: string) {
@@ -51,6 +57,17 @@ export class StoriesService {
   }
 
   async recordView(storyId: string, viewerId: string) {
+    const story = await this.storiesRepository.findById(storyId);
+    if (!story) throw new AppError('Story not found', 404);
+
+    const existingView = await this.storiesRepository.findView(storyId, viewerId);
     await this.storiesRepository.addView(storyId, viewerId);
+    if (!existingView && story.authorId !== viewerId) {
+      eventBus.emit(EVENTS.STORY.VIEWED, {
+        storyId,
+        authorId: story.authorId,
+        viewerId,
+      });
+    }
   }
 }

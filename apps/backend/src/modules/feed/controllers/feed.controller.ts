@@ -8,7 +8,7 @@ export class FeedController {
 
   getFeed = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { minAge, maxAge, maxDistance, interests, sexuality, sort } = req.query;
+      const { cursor, minAge, maxAge, maxDistance, interests, sexuality, sort } = req.query;
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
       const profile = await getProfileLocation(req.user!.id);
@@ -24,7 +24,8 @@ export class FeedController {
         sexuality: sexuality as string,
         sort: sort as string,
         limit,
-        offset: (page - 1) * limit
+        offset: cursor ? 0 : (page - 1) * limit,
+        cursor: cursor as string | undefined,
       });
 
       res.status(200).json({ success: true, ...data });

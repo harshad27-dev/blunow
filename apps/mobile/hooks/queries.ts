@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { feedService } from '@/services/feed.service';
 import { postService, CreatePostPayload } from '@/services/post.service';
 import { userService } from '@/services/user.service';
@@ -19,15 +19,21 @@ import type {
  * Validates and normalizes the feed data response
  */
 export const useFeedQuery = () => {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['feed'],
-    queryFn: async () => {
-      const data = await feedService.getFeed();
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
+      const data = await feedService.getFeed({ page: pageParam, limit: 10 });
       if (!data?.success || !data?.feed) {
-        return [];
+        return { feed: [], hasMore: false, nextPage: undefined };
       }
-      return data.feed;
+      return {
+        feed: data.feed,
+        hasMore: Boolean(data.hasMore),
+        nextPage: data.hasMore ? pageParam + 1 : undefined,
+      };
     },
+    getNextPageParam: (lastPage) => lastPage.nextPage,
   });
 };
 
@@ -197,6 +203,7 @@ export const useStoriesQuery = () => {
         imageUrl: story.author?.profile?.avatarUrl || story.mediaUrl || '',
         mediaUrl: story.mediaUrl || '',
         expiresAt: story.expiresAt,
+        isViewed: Boolean(story.isViewed),
         viewsCount: story._count?.views || story.viewsCount || 0,
       }));
     },

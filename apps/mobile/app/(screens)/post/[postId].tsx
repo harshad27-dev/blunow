@@ -2,11 +2,9 @@ import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -16,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import FeedCard from "@/components/FeedCard";
+import CommentsDrawer from "@/components/feed/CommentsDrawer";
 import { postService } from "@/services/post.service";
 
 const getTimeAgo = (dateString?: string) => {
@@ -61,9 +60,7 @@ export default function PostDetailScreen() {
   const { postId } = useLocalSearchParams<{ postId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [commentText, setCommentText] = useState("");
-  const [isCommenting, setIsCommenting] = useState(false);
-  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
 
   const {
     data: postResponse,
@@ -119,25 +116,6 @@ export default function PostDetailScreen() {
         "Save failed",
         error?.response?.data?.message || "Unable to save this post.",
       );
-    }
-  };
-
-  const handleSubmitComment = async () => {
-    if (!postId || !commentText.trim()) return;
-
-    try {
-      setIsCommenting(true);
-      await postService.addComment(postId, commentText.trim());
-      setCommentText("");
-      setCommentOpen(false);
-      await refreshPostLists();
-    } catch (error: any) {
-      Alert.alert(
-        "Comment failed",
-        error?.response?.data?.message || "Unable to add your comment.",
-      );
-    } finally {
-      setIsCommenting(false);
     }
   };
 
@@ -198,64 +176,16 @@ export default function PostDetailScreen() {
           <FeedCard
             post={post}
             onLikePress={handleLikePost}
-            onCommentPress={() => setCommentOpen(true)}
+            onCommentPress={() => setCommentDrawerOpen(true)}
             onSavePress={handleSavePost}
           />
         </ScrollView>
       )}
-
-      <Modal
-        visible={commentOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCommentOpen(false)}
-      >
-        <View className="flex-1 justify-end bg-black/70 px-4 pb-6">
-          <View className="rounded-[24px] border border-[#242424] bg-[#0F0F0F] p-4">
-            <View className="mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-extrabold text-white">
-                Add comment
-              </Text>
-              <TouchableOpacity
-                className="h-9 w-9 items-center justify-center rounded-full bg-[#1A1A1A]"
-                onPress={() => setCommentOpen(false)}
-                disabled={isCommenting}
-              >
-                <Ionicons name="close" size={18} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              className="min-h-[96px] rounded-[18px] border border-[#242424] bg-[#151515] px-4 py-3 text-base text-white"
-              placeholder="Write your comment..."
-              placeholderTextColor="#666666"
-              multiline
-              value={commentText}
-              onChangeText={setCommentText}
-              editable={!isCommenting}
-              textAlignVertical="top"
-            />
-            <TouchableOpacity
-              className={`mt-3 h-12 items-center justify-center rounded-full ${
-                commentText.trim() ? "bg-white" : "bg-[#1A1A1A]"
-              }`}
-              onPress={handleSubmitComment}
-              disabled={!commentText.trim() || isCommenting}
-            >
-              {isCommenting ? (
-                <ActivityIndicator color="#000000" />
-              ) : (
-                <Text
-                  className={`font-extrabold ${
-                    commentText.trim() ? "text-black" : "text-[#666666]"
-                  }`}
-                >
-                  Post comment
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <CommentsDrawer
+        visible={commentDrawerOpen}
+        postId={postId || null}
+        onClose={() => setCommentDrawerOpen(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -80,8 +80,33 @@ export const postService = {
     return response.data;
   },
 
-  addComment: async (postId: string, content: string) => {
-    const response = await api.post(`/posts/${postId}/comments`, { content });
+  getComments: async (postId: string, page = 1, limit = 20) => {
+    const response = await api.get(`/posts/${postId}/comments`, {
+      params: { page, limit },
+    });
+    return response.data;
+  },
+
+  addComment: async (postId: string, content: string, parentId?: string) => {
+    const response = await api.post(`/posts/${postId}/comments`, {
+      content,
+      parentId,
+    });
+    return response.data;
+  },
+
+  deleteComment: async (postId: string, commentId: string) => {
+    const response = await api.delete(`/posts/${postId}/comments/${commentId}`);
+    return response.data;
+  },
+
+  likeComment: async (postId: string, commentId: string) => {
+    const response = await api.post(`/posts/${postId}/comments/${commentId}/like`);
+    return response.data;
+  },
+
+  unlikeComment: async (postId: string, commentId: string) => {
+    const response = await api.delete(`/posts/${postId}/comments/${commentId}/like`);
     return response.data;
   },
 };

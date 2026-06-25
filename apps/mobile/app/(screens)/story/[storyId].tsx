@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { storyService } from "@/services/story.service";
 
@@ -32,6 +32,7 @@ const getTimeLeft = (expiresAt?: string) => {
 export default function StoryDetailScreen() {
   const { storyId } = useLocalSearchParams<{ storyId: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const {
     data: storyResponse,
@@ -53,10 +54,20 @@ export default function StoryDetailScreen() {
   React.useEffect(() => {
     if (!storyId || !story) return;
 
-    storyService.recordView(storyId).catch(() => {
-      // Viewing should never block the story UI.
-    });
-  }, [storyId, story]);
+    storyService
+      .recordView(storyId)
+      .then(() => {
+        queryClient.setQueryData(["stories"], (current: any[] | undefined) => {
+          if (!current) return current;
+          return current.map((item) =>
+            item.id === storyId ? { ...item, isViewed: true } : item,
+          );
+        });
+      })
+      .catch(() => {
+        // Viewing should never block the story UI.
+      });
+  }, [queryClient, storyId, story]);
 
   return (
     <SafeAreaView className="flex-1 bg-[#050505]" edges={["top"]}>

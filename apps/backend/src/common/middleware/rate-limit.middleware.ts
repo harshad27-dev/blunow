@@ -23,3 +23,25 @@ export const strictRateLimitMiddleware = rateLimit({
     message: 'Too many attempts, please try again in 15 minutes.',
   },
 });
+
+export const socialActionRateLimitMiddleware = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many actions, please slow down.',
+  },
+});
+
+export const contentCreationRateLimitMiddleware = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many uploads or posts, please try again later.',
+  },
+});

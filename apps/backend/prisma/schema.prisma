@@ -26,6 +26,7 @@ model User {
   chatsAsUser1     Chat[]               @relation("ChatUser1")
   chatsAsUser2     Chat[]               @relation("ChatUser2")
   comments         Comment[]
+  commentLikes     CommentLike[]
   confessions      Confession[]
   receivedRequests MatchRequest[]       @relation("ReceivedRequests")
   sentRequests     MatchRequest[]       @relation("SentRequests")
@@ -225,13 +226,29 @@ model Comment {
   id        String   @id @default(uuid())
   postId    String
   authorId  String
+  parentId  String?
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes     CommentLike[]
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
 
   @@map("comments")
+}
+
+model CommentLike {
+  id        String   @id @default(uuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@map("comment_likes")
 }
 
 model Story {
@@ -541,6 +558,7 @@ enum ReportReason {
 
 enum ContentType {
   POST
+  COMMENT
   STORY
   MESSAGE
   CONFESSION

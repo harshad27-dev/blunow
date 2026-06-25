@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const createStorySchema = z.object({
   mediaUrl: z.string().url(),
-  mediaType: z.enum(['IMAGE', 'VIDEO', 'AUDIO']),
+  mediaType: z.enum(['IMAGE', 'VIDEO']),
   caption: z.string().max(200).optional(),
 });
 

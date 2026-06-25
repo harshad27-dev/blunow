@@ -73,10 +73,14 @@ const maskAnonymousPost = (post: any) => {
 
   return {
     ...post,
+    authorId: null,
     author: {
       ...post.author,
       id: null,
+      googleId: undefined,
+      passwordHash: undefined,
       email: undefined,
+      fcmToken: undefined,
       profile: {
         username: "Anonymous",
         avatarUrl: null,

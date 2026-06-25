@@ -15,6 +15,7 @@ export class FeedService {
     sort?: string;
     limit: number;
     offset: number;
+    cursor?: string;
   }) {
     // Array parsing
     const interestsList = params.interests
@@ -26,8 +27,7 @@ export class FeedService {
       interests: interestsList,
     });
 
-    return {
-      feed: feed.map((p) => ({
+    const items = feed.items.map((p) => ({
         postId: p.id,
         caption: p.caption,
         isAnonymous: Boolean(p.isAnonymous),
@@ -45,9 +45,15 @@ export class FeedService {
         savesCount: p.savesCount || 0,
         isLiked: Boolean(p.isLiked),
         isSaved: Boolean(p.isSaved),
-      })),
-      total: feed.length,
-      hasMore: feed.length === params.limit,
+        rankingScore: p.rankingScore,
+      }));
+
+    return {
+      items,
+      feed: items,
+      nextCursor: feed.nextCursor,
+      total: items.length,
+      hasMore: Boolean(feed.nextCursor),
     };
   }
 

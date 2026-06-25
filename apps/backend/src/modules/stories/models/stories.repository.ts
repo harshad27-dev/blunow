@@ -14,28 +14,39 @@ export class StoriesRepository {
     });
   }
 
-  async findById(id: string) {
+  async findById(id: string, viewerId?: string) {
     return prisma.story.findUnique({
       where: { id },
       include: {
         author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
+        ...(viewerId
+          ? { views: { where: { viewerId }, select: { id: true } } }
+          : {}),
         _count: { select: { views: true } },
       },
     });
   }
 
   async findActiveStories(userId: string) {
-    return prisma.story.findMany({
+    const stories = await prisma.story.findMany({
       where: {
         isDeleted: false,
         expiresAt: { gt: new Date() },
       },
       include: {
         author: { include: { profile: { select: { username: true, avatarUrl: true } } } },
+        views: { where: { viewerId: userId }, select: { id: true } },
         _count: { select: { views: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return stories.map((story) => ({
+      ...story,
+      isViewed: story.authorId === userId || story.views.length > 0,
+      viewCount: story._count.views,
+      views: undefined,
+    }));
   }
 
   async findActiveStoriesByAuthorId(authorId: string) {
@@ -58,6 +69,12 @@ export class StoriesRepository {
       where: { storyId_viewerId: { storyId, viewerId } },
       create: { storyId, viewerId },
       update: {},
+    });
+  }
+
+  async findView(storyId: string, viewerId: string) {
+    return prisma.storyView.findUnique({
+      where: { storyId_viewerId: { storyId, viewerId } },
     });
   }
 

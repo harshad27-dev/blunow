@@ -26,6 +26,7 @@ export const EVENTS = {
   },
   STORY: {
     CREATED: 'story.created',
+    VIEWED: 'story.viewed',
     EXPIRED: 'story.expired',
   },
   CHAT: {

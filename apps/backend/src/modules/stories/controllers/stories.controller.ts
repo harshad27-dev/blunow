@@ -34,7 +34,7 @@ export class StoriesController {
 
   getStory = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const story = await this.storiesService.getStoryById(req.params.id);
+      const story = await this.storiesService.getStoryById(req.params.id, req.user!.id);
       res.status(200).json({ success: true, data: story });
     } catch (error: any) {
       res.status(error.statusCode ?? 404).json({ success: false, message: error.message });

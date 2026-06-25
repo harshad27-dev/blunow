@@ -1,7 +1,7 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useChatConversationsQuery } from '@/hooks/useChat';
 import { Colors } from '@/constants/colors';
 
@@ -17,7 +17,6 @@ const ACTION_BUTTON_CLASS =
   'relative h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-card active:bg-bg-elevated';
 
 export default function Header() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { data: conversations = [] } = useChatConversationsQuery();
 
@@ -27,60 +26,61 @@ export default function Header() {
   );
 
   return (
-    <View 
-      className="flex-row items-center justify-between border-b border-border bg-bg px-5 pb-3"
-      style={{ paddingTop: insets.top + 8 }}
-    >
-      <View className="flex-row items-center">
-        <Text className="text-2xl font-extrabold tracking-widest text-text-primary">
-          Datebl
-        </Text>
-      </View>
-
-      <View className="flex-row items-center gap-3">
-        <TouchableOpacity 
-          className={ACTION_BUTTON_CLASS}
-          activeOpacity={0.78}
-          onPress={() => router.push('/(screens)/create-post')}
-          style={HEADER_SHADOW}
-        >
-          <Ionicons name="add" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          className={ACTION_BUTTON_CLASS}
-          activeOpacity={0.78}
-          onPress={() => router.push('/(screens)/notifications')}
-          style={HEADER_SHADOW}
-        >
-          <Ionicons
-            name="notifications-outline"
-            size={20}
-            color={Colors.textPrimary}
+    <SafeAreaView edges={['top']} className="border-b border-border bg-bg">
+      <View className="flex-row items-center justify-between px-5 pb-3 pt-2">
+        <View className="flex-row items-center">
+          <Image
+            source={require('@/assets/images/logoBlack.png')}
+            className="h-10 w-32"
+            resizeMode="contain"
           />
-        </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity 
-          className={ACTION_BUTTON_CLASS}
-          activeOpacity={0.78}
-          onPress={() => router.push('/(screens)/chat' as any)}
-          style={HEADER_SHADOW}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={20}
-            color={Colors.textPrimary}
-          />
+        <View className="flex-row items-center gap-3">
+          <TouchableOpacity 
+            className={ACTION_BUTTON_CLASS}
+            activeOpacity={0.78}
+            onPress={() => router.push('/(screens)/create-post')}
+            style={HEADER_SHADOW}
+          >
+            <Ionicons name="add" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
           
-          {unreadChats > 0 && (
-            <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full border-2 border-bg bg-primary-light px-1">
-              <Text className="text-[10px] font-extrabold text-white">
-                {unreadChats > 9 ? '9+' : unreadChats}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity 
+            className={ACTION_BUTTON_CLASS}
+            activeOpacity={0.78}
+            onPress={() => router.push('/(screens)/notifications')}
+            style={HEADER_SHADOW}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={Colors.textPrimary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            className={ACTION_BUTTON_CLASS}
+            activeOpacity={0.78}
+            onPress={() => router.push('/(screens)/chat' as any)}
+            style={HEADER_SHADOW}
+          >
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={20}
+              color={Colors.textPrimary}
+            />
+            
+            {unreadChats > 0 && (
+              <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full border-2 border-bg bg-primary-light px-1">
+                <Text className="text-[10px] font-extrabold text-white">
+                  {unreadChats > 9 ? '9+' : unreadChats}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
