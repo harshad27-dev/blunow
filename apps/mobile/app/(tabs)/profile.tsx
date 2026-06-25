@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
+import { CustomDialog } from "@/components/common/Modal";
 import { ProfilePostGrid } from "@/components/profile/ProfilePostGrid";
 import {
   ProfileCompletionCard,
@@ -43,6 +44,7 @@ export default function ProfileScreen() {
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
 
   const { data: liveUser } = useUserProfileQuery(user?.id);
   const { data: stats, isLoading: statsLoading } = useUserStatsQuery(user?.id);
@@ -81,7 +83,12 @@ export default function ProfileScreen() {
     lookingFor: profile?.lookingFor,
   });
   const editProfile = () => router.push("/(screens)/edit-profile");
-  const openSettings = () => router.push("/(screens)/settings");
+  const openCompletionDialog = () => setShowCompletionDialog(true);
+  const closeCompletionDialog = () => setShowCompletionDialog(false);
+  const goToEditProfileFromDialog = () => {
+    closeCompletionDialog();
+    editProfile();
+  };  const openSettings = () => router.push("/(screens)/settings");
   const openPost = (postId: string) =>
     router.push({
       pathname: "/(screens)/post/[postId]",
@@ -173,7 +180,7 @@ export default function ProfileScreen() {
           metrics={journeyMetrics}
           updatedAt={stats?.lastUpdated}
         />
-        <ProfileCompletionCard completion={completion} onPress={editProfile} />
+        <ProfileCompletionCard completion={completion} onPress={openCompletionDialog} />
         <ProfileTabs
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -229,6 +236,23 @@ export default function ProfileScreen() {
           )}
         </View>
       </ScrollView>
+
+      <CustomDialog
+        visible={showCompletionDialog}
+        title="Complete your profile"
+        message="Add your best photos, interests, and a short bio so people can get a better feel for you."
+        icon="sparkles-outline"
+        accent={Colors.primary}
+        actions={[
+          { label: "Later", onPress: closeCompletionDialog },
+          {
+            label: "Edit Profile",
+            onPress: goToEditProfileFromDialog,
+            variant: "primary",
+          },
+        ]}
+        onClose={closeCompletionDialog}
+      />
     </SafeAreaView>
   );
 }
