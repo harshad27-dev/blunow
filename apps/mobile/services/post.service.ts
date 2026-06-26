@@ -60,6 +60,13 @@ export const postService = {
     return response.data;
   },
 
+  getTrendingPosts: async (limit = 12) => {
+    const response = await api.get("/posts/trending", {
+      params: { limit },
+    });
+    return response.data;
+  },
+
   likePost: async (postId: string) => {
     const response = await api.post(`/posts/${postId}/like`);
     return response.data;

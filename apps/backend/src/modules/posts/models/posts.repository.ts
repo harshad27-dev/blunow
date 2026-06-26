@@ -148,6 +148,59 @@ export class PostsRepository {
 
     return hydrateAnonymousFlags(savedPosts.map((savedPost) => savedPost.post));
   }
+
+  async findTrending(limit = 20) {
+    const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const posts = await prisma.post.findMany({
+      where: {
+        isPublic: true,
+        isDeleted: false,
+        mediaUrls: { isEmpty: false },
+        createdAt: { gte: windowStart },
+      },
+      include: {
+        author: {
+          include: { profile: { select: { username: true, avatarUrl: true } } },
+        },
+        _count: { select: { likes: true, comments: true, saves: true } },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: Math.max(limit * 5, limit),
+    });
+
+    const hydratedPosts = await hydrateAnonymousFlags(posts);
+
+    return hydratedPosts
+      .map((post) => {
+        const ageInHours = Math.max(
+          1,
+          (Date.now() - post.createdAt.getTime()) / (1000 * 60 * 60),
+        );
+        const interactionScore =
+          post._count.likes * 1 +
+          post._count.comments * 2 +
+          post._count.saves * 2;
+        const mediaScore = Math.min(post.mediaUrls.length, 3);
+        const recencyPenalty = ageInHours * 0.12;
+        const trendingScore = interactionScore + mediaScore - recencyPenalty;
+
+        return {
+          ...post,
+          likesCount: post._count.likes,
+          commentsCount: post._count.comments,
+          savesCount: post._count.saves,
+          trendingScore,
+        };
+      })
+      .sort((a, b) => {
+        if (b.trendingScore !== a.trendingScore) {
+          return b.trendingScore - a.trendingScore;
+        }
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      })
+      .slice(0, limit);
+  }
 }
 
 const hydrateAnonymousFlag = async <T extends { id: string }>(

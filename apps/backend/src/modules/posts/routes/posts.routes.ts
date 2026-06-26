@@ -20,6 +20,7 @@ router.use(authenticate);
 // Posts
 router.post("/", contentCreationRateLimitMiddleware, validateCreatePost, postsController.createPost);
 router.get("/saved", postsController.getSavedPosts);
+router.get("/trending", postsController.getTrendingPosts);
 router.get("/user/:id", postsController.getUserPosts);
 router.get("/:id", postsController.getPost);
 router.patch("/:id", validateUpdatePost, postsController.updatePost);

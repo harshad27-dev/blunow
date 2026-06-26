@@ -18,10 +18,30 @@ import { Colors } from "@/constants/colors";
 const { width } = Dimensions.get("window");
 const mediaWidth = width - 24;
 
+/**
+ * Feed-safe aspect ratio limits
+ *
+ * 4 / 5  = portrait post
+ * 1 / 1  = square post
+ *
+ * This keeps the feed clean.
+ * The full-screen viewer still uses resizeMode="contain",
+ * so users can see the complete image there.
+ */
+const MIN_MEDIA_RATIO = 4 / 5;
+const MAX_MEDIA_RATIO = 1 / 1;
+
+const normalizeAspectRatio = (ratio: number) => {
+  if (!Number.isFinite(ratio) || ratio <= 0) return 4 / 5;
+
+  return Math.min(Math.max(ratio, MIN_MEDIA_RATIO), MAX_MEDIA_RATIO);
+};
+
 const getStableImageNumber = (value: string, offset: number) => {
   const total = value
     .split("")
     .reduce((sum, char) => sum + char.charCodeAt(0), offset);
+
   return (total % 65) + 1;
 };
 
@@ -54,29 +74,41 @@ export default function FeedCard({
 }: FeedCardProps) {
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [viewerOpen, setViewerOpen] = useState(false);
+
   const [mediaAspectRatios, setMediaAspectRatios] = useState<
     Record<string, number>
   >({});
+
   const lastTap = useRef(0);
   const tapTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
+
   const hasImage = Boolean(post.mediaUrls?.length);
+
   const displayName = post.isAnonymous ? "Anonymous" : post.author.username;
+
   const avatarUrl = post.isAnonymous
     ? null
     : post.author.avatarUrl ||
       `https://i.pravatar.cc/300?u=${post.author.username}`;
+
   const reactionAvatars = [
     `https://i.pravatar.cc/100?img=${getStableImageNumber(post.id, 12)}`,
     `https://i.pravatar.cc/100?img=${getStableImageNumber(post.id, 23)}`,
     `https://i.pravatar.cc/100?img=${getStableImageNumber(post.id, 34)}`,
   ];
+
   const activeMediaUrl = post.mediaUrls?.[activeMediaIndex];
+
   const activeAspectRatio = activeMediaUrl
     ? mediaAspectRatios[activeMediaUrl]
     : undefined;
-  const mediaAspectRatio = activeAspectRatio || 4 / 5;
+
+  const mediaAspectRatio = activeAspectRatio
+    ? normalizeAspectRatio(activeAspectRatio)
+    : 4 / 5;
 
   const handleMediaScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
@@ -84,12 +116,66 @@ export default function FeedCard({
     const nextIndex = Math.round(
       event.nativeEvent.contentOffset.x / mediaWidth,
     );
+
     setActiveMediaIndex(nextIndex);
+  };
+
+  const handleViewerScrollEnd = (
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+  ) => {
+    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+
+    setActiveMediaIndex(nextIndex);
+  };
+
+  const playDoubleTapHeart = () => {
+    heartScale.setValue(0);
+    heartOpacity.setValue(0);
+
+    Animated.parallel([
+      Animated.sequence([
+        Animated.spring(heartScale, {
+          toValue: 1,
+          friction: 4,
+          tension: 110,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heartScale, {
+          toValue: 0.82,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heartScale, {
+          toValue: 1.08,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heartScale, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.timing(heartOpacity, {
+          toValue: 1,
+          duration: 80,
+          useNativeDriver: true,
+        }),
+        Animated.delay(520),
+        Animated.timing(heartOpacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
   };
 
   const handleMediaPress = () => {
     const now = Date.now();
     const isDoubleTap = now - lastTap.current < 280;
+
     lastTap.current = now;
 
     if (isDoubleTap) {
@@ -97,47 +183,13 @@ export default function FeedCard({
         clearTimeout(tapTimeout.current);
         tapTimeout.current = null;
       }
-      Animated.parallel([
-        Animated.sequence([
-          Animated.spring(heartScale, {
-            toValue: 1,
-            friction: 4,
-            tension: 110,
-            useNativeDriver: true,
-          }),
-          Animated.timing(heartScale, {
-            toValue: 0.82,
-            duration: 120,
-            useNativeDriver: true,
-          }),
-          Animated.timing(heartScale, {
-            toValue: 1.08,
-            duration: 120,
-            useNativeDriver: true,
-          }),
-          Animated.timing(heartScale, {
-            toValue: 0,
-            duration: 220,
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.sequence([
-          Animated.timing(heartOpacity, {
-            toValue: 1,
-            duration: 80,
-            useNativeDriver: true,
-          }),
-          Animated.delay(520),
-          Animated.timing(heartOpacity, {
-            toValue: 0,
-            duration: 180,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
+
+      playDoubleTapHeart();
+
       if (!post.isLiked) {
         onLikePress?.(post.id, post.isLiked);
       }
+
       return;
     }
 
@@ -148,12 +200,16 @@ export default function FeedCard({
   };
 
   return (
-    <View className="00 overflow-hidden">
+    <View className="overflow-hidden">
       <View className="flex-row items-center justify-between px-4 py-4">
         <View className="min-w-0 flex-1 flex-row items-center">
           <View className="mr-3 h-12 w-12 overflow-hidden rounded-full border border-border bg-bg-elevated">
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} className="h-full w-full" />
+              <Image
+                source={{ uri: avatarUrl }}
+                className="h-full w-full"
+                resizeMode="cover"
+              />
             ) : (
               <View className="h-full w-full items-center justify-center bg-bg-elevated">
                 <Ionicons
@@ -173,6 +229,7 @@ export default function FeedCard({
               >
                 {displayName}
               </Text>
+
               {post.isAnonymous ? (
                 <View className="ml-2 rounded-full border border-border bg-bg-elevated px-2 py-0.5">
                   <Text className="text-[9px] font-extrabold uppercase text-text-muted">
@@ -193,12 +250,15 @@ export default function FeedCard({
               >
                 {post.timeAgo}
               </Text>
+
               <View className="mx-2 h-1 w-1 rounded-full bg-text-muted" />
+
               <Ionicons
                 name="location-outline"
                 size={12}
                 color={Colors.textSecondary}
               />
+
               <Text
                 className="ml-1 text-xs font-medium text-text-secondary"
                 numberOfLines={1}
@@ -224,7 +284,10 @@ export default function FeedCard({
       {hasImage ? (
         <View
           className="mx-3 overflow-hidden rounded-[24px] bg-bg-elevated"
-          style={{ aspectRatio: mediaAspectRatio }}
+          style={{
+            width: mediaWidth,
+            aspectRatio: mediaAspectRatio,
+          }}
         >
           <ScrollView
             horizontal
@@ -232,47 +295,59 @@ export default function FeedCard({
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={handleMediaScrollEnd}
           >
-            {post.mediaUrls!.map((mediaUrl) => (
-              <Pressable
-                key={mediaUrl}
-                onPress={handleMediaPress}
-                style={{ aspectRatio: mediaAspectRatio, width: mediaWidth }}
-              >
-                <Image
-                  source={{ uri: mediaUrl }}
-                  className="h-full w-full"
-                  resizeMode="cover"
-                  onLoad={(event) => {
-                    const source = event.nativeEvent.source;
-                    if (!source?.width || !source?.height) return;
+            {post.mediaUrls!.map((mediaUrl) => {
+              const currentRatio = mediaAspectRatios[mediaUrl]
+                ? normalizeAspectRatio(mediaAspectRatios[mediaUrl])
+                : mediaAspectRatio;
 
-                    setMediaAspectRatios((current) => ({
-                      ...current,
-                      [mediaUrl]: source.width / source.height,
-                    }));
+              return (
+                <Pressable
+                  key={mediaUrl}
+                  onPress={handleMediaPress}
+                  style={{
+                    width: mediaWidth,
+                    aspectRatio: currentRatio,
                   }}
-                />
-              </Pressable>
-            ))}
+                >
+                  <Image
+                    source={{ uri: mediaUrl }}
+                    className="h-full w-full"
+                    resizeMode="cover"
+                    onLoad={(event) => {
+                      const source = event.nativeEvent.source;
+
+                      if (!source?.width || !source?.height) return;
+
+                      setMediaAspectRatios((current) => ({
+                        ...current,
+                        [mediaUrl]: source.width / source.height,
+                      }));
+                    }}
+                  />
+                </Pressable>
+              );
+            })}
           </ScrollView>
 
           {post.mediaUrls!.length > 1 ? (
             <View className="absolute right-3 top-3">
-            <View className="rounded-full bg-black/55 px-3 py-1.5">
-              <Text className="text-xs font-extrabold text-white">
-                {activeMediaIndex + 1}/{post.mediaUrls?.length || 1}
-              </Text>
+              <View className="rounded-full bg-black/55 px-3 py-1.5">
+                <Text className="text-xs font-extrabold text-white">
+                  {activeMediaIndex + 1}/{post.mediaUrls?.length || 1}
+                </Text>
+              </View>
             </View>
-          </View>
           ) : null}
 
           {post.mediaUrls!.length > 1 ? (
-            <View className="absolute top-3 left-0 right-0 flex-row justify-center">
+            <View className="absolute left-0 right-0 top-3 flex-row justify-center">
               {post.mediaUrls!.map((mediaUrl, index) => (
                 <View
                   key={`dot-${mediaUrl}`}
                   className={`mx-1 h-1.5 rounded-full ${
-                    index === activeMediaIndex ? "w-5 bg-white" : "w-1.5 bg-white/45"
+                    index === activeMediaIndex
+                      ? "w-5 bg-white"
+                      : "w-1.5 bg-white/45"
                   }`}
                 />
               ))}
@@ -299,6 +374,7 @@ export default function FeedCard({
             size={28}
             color={Colors.textSecondary}
           />
+
           <Text className="mt-4 text-xl font-extrabold leading-7 text-text-primary">
             {post.caption || "Shared a fresh moment from the city."}
           </Text>
@@ -306,14 +382,14 @@ export default function FeedCard({
       )}
 
       <View className="px-5 pb-4 pt-4">
-        {hasImage && (
+        {hasImage ? (
           <Text className="text-base leading-6 text-text-secondary">
             <Text className="font-extrabold text-text-primary">
               {displayName}{" "}
             </Text>
             {post.caption || "Shared a fresh moment from the city."}
           </Text>
-        )}
+        ) : null}
 
         <View className="mt-4 flex-row items-center justify-between">
           <View className="mr-3 min-w-0 flex-1 flex-row items-center">
@@ -322,9 +398,12 @@ export default function FeedCard({
                 key={avatar}
                 source={{ uri: avatar }}
                 className="h-7 w-7 rounded-full border-2 border-bg-card bg-bg-elevated"
-                style={{ marginLeft: index === 0 ? 0 : -8 }}
+                style={{
+                  marginLeft: index === 0 ? 0 : -8,
+                }}
               />
             ))}
+
             <Text
               className="ml-2 flex-1 text-xs font-semibold text-text-secondary"
               numberOfLines={1}
@@ -339,6 +418,7 @@ export default function FeedCard({
               size={14}
               color={Colors.textSecondary}
             />
+
             <Text className="ml-1.5 text-xs font-bold text-text-secondary">
               2.4k
             </Text>
@@ -346,14 +426,15 @@ export default function FeedCard({
         </View>
       </View>
 
-
       <View className="flex-row items-center justify-between px-4 pb-4">
         <View className="flex-row items-center">
           <TouchableOpacity
             activeOpacity={0.75}
             onPress={() => onLikePress?.(post.id, post.isLiked)}
             className={`mr-2 flex-row items-center rounded-full px-4 py-3 ${
-              post.isLiked ? "border border-primary-light bg-primary-light" : "border border-border bg-bg-elevated"
+              post.isLiked
+                ? "border border-primary-light bg-primary-light"
+                : "border border-border bg-bg-elevated"
             }`}
           >
             <Ionicons
@@ -373,6 +454,7 @@ export default function FeedCard({
               size={18}
               color={Colors.textSecondary}
             />
+
             <Text className="ml-1.5 text-xs font-bold text-text-secondary">
               {post.commentsCount}
             </Text>
@@ -390,6 +472,7 @@ export default function FeedCard({
               color={Colors.textSecondary}
             />
           </TouchableOpacity>
+
           <TouchableOpacity
             activeOpacity={0.75}
             onPress={() => onSavePress?.(post.id, post.isSaved)}
@@ -406,9 +489,8 @@ export default function FeedCard({
             />
           </TouchableOpacity>
         </View>
-
-        
       </View>
+
       <View className="mx-4 mb-4 h-px bg-border" />
 
       <Modal
@@ -426,6 +508,7 @@ export default function FeedCard({
             >
               <Ionicons name="close" size={22} color={Colors.white} />
             </TouchableOpacity>
+
             <View className="rounded-full bg-white/15 px-3 py-2">
               <Text className="text-xs font-extrabold text-white">
                 {activeMediaIndex + 1}/{post.mediaUrls?.length || 1}
@@ -437,8 +520,11 @@ export default function FeedCard({
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={handleMediaScrollEnd}
-            contentOffset={{ x: activeMediaIndex * width, y: 0 }}
+            onMomentumScrollEnd={handleViewerScrollEnd}
+            contentOffset={{
+              x: activeMediaIndex * width,
+              y: 0,
+            }}
           >
             {(post.mediaUrls || []).map((mediaUrl) => (
               <View
@@ -456,7 +542,6 @@ export default function FeedCard({
           </ScrollView>
         </View>
       </Modal>
-
     </View>
   );
 }

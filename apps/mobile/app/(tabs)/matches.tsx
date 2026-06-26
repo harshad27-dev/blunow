@@ -552,20 +552,39 @@ const ProgressDots = ({
 }: {
   activeIndex: number;
   total: number;
-}) => (
-  <View
-    className="h-8 flex-row items-center gap-1.5 rounded-full border px-3"
-    style={styles.floatingButton}
-  >
-    {Array.from({ length: total }).map((_, index) => (
-      <View
-        key={index}
-        className={`h-2 rounded-full ${index === activeIndex ? "w-[26px]" : "w-2"}`}
-        style={index === activeIndex ? styles.activeDot : styles.inactiveDot}
-      />
-    ))}
-  </View>
-);
+}) => {
+  const maxVisibleDots = 5;
+  const visibleDotCount = Math.min(total, maxVisibleDots);
+  const maxStartIndex = Math.max(total - visibleDotCount, 0);
+  const startIndex =
+    total <= maxVisibleDots
+      ? 0
+      : Math.min(Math.max(activeIndex - Math.floor(visibleDotCount / 2), 0), maxStartIndex);
+  const visibleIndexes = Array.from(
+    { length: visibleDotCount },
+    (_, index) => startIndex + index,
+  );
+
+  return (
+    <View
+      className="h-8 flex-row items-center gap-1.5 rounded-full border px-3"
+      style={[styles.floatingButton, styles.progressDots]}
+    >
+      {visibleIndexes.map((index) => (
+        <View
+          key={index}
+          className={`h-2 rounded-full ${index === activeIndex ? "w-[26px]" : "w-2"}`}
+          style={index === activeIndex ? styles.activeDot : styles.inactiveDot}
+        />
+      ))}
+      {total > maxVisibleDots ? (
+        <Text className="ml-1 text-xs font-bold" style={styles.photoText}>
+          {activeIndex + 1}/{total}
+        </Text>
+      ) : null}
+    </View>
+  );
+};
 
 const StatusPill = ({ online }: { online: boolean }) => (
   <View
@@ -776,6 +795,9 @@ const styles = StyleSheet.create({
   floatingButton: {
     backgroundColor: Colors.primary + "B8",
     borderColor: Colors.textInverse + "22",
+  },
+  progressDots: {
+    maxWidth: 168,
   },
   floatingButtonLight: {
     backgroundColor: Colors.bgCard,

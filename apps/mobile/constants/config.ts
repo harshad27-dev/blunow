@@ -1,5 +1,5 @@
 // Change this to your machine's local IP when testing on a physical device
-const DEV_API_URL = 'http://192.168.1.29:3001';
+const DEV_API_URL = 'http://192.168.1.42:3001';
 const PROD_API_URL = 'https://api.blunow.app';
 
 export const Config = {

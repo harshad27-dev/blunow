@@ -66,6 +66,12 @@ export class PostsService {
     const posts = await this.postsRepository.findSavedByUserId(userId);
     return posts.map(maskAnonymousPost);
   }
+
+  async getTrendingPosts(limit = 20) {
+    const normalizedLimit = Math.min(Math.max(limit, 1), 40);
+    const posts = await this.postsRepository.findTrending(normalizedLimit);
+    return posts.map(maskAnonymousPost);
+  }
 }
 
 const maskAnonymousPost = (post: any) => {

@@ -1,10 +1,15 @@
-import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { feedService } from '@/services/feed.service';
-import { postService, CreatePostPayload } from '@/services/post.service';
-import { userService } from '@/services/user.service';
-import { searchService } from '@/services/search.service';
-import { matchService } from '@/services/match.service';
-import { storyService } from '@/services/story.service';
+import {
+  useInfiniteQuery,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { feedService } from "@/services/feed.service";
+import { postService, CreatePostPayload } from "@/services/post.service";
+import { userService } from "@/services/user.service";
+import { searchService } from "@/services/search.service";
+import { matchService } from "@/services/match.service";
+import { storyService } from "@/services/story.service";
 import type {
   Match,
   DiscoverProfile,
@@ -12,15 +17,15 @@ import type {
   MatchRequest,
   RespondMatchRequestPayload,
   SendMatchRequestPayload,
-} from '@/types/match.types';
-
+} from "@/types/match.types";
+import type { TrendingPost } from "@/constants/discover";
 
 /**
  * Validates and normalizes the feed data response
  */
 export const useFeedQuery = () => {
   return useInfiniteQuery({
-    queryKey: ['feed'],
+    queryKey: ["feed"],
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const data = await feedService.getFeed({ page: pageParam, limit: 10 });
@@ -52,13 +57,13 @@ export const useCreatePostMutation = () => {
       const { imageUri, ...postPayload } = params;
 
       let uploadedUrls: string[] = [];
-      let uploadedTypes: ('IMAGE' | 'VIDEO' | 'AUDIO')[] = [];
+      let uploadedTypes: ("IMAGE" | "VIDEO" | "AUDIO")[] = [];
 
       if (imageUri) {
         const uploadedUrl = await postService.uploadMedia(imageUri);
         if (uploadedUrl) {
           uploadedUrls.push(uploadedUrl);
-          uploadedTypes.push('IMAGE');
+          uploadedTypes.push("IMAGE");
         }
       }
 
@@ -70,10 +75,10 @@ export const useCreatePostMutation = () => {
     },
     onSuccess: () => {
       // Invalidate feed query to refetch latest posts automatically
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
-      queryClient.invalidateQueries({ queryKey: ['user-posts'] });
-      queryClient.invalidateQueries({ queryKey: ['user-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['saved-posts'] });
+      queryClient.invalidateQueries({ queryKey: ["feed"] });
+      queryClient.invalidateQueries({ queryKey: ["user-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["user-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["saved-posts"] });
     },
   });
 };
@@ -83,7 +88,7 @@ export const useCreatePostMutation = () => {
  */
 export const useUserStatsQuery = (userId?: string) => {
   return useQuery({
-    queryKey: ['user-stats', userId],
+    queryKey: ["user-stats", userId],
     queryFn: async () => {
       if (!userId) return null;
       const data = await userService.getStats(userId);
@@ -123,7 +128,7 @@ export const useUserStatsQuery = (userId?: string) => {
  */
 export const useUserPostsQuery = (userId?: string) => {
   return useQuery({
-    queryKey: ['user-posts', userId],
+    queryKey: ["user-posts", userId],
     queryFn: async () => {
       if (!userId) return [];
       const response = await postService.getUserPosts(userId);
@@ -133,7 +138,7 @@ export const useUserPostsQuery = (userId?: string) => {
       // Normalize backend data structure to match ProfilePostGrid expectations
       return response.data.map((post: any) => ({
         id: post.id,
-        thumbnailUrl: post.mediaUrls?.[0] || '', // Use the first media URL as thumbnail
+        thumbnailUrl: post.mediaUrls?.[0] || "", // Use the first media URL as thumbnail
       }));
     },
     enabled: !!userId,
@@ -145,7 +150,7 @@ export const useUserPostsQuery = (userId?: string) => {
  */
 export const useSavedPostsQuery = (enabled = true) => {
   return useQuery({
-    queryKey: ['saved-posts'],
+    queryKey: ["saved-posts"],
     queryFn: async () => {
       const response = await postService.getSavedPosts();
       if (!response?.success || !Array.isArray(response.data)) {
@@ -153,11 +158,62 @@ export const useSavedPostsQuery = (enabled = true) => {
       }
       return response.data.map((post: any) => ({
         id: post.id,
-        thumbnailUrl: post.mediaUrls?.[0] || '',
+        thumbnailUrl: post.mediaUrls?.[0] || "",
       }));
     },
     enabled,
   });
+};
+
+export const useTrendingPostsQuery = (limit = 12) => {
+  return useQuery({
+    queryKey: ["trending-posts", limit],
+    queryFn: async () => {
+      const response = await postService.getTrendingPosts(limit);
+      if (!response?.success || !Array.isArray(response.data)) {
+        return [];
+      }
+
+      return response.data
+        .filter((post: any) => Boolean(post.mediaUrls?.[0]))
+        .map((post: any, index: number) => {
+          const title =
+            post.caption?.trim()?.split("\n")[0]?.slice(0, 48) ||
+            "Trending moment";
+          const username =
+            post.isAnonymous
+              ? "Anonymous"
+              : post.author?.profile?.username || post.author?.username || "Someone";
+          const likesCount = post.likesCount || post._count?.likes || 0;
+          const commentsCount = post.commentsCount || post._count?.comments || 0;
+
+          return {
+            id: post.id,
+            title,
+            subtitle: `${username} • ${commentsCount} comments`,
+            image: post.mediaUrls[0],
+            likes: formatCompactCount(likesCount),
+            height: getTrendingCardHeight(index, post.id),
+            trendingScore: post.trendingScore || 0,
+          } satisfies TrendingPost;
+        });
+    },
+    staleTime: 1000 * 60 * 3,
+  });
+};
+
+const formatCompactCount = (count: number) => {
+  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}m`;
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
+  return `${count}`;
+};
+
+const getTrendingCardHeight = (index: number, id: string) => {
+  const heights = [236, 178, 196, 246, 210, 184];
+  const idOffset = id
+    .split("")
+    .reduce((total, char) => total + char.charCodeAt(0), 0);
+  return heights[(index + idOffset) % heights.length];
 };
 
 /**
@@ -165,7 +221,7 @@ export const useSavedPostsQuery = (enabled = true) => {
  */
 export const useUserStoriesQuery = (userId?: string, enabled = true) => {
   return useQuery({
-    queryKey: ['user-stories', userId],
+    queryKey: ["user-stories", userId],
     queryFn: async () => {
       if (!userId) return [];
       const response = await storyService.getUserStories(userId);
@@ -174,7 +230,7 @@ export const useUserStoriesQuery = (userId?: string, enabled = true) => {
       }
       return response.data.map((story: any) => ({
         id: story.id,
-        thumbnailUrl: story.mediaUrl || '',
+        thumbnailUrl: story.mediaUrl || "",
       }));
     },
     enabled: !!userId && enabled,
@@ -186,7 +242,7 @@ export const useUserStoriesQuery = (userId?: string, enabled = true) => {
  */
 export const useStoriesQuery = () => {
   return useQuery({
-    queryKey: ['stories'],
+    queryKey: ["stories"],
     queryFn: async () => {
       const response = await storyService.getStories();
       if (!response?.success || !Array.isArray(response.data)) {
@@ -197,11 +253,9 @@ export const useStoriesQuery = () => {
         id: story.id,
         authorId: story.authorId || story.author?.id,
         name:
-          story.author?.profile?.username ||
-          story.author?.username ||
-          'Story',
-        imageUrl: story.author?.profile?.avatarUrl || story.mediaUrl || '',
-        mediaUrl: story.mediaUrl || '',
+          story.author?.profile?.username || story.author?.username || "Story",
+        imageUrl: story.author?.profile?.avatarUrl || story.mediaUrl || "",
+        mediaUrl: story.mediaUrl || "",
         expiresAt: story.expiresAt,
         isViewed: Boolean(story.isViewed),
         viewsCount: story._count?.views || story.viewsCount || 0,
@@ -223,14 +277,14 @@ export const useCreateStoryMutation = () => {
       const mediaUrl = await postService.uploadMedia(imageUri);
       return storyService.createStory({
         mediaUrl,
-        mediaType: 'IMAGE',
+        mediaType: "IMAGE",
         caption: caption?.trim() || undefined,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stories'] });
-      queryClient.invalidateQueries({ queryKey: ['user-stories'] });
-      queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+      queryClient.invalidateQueries({ queryKey: ["stories"] });
+      queryClient.invalidateQueries({ queryKey: ["user-stories"] });
+      queryClient.invalidateQueries({ queryKey: ["user-stats"] });
     },
   });
 };
@@ -240,7 +294,7 @@ export const useCreateStoryMutation = () => {
  */
 export const useMatchesQuery = (enabled = true) => {
   return useQuery({
-    queryKey: ['matches'],
+    queryKey: ["matches"],
     queryFn: async () => {
       const response = await matchService.getMatches();
       if (!response?.success || !Array.isArray(response.data)) {
@@ -257,7 +311,7 @@ export const useMatchesQuery = (enabled = true) => {
  */
 export const useMatchRecommendationsQuery = () => {
   return useQuery({
-    queryKey: ['match-recommendations'],
+    queryKey: ["match-recommendations"],
     queryFn: async () => {
       const response = await matchService.getRecommendations();
       if (!response?.success || !Array.isArray(response.data)) {
@@ -268,16 +322,26 @@ export const useMatchRecommendationsQuery = () => {
   });
 };
 
-export const useDiscoverPeopleQuery = () => {
-  return useQuery({
-    queryKey: ['discover-people'],
-    queryFn: async () => {
-      const response = await searchService.getDiscoverPeople();
+export const useDiscoverPeopleQuery = (category = "For you") => {
+  return useInfiniteQuery({
+    queryKey: ["discover-people", category],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
+      const response = await searchService.getDiscoverPeople(
+        pageParam,
+        12,
+        category,
+      );
       if (!response?.success || !Array.isArray(response.data)) {
-        return [];
+        return { data: [], hasMore: false, nextPage: undefined };
       }
-      return response.data as DiscoverProfile[];
+      return {
+        data: response.data as DiscoverProfile[],
+        hasMore: Boolean(response.hasMore),
+        nextPage: response.nextPage || undefined,
+      };
     },
+    getNextPageParam: (lastPage) => lastPage.nextPage,
   });
 };
 
@@ -292,17 +356,17 @@ export const useSendMatchRequestMutation = () => {
       return matchService.sendRequest(receiverId, message);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['match-recommendations'] });
-      queryClient.invalidateQueries({ queryKey: ['matches'] });
-      queryClient.invalidateQueries({ queryKey: ['match-requests-incoming'] });
-      queryClient.invalidateQueries({ queryKey: ['match-requests-outgoing'] });
+      queryClient.invalidateQueries({ queryKey: ["match-recommendations"] });
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+      queryClient.invalidateQueries({ queryKey: ["match-requests-incoming"] });
+      queryClient.invalidateQueries({ queryKey: ["match-requests-outgoing"] });
     },
   });
 };
 
 export const useIncomingMatchRequestsQuery = (enabled = true) => {
   return useQuery({
-    queryKey: ['match-requests-incoming'],
+    queryKey: ["match-requests-incoming"],
     queryFn: async () => {
       const response = await matchService.getIncomingRequests();
       if (!response?.success || !Array.isArray(response.data)) {
@@ -316,7 +380,7 @@ export const useIncomingMatchRequestsQuery = (enabled = true) => {
 
 export const useOutgoingMatchRequestsQuery = (enabled = true) => {
   return useQuery({
-    queryKey: ['match-requests-outgoing'],
+    queryKey: ["match-requests-outgoing"],
     queryFn: async () => {
       const response = await matchService.getOutgoingRequests();
       if (!response?.success || !Array.isArray(response.data)) {
@@ -336,11 +400,11 @@ export const useRespondMatchRequestMutation = () => {
       return matchService.respondToRequest(requestId, status);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['match-requests-incoming'] });
-      queryClient.invalidateQueries({ queryKey: ['match-requests-outgoing'] });
-      queryClient.invalidateQueries({ queryKey: ['match-recommendations'] });
-      queryClient.invalidateQueries({ queryKey: ['matches'] });
-      queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ["match-requests-incoming"] });
+      queryClient.invalidateQueries({ queryKey: ["match-requests-outgoing"] });
+      queryClient.invalidateQueries({ queryKey: ["match-recommendations"] });
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
     },
   });
 };
@@ -351,9 +415,9 @@ export const useUnmatchMutation = () => {
   return useMutation({
     mutationFn: async (matchId: string) => matchService.unmatch(matchId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['matches'] });
-      queryClient.invalidateQueries({ queryKey: ['match-recommendations'] });
-      queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+      queryClient.invalidateQueries({ queryKey: ["match-recommendations"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
     },
   });
 };
@@ -370,9 +434,9 @@ export const useUpdateProfileMutation = () => {
     },
     onSuccess: () => {
       // Invalidate user data to refetch fresh profile info
-      queryClient.invalidateQueries({ queryKey: ['me'] });
-      queryClient.invalidateQueries({ queryKey: ['user-profile'] });
-      queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["user-stats"] });
     },
   });
 };
@@ -380,9 +444,9 @@ export const useUpdateProfileMutation = () => {
 /**
  * Real-time unified search
  */
-export const useSearchQuery = (q: string, type: string = 'users') => {
+export const useSearchQuery = (q: string, type: string = "users") => {
   return useQuery({
-    queryKey: ['search', q, type],
+    queryKey: ["search", q, type],
     queryFn: async () => {
       if (!q || q.length < 2) return { users: [], posts: [], rooms: [] };
       const response = await searchService.getUnifiedSearch(q, type);
@@ -398,7 +462,7 @@ export const useSearchQuery = (q: string, type: string = 'users') => {
 
 export const useTrendingHashtagsQuery = () => {
   return useQuery({
-    queryKey: ['trending-hashtags'],
+    queryKey: ["trending-hashtags"],
     queryFn: async () => {
       const response = await searchService.getTrendingHashtags();
       if (!response?.success || !Array.isArray(response.hashtags)) {
@@ -420,7 +484,7 @@ export const useTrendingHashtagsQuery = () => {
  */
 export const useUserProfileQuery = (userId?: string) => {
   return useQuery({
-    queryKey: ['user-profile', userId],
+    queryKey: ["user-profile", userId],
     queryFn: async () => {
       if (!userId) return null;
       const data = await userService.getProfile(userId);
