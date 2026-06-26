@@ -3,11 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -29,9 +25,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from "react-native-reanimated";
-import {
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { Config } from "@/constants/config";
 import { Radius, Spacing } from "@/constants/spacing";
@@ -39,6 +33,7 @@ import { FontFamily, FontSize } from "@/constants/typography";
 import { useUpdateProfileMutation } from "@/hooks/queries";
 import { useAuthStore } from "@/store/authStore";
 import { storage } from "@/utils/storage";
+import { BirthDateCalendar } from "@/components/onboarding/BirthDateCalendar";
 
 const INTEREST_OPTIONS = [
   "Music",
@@ -136,8 +131,9 @@ type OnboardingProgress = {
 const ONBOARDING_STEPS = STEP_THEMES.length;
 const STEP_TRANSITION_DURATION = 480;
 const STEP_EASING = Easing.bezier(0.22, 1, 0.36, 1);
-const STEP_LAYOUT_TRANSITION =
-  LinearTransition.duration(STEP_TRANSITION_DURATION).easing(STEP_EASING);
+const STEP_LAYOUT_TRANSITION = LinearTransition.duration(
+  STEP_TRANSITION_DURATION,
+).easing(STEP_EASING);
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function OnboardingScreen() {
@@ -145,20 +141,13 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const updateProfileMutation = useUpdateProfileMutation();
-  const user = useAuthStore((state) => state.user);
   const refreshUser = useAuthStore((state) => state.refreshUser);
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<StepIndex>(0);
   const [previousStep, setPreviousStep] = useState<StepIndex>(0);
-  const [username, setUsername] = useState(
-    user?.profile?.username || user?.username || "",
-  );
-  const [birthDate, setBirthDate] = useState(
-    formatBirthDate(user?.profile?.birthDate),
-  );
-  const [gender, setGender] = useState<Gender>(
-    (user?.profile?.gender as Gender) || "OTHER",
-  );
+  const [username, setUsername] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [gender, setGender] = useState<Gender>("OTHER");
   const [bio, setBio] = useState("");
   const [selectedLookingFor, setSelectedLookingFor] =
     useState<LookingFor>("Dating");
@@ -175,6 +164,7 @@ export default function OnboardingScreen() {
   const activeTheme = STEP_THEMES[currentStep];
   const previousTheme = STEP_THEMES[previousStep];
   const headerHeight = Math.max(250, Math.min(330, height * 0.36));
+  const scrollViewHeight = height * 0.6;
   const selectedIntent =
     LOOKING_FOR_OPTIONS.find((item) => item.label === selectedLookingFor) ??
     LOOKING_FOR_OPTIONS[0];
@@ -188,9 +178,6 @@ export default function OnboardingScreen() {
       }
       try {
         const progress = JSON.parse(raw) as Partial<OnboardingProgress>;
-        if (progress.username !== undefined) setUsername(progress.username);
-        if (progress.birthDate !== undefined) setBirthDate(progress.birthDate);
-        if (progress.gender !== undefined) setGender(progress.gender);
         if (progress.bio !== undefined) setBio(progress.bio);
         if (progress.permissions) setPermissions(progress.permissions);
         if (Array.isArray(progress.selectedInterests))
@@ -354,7 +341,9 @@ export default function OnboardingScreen() {
   const contentAnimatedStyle = useAnimatedStyle(() => ({
     opacity: contentProgress.value,
     transform: [
-      { translateY: (1 - contentProgress.value) * 16 * animatedDirection.value },
+      {
+        translateY: (1 - contentProgress.value) * 16 * animatedDirection.value,
+      },
       { scale: 0.996 + contentProgress.value * 0.004 },
     ],
   }));
@@ -377,9 +366,7 @@ export default function OnboardingScreen() {
   }));
 
   return (
-    <View
-      style={[styles.screen, { backgroundColor: activeTheme.colors[0] }]}
-    >
+    <View style={[styles.screen, { backgroundColor: activeTheme.colors[0] }]}>
       <StatusBar style="dark" backgroundColor={activeTheme.colors[0]} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -440,95 +427,97 @@ export default function OnboardingScreen() {
           <ScrollView
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingTop: headerHeight * 0.47, paddingBottom: 116 },
+              { paddingTop: headerHeight * 0.42, paddingBottom: 116 },
             ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            style={[styles.scrollView, { height: scrollViewHeight }]}
           >
-            <View style={styles.stepper}>
-              {STEP_THEMES.map((step, index) => {
-                const stepIndex = index as StepIndex;
-                const state =
-                  index < currentStep
-                    ? "completed"
-                    : index === currentStep
-                      ? "active"
-                      : "inactive";
-                return (
-                  <StepperItem
-                    key={step.title}
-                    accent={step.accent}
-                    contentStyle={
-                      index === currentStep ? contentAnimatedStyle : undefined
-                    }
-                    description={step.description}
-                    error={index === currentStep ? serverError : ""}
-                    icon={step.icon}
-                    isFirst={index === 0}
-                    isLast={index === STEP_THEMES.length - 1}
-                    onPress={() => {
-                      if (!isLoading && index < currentStep) {
-                        setServerError("");
-                        animateToStep(stepIndex);
+            <View style={styles.scrollSheet}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.stepper}>
+                {STEP_THEMES.map((step, index) => {
+                  const stepIndex = index as StepIndex;
+                  const state =
+                    index < currentStep
+                      ? "completed"
+                      : index === currentStep
+                        ? "active"
+                        : "inactive";
+                  return (
+                    <StepperItem
+                      key={step.title}
+                      accent={step.accent}
+                      contentStyle={
+                        index === currentStep ? contentAnimatedStyle : undefined
                       }
-                    }}
-                    rowStyle={
-                      index === currentStep ? stepRowAnimatedStyle : undefined
-                    }
-                    showContent={index === currentStep}
-                    state={state}
-                    title={step.title}
-                  >
-                    {index === 0 ? (
-                      <ProfileBasicsStep
-                        accent={step.accent}
-                        birthDate={birthDate}
-                        gender={gender}
-                        onChangeBirthDate={(value) =>
-                          setBirthDate(formatBirthDateInput(value))
+                      description={step.description}
+                      error={index === currentStep ? serverError : ""}
+                      icon={step.icon}
+                      isFirst={index === 0}
+                      isLast={index === STEP_THEMES.length - 1}
+                      onPress={() => {
+                        if (!isLoading && index < currentStep) {
+                          setServerError("");
+                          animateToStep(stepIndex);
                         }
-                        onChangeGender={setGender}
-                        onChangeUsername={(value) =>
-                          setUsername(value.toLowerCase())
-                        }
-                        username={username}
-                      />
-                    ) : null}
-                    {index === 1 ? (
-                      <BioStep
-                        accent={step.accent}
-                        bio={bio}
-                        onChangeBio={setBio}
-                      />
-                    ) : null}
-                    {index === 2 ? (
-                      <LookingForStep
-                        accent={step.accent}
-                        onSelectLookingFor={setSelectedLookingFor}
-                        selectedLookingFor={selectedLookingFor}
-                      />
-                    ) : null}
-                    {index === 3 ? (
-                      <InterestsStep
-                        accent={step.accent}
-                        onToggleInterest={(interest) =>
-                          setSelectedInterests((values) =>
-                            toggleValue(values, interest),
-                          )
-                        }
-                        selectedInterests={selectedInterests}
-                      />
-                    ) : null}
-                    {index === 4 ? (
-                      <PermissionsStep
-                        accent={step.accent}
-                        onChangePermissions={setPermissions}
-                        permissions={permissions}
-                      />
-                    ) : null}
-                  </StepperItem>
-                );
-              })}
+                      }}
+                      rowStyle={
+                        index === currentStep ? stepRowAnimatedStyle : undefined
+                      }
+                      showContent={index === currentStep}
+                      state={state}
+                      title={step.title}
+                    >
+                      {index === 0 ? (
+                        <ProfileBasicsStep
+                          accent={step.accent}
+                          birthDate={birthDate}
+                          gender={gender}
+                          onChangeBirthDate={setBirthDate}
+                          onChangeGender={setGender}
+                          onChangeUsername={(value) =>
+                            setUsername(value.toLowerCase())
+                          }
+                          username={username}
+                        />
+                      ) : null}
+                      {index === 1 ? (
+                        <BioStep
+                          accent={step.accent}
+                          bio={bio}
+                          onChangeBio={setBio}
+                        />
+                      ) : null}
+                      {index === 2 ? (
+                        <LookingForStep
+                          accent={step.accent}
+                          onSelectLookingFor={setSelectedLookingFor}
+                          selectedLookingFor={selectedLookingFor}
+                        />
+                      ) : null}
+                      {index === 3 ? (
+                        <InterestsStep
+                          accent={step.accent}
+                          onToggleInterest={(interest) =>
+                            setSelectedInterests((values) =>
+                              toggleValue(values, interest),
+                            )
+                          }
+                          selectedInterests={selectedInterests}
+                        />
+                      ) : null}
+                      {index === 4 ? (
+                        <PermissionsStep
+                          accent={step.accent}
+                          onChangePermissions={setPermissions}
+                          permissions={permissions}
+                        />
+                      ) : null}
+                    </StepperItem>
+                  );
+                })}
+              </View>
             </View>
           </ScrollView>
 
@@ -638,10 +627,11 @@ function StepperItem({
           style={[
             styles.stepIcon,
             highlighted && { backgroundColor: accent, borderColor: accent },
-            completed && !highlighted && {
-              backgroundColor: Colors.textPrimary,
-              borderColor: Colors.textPrimary,
-            },
+            completed &&
+              !highlighted && {
+                backgroundColor: Colors.textPrimary,
+                borderColor: Colors.textPrimary,
+              },
           ]}
         >
           <Ionicons
@@ -728,13 +718,9 @@ function ProfileBasicsStep({
         placeholder="yourname"
         value={username}
       />
-      <SoftInput
-        icon="calendar-outline"
-        keyboardType="number-pad"
-        label="Birth date"
-        maxLength={10}
-        onChangeText={onChangeBirthDate}
-        placeholder="MM/DD/YYYY"
+      <BirthDateCalendar
+        accent={accent}
+        onChangeDate={onChangeBirthDate}
         value={birthDate}
       />
       <View style={styles.chipGroup}>
@@ -1024,6 +1010,9 @@ const styles = StyleSheet.create({
     width: 44,
   },
   scrollContent: { flexGrow: 1, paddingHorizontal: Spacing.lg },
+  scrollView: { alignSelf: "stretch" },
+  scrollSheet: { alignSelf: "stretch" },
+  sheetHandle: { display: "none" },
   stepper: { alignSelf: "stretch" },
   stepItem: { flexDirection: "row", minHeight: 62 },
   stepRail: { alignItems: "center", width: 38 },
@@ -1384,19 +1373,3 @@ const parseBirthDate = (birthDate: string) => {
 
 const toBackendBirthDate = (birthDate: string) =>
   (parseBirthDate(birthDate) ?? new Date()).toISOString();
-
-const formatBirthDate = (birthDate?: string | null) => {
-  if (!birthDate) return "";
-  const date = new Date(birthDate);
-  if (Number.isNaN(date.getTime())) return "";
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${month}/${day}/${date.getUTCFullYear()}`;
-};
-
-const formatBirthDateInput = (value: string) => {
-  const digits = value.replace(/\D/g, "").slice(0, 8);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
-};
