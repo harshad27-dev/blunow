@@ -4,8 +4,11 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  ScrollView,
   StyleSheet,
   StatusBar,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -22,14 +25,58 @@ import { FontFamily } from "@/constants/typography";
 import {
   useMatchRecommendationsQuery,
   useIncomingMatchRequestsQuery,
+  useDismissRecommendationMutation,
   useRespondMatchRequestMutation,
   useSendMatchRequestMutation,
 } from "@/hooks/queries";
-import type { MatchRecommendation, MatchRequest } from "@/types/match.types";
+import type {
+  MatchRecommendation,
+  MatchRecommendationFilters,
+  MatchRequest,
+} from "@/types/match.types";
 
 const bottomActionHeight = 94;
 const fallbackProfileImage =
   "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
+const INTEREST_OPTIONS = [
+  "Music",
+  "Travel",
+  "Fitness",
+  "Gaming",
+  "Food",
+  "Movies",
+  "Books",
+  "Coding",
+  "Fashion",
+  "Nature",
+  "Photography",
+  "Coffee",
+];
+const AGE_OPTIONS = [18, 21, 24, 27, 30, 35, 40, 50];
+const DISTANCE_OPTIONS = [10, 25, 50, 100, 250, 500];
+const GENDER_OPTIONS: Array<{
+  label: string;
+  value: NonNullable<MatchRecommendationFilters["gender"]>;
+}> = [
+  { label: "Any", value: "ANY" },
+  { label: "Men", value: "MALE" },
+  { label: "Women", value: "FEMALE" },
+  { label: "Non-binary", value: "NON_BINARY" },
+  { label: "Other", value: "OTHER" },
+];
+
+const defaultFilters: MatchRecommendationFilters = {
+  minAge: 18,
+  maxAge: 50,
+  maxDistance: 50,
+  gender: "ANY",
+  useMyPreference: true,
+  interests: [],
+  verifiedOnly: false,
+  onlineOnly: false,
+};
+
+type PendingAction = "pass" | "chat" | "like" | "boost" | null;
 
 export default function MatchesScreen() {
   const insets = useSafeAreaInsets();
@@ -40,12 +87,25 @@ export default function MatchesScreen() {
     chatId: string;
     profile: MatchRecommendation;
   } | null>(null);
+  const [filters, setFilters] =
+    useState<MatchRecommendationFilters>(defaultFilters);
+  const [draftFilters, setDraftFilters] =
+    useState<MatchRecommendationFilters>(defaultFilters);
+  const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [isRequestsModalVisible, setIsRequestsModalVisible] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [pendingRequestAction, setPendingRequestAction] = useState<{
+    requestId: string;
+    status: "ACCEPTED" | "REJECTED";
+  } | null>(null);
   const fade = useRef(new Animated.Value(1)).current;
-  const { data: profiles = [], isLoading } = useMatchRecommendationsQuery();
+  const { data: profiles = [], isLoading } = useMatchRecommendationsQuery(filters);
   const { data: incomingRequests = [] } = useIncomingMatchRequestsQuery();
   const sendMatchRequest = useSendMatchRequestMutation();
   const respondMatchRequest = useRespondMatchRequestMutation();
+  const dismissRecommendation = useDismissRecommendationMutation();
   const profile = profiles[activeIndex] as MatchRecommendation | undefined;
+  const isDeckActionPending = pendingAction !== null;
   const nextProfiles = useMemo(
     () =>
       profiles
@@ -53,12 +113,28 @@ export default function MatchesScreen() {
         .slice(0, 2),
     [profile?.id, profiles],
   );
+  const filterCount = getActiveFilterCount(filters);
+  const availableInterests = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...INTEREST_OPTIONS,
+          ...(filters.interests ?? []),
+          ...profiles.flatMap((item) => item.interests ?? []),
+        ]),
+      ),
+    [filters.interests, profiles],
+  );
 
   React.useEffect(() => {
     if (profiles.length > 0 && activeIndex >= profiles.length) {
       setActiveIndex(0);
     }
   }, [activeIndex, profiles.length]);
+
+  React.useEffect(() => {
+    setActiveIndex(0);
+  }, [filters]);
 
   const moveToNextCard = () => {
     if (profiles.length === 0) return;
@@ -78,8 +154,9 @@ export default function MatchesScreen() {
   };
 
   const handleLike = () => {
-    if (!profile) return;
+    if (!profile || isDeckActionPending) return;
 
+    setPendingAction("like");
     if (profile.alreadyLikedMe) {
       sendMatchRequest.mutate(
         { receiverId: profile.id },
@@ -102,6 +179,7 @@ export default function MatchesScreen() {
             });
           },
           onError: moveToNextCard,
+          onSettled: () => setPendingAction(null),
         },
       );
       return;
@@ -112,13 +190,15 @@ export default function MatchesScreen() {
       {
         onSuccess: moveToNextCard,
         onError: moveToNextCard,
+        onSettled: () => setPendingAction(null),
       },
     );
   };
 
   const handleChatRequest = () => {
-    if (!profile) return;
+    if (!profile || isDeckActionPending) return;
 
+    setPendingAction("chat");
     sendMatchRequest.mutate(
       { receiverId: profile.id, message: "Hi, I would like to chat with you." },
       {
@@ -136,24 +216,39 @@ export default function MatchesScreen() {
           moveToNextCard();
         },
         onError: moveToNextCard,
+        onSettled: () => setPendingAction(null),
       },
     );
   };
 
   const handleMatchRequest = () => {
-    if (!profile) return;
+    if (!profile || isDeckActionPending) return;
 
+    setPendingAction("boost");
     sendMatchRequest.mutate(
       { receiverId: profile.id, message: "I would like to connect with you." },
       {
         onSuccess: moveToNextCard,
         onError: moveToNextCard,
+        onSettled: () => setPendingAction(null),
       },
     );
   };
 
   const handleSkip = () => {
-    moveToNextCard();
+    if (!profile || isDeckActionPending) return;
+
+    setPendingAction("pass");
+    dismissRecommendation.mutate(profile.id, {
+      onSuccess: moveToNextCard,
+      onError: (error: any) => {
+        Alert.alert(
+          "Pass failed",
+          error?.response?.data?.message || "Unable to dismiss this profile.",
+        );
+      },
+      onSettled: () => setPendingAction(null),
+    });
   };
 
   const openProfileDetail = () => {
@@ -181,10 +276,14 @@ export default function MatchesScreen() {
     request: MatchRequest,
     status: "ACCEPTED" | "REJECTED",
   ) => {
+    if (pendingRequestAction) return;
+
+    setPendingRequestAction({ requestId: request.id, status });
     respondMatchRequest.mutate(
       { requestId: request.id, status },
       {
         onSuccess: (response: any) => {
+          setIsRequestsModalVisible(false);
           const chatId = response?.data?.chat?.id;
           if (status === "ACCEPTED" && chatId) {
             const sender = request.sender;
@@ -209,8 +308,28 @@ export default function MatchesScreen() {
             error?.response?.data?.message || "Unable to update request.",
           );
         },
+        onSettled: () => setPendingRequestAction(null),
       },
     );
+  };
+
+  const openFilters = () => {
+    setDraftFilters(filters);
+    setIsFilterModalVisible(true);
+  };
+
+  const applyFilters = () => {
+    setFilters({
+      ...draftFilters,
+      interests: draftFilters.interests ?? [],
+    });
+    setIsFilterModalVisible(false);
+  };
+
+  const resetFilters = () => {
+    setDraftFilters(defaultFilters);
+    setFilters(defaultFilters);
+    setIsFilterModalVisible(false);
   };
 
   if (isLoading) {
@@ -226,52 +345,101 @@ export default function MatchesScreen() {
 
   if (!profile) {
     return (
-      <SafeAreaView
-        className="flex-1"
-        style={styles.screen}
-        edges={["top", "left", "right"]}
-      >
-        <View className="flex-row items-center justify-between px-[18px] pt-2">
-          <TouchableOpacity
-            className="h-10 w-10 items-center justify-center rounded-full border"
-            style={styles.overlayIconButton}
-            onPress={() => router.back()}
-            activeOpacity={0.82}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-        <View className="flex-1 items-center justify-center px-7">
-          <View
-            className="h-20 w-20 items-center justify-center rounded-full border"
-            style={styles.emptyIconWrap}
-          >
-            <Ionicons name="people-outline" size={34} color={Colors.textMuted} />
+      <View className="flex-1" style={styles.screen}>
+        <SafeAreaView
+          className="flex-1"
+          style={styles.screen}
+          edges={["top", "left", "right"]}
+        >
+          <View className="flex-row items-center justify-between px-[18px] pt-2">
+            <TouchableOpacity
+              className="h-10 w-10 items-center justify-center rounded-full border"
+              style={styles.overlayIconButton}
+              onPress={() => router.back()}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="h-10 w-10 items-center justify-center rounded-full border"
+              style={styles.overlayIconButton}
+              onPress={openFilters}
+              activeOpacity={0.82}
+            >
+              <Ionicons
+                name="options-outline"
+                size={20}
+                color={Colors.textPrimary}
+              />
+              {filterCount ? (
+                <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full px-1" style={styles.badge}>
+                  <Text className="text-[10px] font-bold" style={styles.primaryButtonText}>
+                    {filterCount}
+                  </Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
           </View>
-          <Text className="mt-5 text-center text-2xl font-bold" style={styles.titleText}>
-            No profiles yet
-          </Text>
-          <Text className="mt-2 text-center text-sm leading-5" style={styles.mutedText}>
-            Real users will appear here after they create an account and
-            complete their profile.
-          </Text>
-          <TouchableOpacity
-            className="mt-6 h-12 flex-row items-center rounded-full px-5"
-            style={styles.primaryButton}
-            onPress={() => router.push("/(screens)/edit-profile")}
-            activeOpacity={0.84}
-          >
-            <Ionicons
-              name="person-circle-outline"
-              size={20}
-              color={Colors.textInverse}
-            />
-            <Text className="ml-2 text-sm font-bold" style={styles.primaryButtonText}>
-              Complete profile
+          <View className="flex-1 items-center justify-center px-7">
+            <View
+              className="h-20 w-20 items-center justify-center rounded-full border"
+              style={styles.emptyIconWrap}
+            >
+              <Ionicons name="people-outline" size={34} color={Colors.textMuted} />
+            </View>
+            <Text className="mt-5 text-center text-2xl font-bold" style={styles.titleText}>
+              No profiles yet
             </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+            <Text className="mt-2 text-center text-sm leading-5" style={styles.mutedText}>
+              {filterCount
+                ? "Try relaxing your filters to see more real profiles."
+                : "Real users will appear here after they create an account and complete their profile."}
+            </Text>
+            {filterCount ? (
+              <TouchableOpacity
+                className="mt-6 h-12 flex-row items-center rounded-full px-5"
+                style={styles.primaryButton}
+                onPress={resetFilters}
+                activeOpacity={0.84}
+              >
+                <Ionicons
+                  name="refresh"
+                  size={20}
+                  color={Colors.textInverse}
+                />
+                <Text className="ml-2 text-sm font-bold" style={styles.primaryButtonText}>
+                  Reset filters
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                className="mt-6 h-12 flex-row items-center rounded-full px-5"
+                style={styles.primaryButton}
+                onPress={() => router.push("/(screens)/edit-profile")}
+                activeOpacity={0.84}
+              >
+                <Ionicons
+                  name="person-circle-outline"
+                  size={20}
+                  color={Colors.textInverse}
+                />
+                <Text className="ml-2 text-sm font-bold" style={styles.primaryButtonText}>
+                  Complete profile
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </SafeAreaView>
+        <FilterModal
+          visible={isFilterModalVisible}
+          filters={draftFilters}
+          interests={availableInterests}
+          onChange={setDraftFilters}
+          onApply={applyFilters}
+          onReset={resetFilters}
+          onClose={() => setIsFilterModalVisible(false)}
+        />
+      </View>
     );
   }
 
@@ -330,6 +498,7 @@ export default function MatchesScreen() {
             <TouchableOpacity
               className="h-10 w-10 items-center justify-center rounded-full border"
               style={styles.floatingIconButton}
+              onPress={openFilters}
               activeOpacity={0.82}
             >
               <Ionicons
@@ -337,6 +506,13 @@ export default function MatchesScreen() {
                 size={20}
                 color={Colors.textInverse}
               />
+              {filterCount ? (
+                <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full px-1" style={styles.badge}>
+                  <Text className="text-[10px] font-bold" style={styles.primaryButtonText}>
+                    {filterCount}
+                  </Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
           </View>
         </View>
@@ -347,15 +523,25 @@ export default function MatchesScreen() {
               <Text className="text-sm font-extrabold" style={styles.photoText}>
                 Requests
               </Text>
-              <Text className="text-xs font-bold" style={styles.photoMutedText}>
-                {incomingRequests.length} waiting
-              </Text>
+              <TouchableOpacity
+                onPress={() => setIsRequestsModalVisible(true)}
+                activeOpacity={0.84}
+              >
+                <Text className="text-xs font-bold" style={styles.photoMutedText}>
+                  {incomingRequests.length > 2 ? "View all" : `${incomingRequests.length} waiting`}
+                </Text>
+              </TouchableOpacity>
             </View>
             {incomingRequests.slice(0, 2).map((request) => (
               <IncomingRequestRow
                 key={request.id}
                 request={request}
-                disabled={respondMatchRequest.isPending}
+                disabled={Boolean(pendingRequestAction)}
+                pendingStatus={
+                  pendingRequestAction?.requestId === request.id
+                    ? pendingRequestAction.status
+                    : null
+                }
                 onAccept={() => respondToIncomingRequest(request, "ACCEPTED")}
                 onReject={() => respondToIncomingRequest(request, "REJECTED")}
               />
@@ -475,6 +661,8 @@ export default function MatchesScreen() {
             label="Pass"
             tone="muted"
             onPress={handleSkip}
+            disabled={isDeckActionPending}
+            loading={pendingAction === "pass"}
           />
           <RoundAction
             icon="chatbubble-ellipses"
@@ -482,16 +670,43 @@ export default function MatchesScreen() {
             badge={profile.chatRequests}
             tone="chat"
             onPress={handleChatRequest}
+            disabled={isDeckActionPending}
+            loading={pendingAction === "chat"}
           />
-          <HeartAction onPress={handleLike} />
+          <HeartAction
+            onPress={handleLike}
+            disabled={isDeckActionPending}
+            loading={pendingAction === "like"}
+          />
           <RoundAction
             icon="flash"
             label="Boost"
             tone="boost"
             onPress={handleMatchRequest}
+            disabled={isDeckActionPending}
+            loading={pendingAction === "boost"}
           />
         </View>
       </SafeAreaView>
+
+      <FilterModal
+        visible={isFilterModalVisible}
+        filters={draftFilters}
+        interests={availableInterests}
+        onChange={setDraftFilters}
+        onApply={applyFilters}
+        onReset={resetFilters}
+        onClose={() => setIsFilterModalVisible(false)}
+      />
+
+      <RequestsModal
+        visible={isRequestsModalVisible}
+        requests={incomingRequests}
+        pendingAction={pendingRequestAction}
+        onAccept={(request) => respondToIncomingRequest(request, "ACCEPTED")}
+        onReject={(request) => respondToIncomingRequest(request, "REJECTED")}
+        onClose={() => setIsRequestsModalVisible(false)}
+      />
 
       {matchBanner ? (
         <View
@@ -646,12 +861,16 @@ const RoundAction = ({
   onPress,
   badge,
   tone,
+  disabled,
+  loading,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   badge?: number;
   tone: "muted" | "chat" | "boost";
+  disabled?: boolean;
+  loading?: boolean;
 }) => {
   const color =
     tone === "chat"
@@ -664,13 +883,19 @@ const RoundAction = ({
     <TouchableOpacity
       className="min-w-14 items-center justify-center"
       onPress={onPress}
+      disabled={disabled}
       activeOpacity={0.82}
+      style={disabled ? styles.disabledAction : undefined}
     >
       <View
         className="h-[50px] w-[50px] items-center justify-center rounded-full border"
         style={styles.actionIconCircle}
       >
-        <Ionicons name={icon} size={23} color={color} />
+        {loading ? (
+          <ActivityIndicator color={color} size="small" />
+        ) : (
+          <Ionicons name={icon} size={23} color={color} />
+        )}
         {badge ? (
           <View
             className="absolute -right-1 -top-1 min-w-5 items-center rounded-full px-1"
@@ -687,11 +912,21 @@ const RoundAction = ({
   );
 };
 
-const HeartAction = ({ onPress }: { onPress: () => void }) => (
+const HeartAction = ({
+  onPress,
+  disabled,
+  loading,
+}: {
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+}) => (
   <TouchableOpacity
     className="min-w-[74px] items-center justify-center"
     activeOpacity={0.84}
     onPress={onPress}
+    disabled={disabled}
+    style={disabled ? styles.disabledAction : undefined}
   >
     <LinearGradient
       colors={Colors.gradientCard}
@@ -699,7 +934,11 @@ const HeartAction = ({ onPress }: { onPress: () => void }) => (
       end={{ x: 1, y: 1 }}
       className="h-[70px] w-[70px] items-center justify-center rounded-full"
     >
-      <Ionicons name="heart" size={33} color={Colors.primary} />
+      {loading ? (
+        <ActivityIndicator color={Colors.primary} size="small" />
+      ) : (
+        <Ionicons name="heart" size={33} color={Colors.primary} />
+      )}
     </LinearGradient>
     <Text className="mt-1 text-[11px] font-bold" style={styles.photoText}>Like</Text>
   </TouchableOpacity>
@@ -708,11 +947,13 @@ const HeartAction = ({ onPress }: { onPress: () => void }) => (
 const IncomingRequestRow = ({
   request,
   disabled,
+  pendingStatus,
   onAccept,
   onReject,
 }: {
   request: MatchRequest;
   disabled: boolean;
+  pendingStatus?: "ACCEPTED" | "REJECTED" | null;
   onAccept: () => void;
   onReject: () => void;
 }) => {
@@ -749,7 +990,11 @@ const IncomingRequestRow = ({
         onPress={onAccept}
         activeOpacity={0.84}
       >
-        <Ionicons name="checkmark" size={18} color={Colors.textInverse} />
+        {pendingStatus === "ACCEPTED" ? (
+          <ActivityIndicator color={Colors.textInverse} size="small" />
+        ) : (
+          <Ionicons name="checkmark" size={18} color={Colors.textInverse} />
+        )}
       </TouchableOpacity>
       <TouchableOpacity
         className="h-9 w-9 items-center justify-center rounded-full"
@@ -758,10 +1003,294 @@ const IncomingRequestRow = ({
         onPress={onReject}
         activeOpacity={0.84}
       >
-        <Ionicons name="close" size={18} color={Colors.textInverse} />
+        {pendingStatus === "REJECTED" ? (
+          <ActivityIndicator color={Colors.textInverse} size="small" />
+        ) : (
+          <Ionicons name="close" size={18} color={Colors.textInverse} />
+        )}
       </TouchableOpacity>
     </View>
   );
+};
+
+const RequestsModal = ({
+  visible,
+  requests,
+  pendingAction,
+  onAccept,
+  onReject,
+  onClose,
+}: {
+  visible: boolean;
+  requests: MatchRequest[];
+  pendingAction: {
+    requestId: string;
+    status: "ACCEPTED" | "REJECTED";
+  } | null;
+  onAccept: (request: MatchRequest) => void;
+  onReject: (request: MatchRequest) => void;
+  onClose: () => void;
+}) => (
+  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <View className="flex-1 justify-end" style={styles.modalBackdrop}>
+      <View className="max-h-[78%] rounded-t-[30px] px-5 pb-8 pt-4" style={styles.requestSheet}>
+        <View className="mb-4 flex-row items-center justify-between">
+          <Text className="text-xl font-extrabold" style={styles.photoText}>
+            Incoming requests
+          </Text>
+          <TouchableOpacity
+            className="h-10 w-10 items-center justify-center rounded-full"
+            style={styles.actionIconCircle}
+            onPress={onClose}
+            activeOpacity={0.84}
+          >
+            <Ionicons name="close" size={20} color={Colors.textInverse} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {requests.map((request) => (
+            <IncomingRequestRow
+              key={request.id}
+              request={request}
+              disabled={Boolean(pendingAction)}
+              pendingStatus={
+                pendingAction?.requestId === request.id ? pendingAction.status : null
+              }
+              onAccept={() => onAccept(request)}
+              onReject={() => onReject(request)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>
+);
+
+const FilterModal = ({
+  visible,
+  filters,
+  interests,
+  onChange,
+  onApply,
+  onReset,
+  onClose,
+}: {
+  visible: boolean;
+  filters: MatchRecommendationFilters;
+  interests: string[];
+  onChange: (filters: MatchRecommendationFilters) => void;
+  onApply: () => void;
+  onReset: () => void;
+  onClose: () => void;
+}) => {
+  const selectedInterests = filters.interests ?? [];
+  const updateFilters = (patch: Partial<MatchRecommendationFilters>) =>
+    onChange({ ...filters, ...patch });
+  const toggleInterest = (interest: string) =>
+    updateFilters({
+      interests: selectedInterests.includes(interest)
+        ? selectedInterests.filter((item) => item !== interest)
+        : [...selectedInterests, interest],
+    });
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View className="flex-1 justify-end" style={styles.modalBackdrop}>
+        <View className="max-h-[86%] rounded-t-[30px] px-5 pb-8 pt-4" style={styles.sheet}>
+          <View className="mb-4 flex-row items-center justify-between">
+            <Text className="text-xl font-extrabold" style={styles.titleText}>
+              Filters
+            </Text>
+            <TouchableOpacity
+              className="h-10 w-10 items-center justify-center rounded-full"
+              style={styles.floatingButtonLight}
+              onPress={onClose}
+              activeOpacity={0.84}
+            >
+              <Ionicons name="close" size={20} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <FilterSection title="Age">
+              <View className="flex-row flex-wrap gap-2">
+                {AGE_OPTIONS.map((age) => (
+                  <FilterChip
+                    key={`min-${age}`}
+                    label={`Min ${age}`}
+                    selected={filters.minAge === age}
+                    onPress={() => updateFilters({ minAge: age })}
+                  />
+                ))}
+              </View>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {AGE_OPTIONS.map((age) => (
+                  <FilterChip
+                    key={`max-${age}`}
+                    label={`Max ${age}`}
+                    selected={filters.maxAge === age}
+                    onPress={() => updateFilters({ maxAge: age })}
+                  />
+                ))}
+              </View>
+            </FilterSection>
+
+            <FilterSection title="Distance">
+              <View className="flex-row flex-wrap gap-2">
+                {DISTANCE_OPTIONS.map((distance) => (
+                  <FilterChip
+                    key={distance}
+                    label={`${distance} mi`}
+                    selected={filters.maxDistance === distance}
+                    onPress={() => updateFilters({ maxDistance: distance })}
+                  />
+                ))}
+              </View>
+            </FilterSection>
+
+            <FilterSection title="Gender">
+              <View className="flex-row flex-wrap gap-2">
+                {GENDER_OPTIONS.map((option) => (
+                  <FilterChip
+                    key={option.value}
+                    label={option.label}
+                    selected={filters.gender === option.value}
+                    onPress={() => updateFilters({ gender: option.value })}
+                  />
+                ))}
+              </View>
+            </FilterSection>
+
+            <SwitchRow
+              label="Use my preference"
+              value={Boolean(filters.useMyPreference)}
+              onValueChange={(value) => updateFilters({ useMyPreference: value })}
+            />
+            <SwitchRow
+              label="Verified only"
+              value={Boolean(filters.verifiedOnly)}
+              onValueChange={(value) => updateFilters({ verifiedOnly: value })}
+            />
+            <SwitchRow
+              label="Online only"
+              value={Boolean(filters.onlineOnly)}
+              onValueChange={(value) => updateFilters({ onlineOnly: value })}
+            />
+
+            <FilterSection title="Interests">
+              <View className="flex-row flex-wrap gap-2">
+                {interests.map((interest) => (
+                  <FilterChip
+                    key={interest}
+                    label={interest}
+                    selected={selectedInterests.includes(interest)}
+                    onPress={() => toggleInterest(interest)}
+                  />
+                ))}
+              </View>
+            </FilterSection>
+          </ScrollView>
+
+          <View className="mt-5 flex-row gap-3">
+            <TouchableOpacity
+              className="h-12 flex-1 items-center justify-center rounded-full border"
+              style={styles.resetButton}
+              onPress={onReset}
+              activeOpacity={0.84}
+            >
+              <Text className="text-sm font-bold" style={styles.titleText}>
+                Reset
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="h-12 flex-1 items-center justify-center rounded-full"
+              style={styles.primaryButton}
+              onPress={onApply}
+              activeOpacity={0.84}
+            >
+              <Text className="text-sm font-bold" style={styles.primaryButtonText}>
+                Apply
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const FilterSection = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <View className="mb-5">
+    <Text className="mb-2 text-sm font-extrabold" style={styles.titleText}>
+      {title}
+    </Text>
+    {children}
+  </View>
+);
+
+const FilterChip = ({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    className="h-9 items-center justify-center rounded-full border px-3"
+    style={selected ? styles.filterChipSelected : styles.filterChip}
+    onPress={onPress}
+    activeOpacity={0.84}
+  >
+    <Text
+      className="text-xs font-bold"
+      style={selected ? styles.primaryButtonText : styles.titleText}
+    >
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+const SwitchRow = ({
+  label,
+  value,
+  onValueChange,
+}: {
+  label: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}) => (
+  <View className="mb-4 flex-row items-center justify-between">
+    <Text className="text-sm font-bold" style={styles.titleText}>
+      {label}
+    </Text>
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: Colors.border, true: Colors.primaryLight }}
+      thumbColor={value ? Colors.primary : Colors.bgCard}
+    />
+  </View>
+);
+
+const getActiveFilterCount = (filters: MatchRecommendationFilters) => {
+  let count = 0;
+  if (filters.minAge !== defaultFilters.minAge) count += 1;
+  if (filters.maxAge !== defaultFilters.maxAge) count += 1;
+  if (filters.maxDistance !== defaultFilters.maxDistance) count += 1;
+  if (filters.gender !== defaultFilters.gender) count += 1;
+  if (filters.useMyPreference !== defaultFilters.useMyPreference) count += 1;
+  if (filters.verifiedOnly) count += 1;
+  if (filters.onlineOnly) count += 1;
+  if (filters.interests?.length) count += 1;
+  return count;
 };
 
 const styles = StyleSheet.create({
@@ -815,6 +1344,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.textInverse + "18",
     borderColor: Colors.textInverse + "22",
   },
+  disabledAction: {
+    opacity: 0.58,
+  },
   badge: {
     backgroundColor: Colors.primaryLight,
   },
@@ -856,6 +1388,27 @@ const styles = StyleSheet.create({
   },
   matchOverlay: {
     backgroundColor: Colors.primary + "EB",
+  },
+  modalBackdrop: {
+    backgroundColor: Colors.overlay,
+  },
+  sheet: {
+    backgroundColor: Colors.bgCard,
+  },
+  requestSheet: {
+    backgroundColor: Colors.primary,
+  },
+  resetButton: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  filterChip: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  filterChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   bottomContentShade: {
     bottom: 0,

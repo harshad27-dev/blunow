@@ -13,6 +13,7 @@ import { storyService } from "@/services/story.service";
 import type {
   Match,
   DiscoverProfile,
+  MatchRecommendationFilters,
   MatchRecommendation,
   MatchRequest,
   RespondMatchRequestPayload,
@@ -309,15 +310,28 @@ export const useMatchesQuery = (enabled = true) => {
 /**
  * Fetches real user recommendations for the matches deck
  */
-export const useMatchRecommendationsQuery = () => {
+export const useMatchRecommendationsQuery = (
+  filters: MatchRecommendationFilters = {},
+) => {
   return useQuery({
-    queryKey: ["match-recommendations"],
+    queryKey: ["match-recommendations", filters],
     queryFn: async () => {
-      const response = await matchService.getRecommendations();
+      const response = await matchService.getRecommendations(filters);
       if (!response?.success || !Array.isArray(response.data)) {
         return [];
       }
       return response.data as MatchRecommendation[];
+    },
+  });
+};
+
+export const useDismissRecommendationMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (userId: string) => matchService.dismissRecommendation(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["match-recommendations"] });
     },
   });
 };

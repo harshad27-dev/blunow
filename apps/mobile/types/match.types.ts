@@ -66,6 +66,17 @@ export type MatchRecommendation = {
   alreadyLikedMe?: boolean;
 };
 
+export type MatchRecommendationFilters = {
+  minAge?: number;
+  maxAge?: number;
+  maxDistance?: number;
+  gender?: "ANY" | "MALE" | "FEMALE" | "NON_BINARY" | "OTHER";
+  useMyPreference?: boolean;
+  interests?: string[];
+  verifiedOnly?: boolean;
+  onlineOnly?: boolean;
+};
+
 export type DiscoverProfile = {
   id: string;
   username: string;

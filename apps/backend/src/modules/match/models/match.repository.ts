@@ -1,5 +1,16 @@
 import { prisma } from '../../../prisma/prisma';
 
+export type MatchRecommendationFilters = {
+  minAge?: number;
+  maxAge?: number;
+  maxDistance?: number;
+  gender?: string;
+  useMyPreference?: boolean;
+  interests?: string[];
+  verifiedOnly?: boolean;
+  onlineOnly?: boolean;
+};
+
 export class MatchRepository {
   async createRequest(data: { senderId: string; receiverId: string; message?: string }) {
     return prisma.matchRequest.create({
@@ -82,8 +93,12 @@ export class MatchRepository {
     });
   }
 
-  async findRecommendationsForUser(userId: string, limit = 20) {
-    const [currentUser, existingRequests, existingMatches, incomingRequests] = await Promise.all([
+  async findRecommendationsForUser(
+    userId: string,
+    limit = 20,
+    filters: MatchRecommendationFilters = {},
+  ) {
+    const [currentUser, existingRequests, existingMatches, incomingRequests, dismissals] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         include: { profile: true },
@@ -104,6 +119,10 @@ export class MatchRepository {
         where: { receiverId: userId, status: 'PENDING' },
         select: { senderId: true },
       }),
+      prisma.matchDismissal.findMany({
+        where: { userId },
+        select: { dismissedUserId: true },
+      }),
     ]);
 
     const excludedUserIds = new Set<string>([userId]);
@@ -121,21 +140,44 @@ export class MatchRepository {
       excludedUserIds.add(match.user1Id);
       excludedUserIds.add(match.user2Id);
     });
+    dismissals.forEach((dismissal) => excludedUserIds.add(dismissal.dismissedUserId));
+
+    const preferenceGenders =
+      filters.useMyPreference && currentUser?.profile?.interestedIn?.length
+        ? normalizePreferenceGenders(currentUser.profile.interestedIn)
+        : undefined;
 
     const users = await prisma.user.findMany({
       where: {
         id: { notIn: Array.from(excludedUserIds) },
         isActive: true,
         profile: {
-          isNot: null,
+          is: {
+            ...(filters.gender && filters.gender !== 'ANY'
+              ? { gender: filters.gender as any }
+              : preferenceGenders
+                ? { gender: { in: preferenceGenders as any[] } }
+                : {}),
+            ...(filters.interests?.length
+              ? { interests: { hasSome: filters.interests } }
+              : {}),
+          },
         },
+        ...(filters.verifiedOnly
+          ? {
+              OR: [
+                { isVerified: true },
+                { verification: { is: { status: 'VERIFIED' } } },
+              ],
+            }
+          : {}),
       },
       include: {
         profile: true,
         verification: { select: { status: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: limit,
+      take: Math.max(limit * 4, 40),
     });
 
     const currentInterests = currentUser?.profile?.interests ?? [];
@@ -146,16 +188,27 @@ export class MatchRepository {
       const sharedInterestCount = interests.filter((interest) =>
         currentInterests.includes(interest),
       ).length;
+      const age = getAge(user.profile?.birthDate);
+      const distanceMiles = getDistanceMiles(
+        currentUser?.profile?.latitude,
+        currentUser?.profile?.longitude,
+        user.profile?.latitude,
+        user.profile?.longitude,
+      );
+      const online = user.updatedAt >= new Date(Date.now() - 15 * 60 * 1000);
 
       return {
         id: user.id,
         name: user.profile?.username ?? user.email.split('@')[0],
         lastName: '',
-        age: getAge(user.profile?.birthDate),
+        age,
         city: user.profile?.location ?? 'Location not set',
-        distance: 'Nearby',
+        distance:
+          typeof distanceMiles === 'number'
+            ? `${Math.max(1, Math.round(distanceMiles))} mi away`
+            : 'Nearby',
         occupation: user.profile?.relationship ?? 'Blunow member',
-        online: false,
+        online,
         verified: user.verification?.status === 'VERIFIED' || user.isVerified,
         quote: user.profile?.bio ?? 'No bio provided yet.',
         imageUrl: user.profile?.bannerUrl || user.profile?.avatarUrl || '',
@@ -165,6 +218,22 @@ export class MatchRepository {
         chatRequests: incomingRequests.length,
         alreadyLikedMe: incomingSenderIds.has(user.id),
       };
+    }).filter((recommendation) => {
+      if (filters.minAge && recommendation.age < filters.minAge) return false;
+      if (filters.maxAge && recommendation.age > filters.maxAge) return false;
+      if (filters.onlineOnly && !recommendation.online) return false;
+      if (filters.maxDistance && typeof getDistanceValue(recommendation.distance) === 'number') {
+        return getDistanceValue(recommendation.distance)! <= filters.maxDistance;
+      }
+      return true;
+    }).slice(0, limit);
+  }
+
+  async dismissRecommendation(userId: string, dismissedUserId: string) {
+    return prisma.matchDismissal.upsert({
+      where: { userId_dismissedUserId: { userId, dismissedUserId } },
+      update: {},
+      create: { userId, dismissedUserId },
     });
   }
 
@@ -189,4 +258,53 @@ const getAge = (birthDate?: Date | null) => {
   }
 
   return age;
+};
+
+const getDistanceMiles = (
+  lat1?: number | null,
+  lon1?: number | null,
+  lat2?: number | null,
+  lon2?: number | null,
+) => {
+  if (
+    typeof lat1 !== 'number' ||
+    typeof lon1 !== 'number' ||
+    typeof lat2 !== 'number' ||
+    typeof lon2 !== 'number'
+  ) {
+    return undefined;
+  }
+
+  const earthRadiusMiles = 3958.8;
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const getDistanceValue = (distance: string) => {
+  const value = Number(distance.match(/\d+/)?.[0]);
+  return Number.isFinite(value) ? value : undefined;
+};
+
+const normalizePreferenceGenders = (values: string[]) => {
+  const normalized = values
+    .map((value) => {
+      const key = value.trim().toUpperCase().replace(/[\s-]+/g, '_');
+      if (key === 'MEN') return 'MALE';
+      if (key === 'WOMEN') return 'FEMALE';
+      if (key === 'NON_BINARY') return 'NON_BINARY';
+      if (['MALE', 'FEMALE', 'OTHER'].includes(key)) return key;
+      return undefined;
+    })
+    .filter((value): value is string => Boolean(value));
+
+  return normalized.length ? normalized : undefined;
 };

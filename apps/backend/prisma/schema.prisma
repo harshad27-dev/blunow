@@ -30,6 +30,8 @@ model User {
   confessions      Confession[]
   receivedRequests MatchRequest[]       @relation("ReceivedRequests")
   sentRequests     MatchRequest[]       @relation("SentRequests")
+  dismissedRecommendations MatchDismissal[] @relation("DismissedRecommendations")
+  dismissedByUsers MatchDismissal[]      @relation("DismissedByUsers")
   matchesAsUser1   Match[]              @relation("MatchUser1")
   matchesAsUser2   Match[]              @relation("MatchUser2")
   mediaFiles       Media[]
@@ -177,6 +179,19 @@ model Match {
 
   @@unique([user1Id, user2Id])
   @@map("matches")
+}
+
+model MatchDismissal {
+  id              String   @id @default(uuid())
+  userId          String
+  dismissedUserId String
+  createdAt       DateTime @default(now())
+  dismissedUser   User     @relation("DismissedByUsers", fields: [dismissedUserId], references: [id], onDelete: Cascade)
+  user            User     @relation("DismissedRecommendations", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dismissedUserId])
+  @@index([userId, createdAt])
+  @@map("match_dismissals")
 }
 
 model Post {

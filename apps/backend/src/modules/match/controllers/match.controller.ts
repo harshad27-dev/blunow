@@ -55,10 +55,28 @@ export class MatchController {
   getRecommendations = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
-      const recommendations = await this.matchService.getRecommendations(req.user!.id, limit);
+      const recommendations = await this.matchService.getRecommendations(req.user!.id, limit, {
+        minAge: parseOptionalNumber(req.query.minAge),
+        maxAge: parseOptionalNumber(req.query.maxAge),
+        maxDistance: parseOptionalNumber(req.query.maxDistance),
+        gender: parseOptionalString(req.query.gender),
+        useMyPreference: parseOptionalBoolean(req.query.useMyPreference),
+        interests: parseOptionalList(req.query.interests),
+        verifiedOnly: parseOptionalBoolean(req.query.verifiedOnly),
+        onlineOnly: parseOptionalBoolean(req.query.onlineOnly),
+      });
       res.status(200).json({ success: true, data: recommendations });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  dismissRecommendation = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      await this.matchService.dismissRecommendation(req.user!.id, req.params.userId);
+      res.status(200).json({ success: true, message: 'Recommendation dismissed' });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
     }
   };
 
@@ -71,3 +89,30 @@ export class MatchController {
     }
   };
 }
+
+const parseOptionalString = (value: unknown) => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+};
+
+const parseOptionalNumber = (value: unknown) => {
+  if (typeof value !== 'string') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const parseOptionalBoolean = (value: unknown) => {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+};
+
+const parseOptionalList = (value: unknown) => {
+  if (typeof value !== 'string') return undefined;
+  const items = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length ? items : undefined;
+};

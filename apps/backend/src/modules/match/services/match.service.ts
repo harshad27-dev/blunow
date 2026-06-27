@@ -1,4 +1,4 @@
-import { MatchRepository } from '../models/match.repository';
+import { MatchRecommendationFilters, MatchRepository } from '../models/match.repository';
 import { eventBus } from '../../../events/event-bus';
 import { EVENTS } from '../../../events/event-constants';
 import { AppError } from '../../../common/middleware/error.middleware';
@@ -10,8 +10,20 @@ export class MatchService {
     return this.matchRepository.findMatchesByUser(userId);
   }
 
-  async getRecommendations(userId: string, limit?: number) {
-    return this.matchRepository.findRecommendationsForUser(userId, limit);
+  async getRecommendations(
+    userId: string,
+    limit?: number,
+    filters?: MatchRecommendationFilters,
+  ) {
+    return this.matchRepository.findRecommendationsForUser(userId, limit, filters);
+  }
+
+  async dismissRecommendation(userId: string, dismissedUserId: string) {
+    if (userId === dismissedUserId) {
+      throw new AppError('Cannot dismiss your own profile', 400);
+    }
+
+    await this.matchRepository.dismissRecommendation(userId, dismissedUserId);
   }
 
   async unmatch(matchId: string, userId: string) {

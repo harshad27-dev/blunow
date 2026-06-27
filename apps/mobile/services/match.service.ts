@@ -1,5 +1,6 @@
 import { api } from './api';
 import type {
+  MatchRecommendationFilters,
   MatchRequestStatus,
   SendMatchRequestPayload,
 } from '@/types/match.types';
@@ -10,8 +11,13 @@ export const matchService = {
     return response.data;
   },
 
-  getRecommendations: async () => {
-    const response = await api.get('/match/recommendations');
+  getRecommendations: async (filters: MatchRecommendationFilters = {}) => {
+    const response = await api.get('/match/recommendations', {
+      params: {
+        ...filters,
+        interests: filters.interests?.join(','),
+      },
+    });
     return response.data;
   },
 
@@ -36,6 +42,11 @@ export const matchService = {
     status: Extract<MatchRequestStatus, 'ACCEPTED' | 'REJECTED'>,
   ) => {
     const response = await api.patch(`/match/requests/${requestId}`, { status });
+    return response.data;
+  },
+
+  dismissRecommendation: async (userId: string) => {
+    const response = await api.post(`/match/recommendations/${userId}/dismiss`);
     return response.data;
   },
 

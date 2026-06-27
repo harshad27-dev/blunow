@@ -14,6 +14,7 @@ router.get('/requests/incoming', controller.getIncomingRequests);
 router.get('/requests/outgoing', controller.getOutgoingRequests);
 router.patch('/requests/:id', validateRespondRequest, controller.respondToRequest);
 router.get('/recommendations', controller.getRecommendations);
+router.post('/recommendations/:userId/dismiss', controller.dismissRecommendation);
 router.get('/', controller.getMatches);
 router.delete('/:id', controller.unmatch);
 
