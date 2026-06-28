@@ -8,7 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -25,6 +28,7 @@ import type {
   JourneyMetric,
   ProfileTab,
 } from "@/components/ui/ProfileScreenUi";
+import type { Match } from "@/types/match.types";
 import { useAuthStore } from "@/store/authStore";
 import {
   useMatchesQuery,
@@ -41,6 +45,7 @@ const DEFAULT_COVER =
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
@@ -88,7 +93,8 @@ export default function ProfileScreen() {
   const goToEditProfileFromDialog = () => {
     closeCompletionDialog();
     editProfile();
-  };  const openSettings = () => router.push("/(screens)/settings");
+  };
+  const openSettings = () => router.push("/(screens)/settings");
   const openPost = (postId: string) =>
     router.push({
       pathname: "/(screens)/post/[postId]",
@@ -99,6 +105,33 @@ export default function ProfileScreen() {
       pathname: "/(screens)/story/[storyId]",
       params: { storyId },
     });
+  const openMatch = (match: Match) => {
+    const matchedUser =
+      match.user1Id === user?.id ? match.user2 : match.user1;
+
+    if (match.chat?.id) {
+      router.push({
+        pathname: "/(screens)/chat/[roomId]",
+        params: {
+          roomId: match.chat.id,
+          userId: matchedUser?.id || "",
+          name:
+            matchedUser?.profile?.username ||
+            matchedUser?.username ||
+            "Match",
+          avatarUrl: matchedUser?.profile?.avatarUrl || "",
+        },
+      });
+      return;
+    }
+
+    if (matchedUser?.id) {
+      router.push({
+        pathname: "/(screens)/user/[userId]",
+        params: { userId: matchedUser.id },
+      });
+    }
+  };
 
   const journeyMetrics: JourneyMetric[] = [
     {
@@ -147,6 +180,11 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView edges={["left", "right"]} className="flex-1 bg-bg">
+      <View
+        pointerEvents="none"
+        className="absolute left-0 right-0 top-0 z-30 bg-bg"
+        style={{ height: insets.top }}
+      />
       <ScrollView
         className="flex-1"
         contentContainerClassName="pb-10"
@@ -226,7 +264,11 @@ export default function ProfileScreen() {
               />
             )
           ) : matches?.length ? (
-            <ProfileMatchList currentUserId={user?.id} matches={matches} />
+            <ProfileMatchList
+              currentUserId={user?.id}
+              matches={matches}
+              onMatchPress={openMatch}
+            />
           ) : (
             <ProfileEmptyState
               icon="heart-outline"
@@ -272,9 +314,11 @@ const isTabLoading = (
 const ProfileMatchList = ({
   currentUserId,
   matches,
+  onMatchPress,
 }: {
   currentUserId?: string;
-  matches: any[];
+  matches: Match[];
+  onMatchPress: (match: Match) => void;
 }) => (
   <View className="px-5">
     {matches.map((match) => {
@@ -286,6 +330,7 @@ const ProfileMatchList = ({
       return (
         <TouchableOpacity
           key={match.id}
+          onPress={() => onMatchPress(match)}
           activeOpacity={0.85}
           className="mb-3 flex-row items-center rounded-2xl border border-border bg-bg-card p-4"
         >

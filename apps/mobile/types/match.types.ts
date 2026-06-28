@@ -60,6 +60,7 @@ export type MatchRecommendation = {
   quote: string;
   imageUrl: string;
   avatarUrl?: string | null;
+  profilePhotoUrls?: string[];
   interests: string[];
   matchScore: number;
   chatRequests: number;
@@ -104,3 +105,4 @@ export type RespondMatchRequestPayload = {
   requestId: string;
   status: Extract<MatchRequestStatus, "ACCEPTED" | "REJECTED">;
 };
+

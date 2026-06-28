@@ -49,6 +49,35 @@ export class NotificationsService {
     await this.repository.delete(id);
   };
 
+  getPreferences = async (userId: string) => {
+    return prisma.notificationPreference.upsert({
+      where: { userId },
+      create: { userId },
+      update: {},
+    });
+  };
+
+  updatePreferences = async (
+    userId: string,
+    data: {
+      pushEnabled?: boolean;
+      matches?: boolean;
+      messages?: boolean;
+      likes?: boolean;
+      comments?: boolean;
+      storyViews?: boolean;
+      confessions?: boolean;
+      roomInvites?: boolean;
+      system?: boolean;
+    },
+  ) => {
+    return prisma.notificationPreference.upsert({
+      where: { userId },
+      create: { userId, ...data },
+      update: data,
+    });
+  };
+
   // Handlers
   private handleMatchRequest = async (payload: any) => {
     await notificationQueue.add(QUEUES.NOTIFICATION, {

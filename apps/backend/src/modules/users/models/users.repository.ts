@@ -13,10 +13,47 @@ const pickProfileFields = (data: Record<string, any>) =>
   );
 
 export class UsersRepository {
-  async findById(id: string) {
+  async findById(id: string, viewerId?: string) {
     return prisma.user.findUnique({
       where: { id },
-      include: { profile: true },
+      include: {
+        profile: true,
+        followers: viewerId
+          ? { where: { followerId: viewerId }, select: { followerId: true } }
+          : false,
+        blockedByUsers: viewerId
+          ? { where: { blockerId: viewerId }, select: { blockerId: true } }
+          : false,
+      },
+    });
+  }
+
+  async recordProfileView(viewerId: string, viewedUserId: string) {
+    if (viewerId === viewedUserId) return;
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.profileView.findUnique({
+        where: { viewerId_viewedUserId: { viewerId, viewedUserId } },
+        select: { id: true },
+      });
+
+      if (existing) {
+        await tx.profileView.update({
+          where: { id: existing.id },
+          data: { updatedAt: new Date() },
+        });
+        return;
+      }
+
+      await tx.profileView.create({ data: { viewerId, viewedUserId } });
+      await tx.userStat.upsert({
+        where: { userId: viewedUserId },
+        create: { userId: viewedUserId, profileViews: 1 },
+        update: {
+          profileViews: { increment: 1 },
+          lastUpdated: new Date(),
+        },
+      });
     });
   }
 
@@ -59,5 +96,9 @@ export class UsersRepository {
       where: { id: userId },
       data: { isActive: false },
     });
+  }
+
+  async delete(userId: string) {
+    return prisma.user.delete({ where: { id: userId } });
   }
 }

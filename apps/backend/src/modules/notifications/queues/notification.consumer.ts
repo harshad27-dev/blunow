@@ -12,14 +12,47 @@ export const notificationWorker = createWorker(
   async (job) => {
     const { userId, type, title, body, data } = job.data;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { notificationPreference: true },
+    });
     if (!user) return;
+
+    const preferenceKey = {
+      MATCH: 'matches',
+      MESSAGE: 'messages',
+      LIKE: 'likes',
+      COMMENT: 'comments',
+      STORY_VIEW: 'storyViews',
+      CONFESSION: 'confessions',
+      ROOM_INVITE: 'roomInvites',
+      SYSTEM: 'system',
+    }[type] as
+      | 'matches'
+      | 'messages'
+      | 'likes'
+      | 'comments'
+      | 'storyViews'
+      | 'confessions'
+      | 'roomInvites'
+      | 'system'
+      | undefined;
+
+    if (
+      preferenceKey &&
+      user.notificationPreference?.[preferenceKey] === false
+    ) {
+      return;
+    }
 
     // 1. Create In-App notification
     await inAppService.createInAppNotification({ userId, type, title, body, data });
 
     // 2. Send Push Notification if FCM token exists
-    if (user.fcmToken) {
+    if (
+      user.fcmToken &&
+      user.notificationPreference?.pushEnabled !== false
+    ) {
       await pushService.sendPushNotification(user.fcmToken, { title, body, data });
     }
 

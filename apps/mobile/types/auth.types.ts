@@ -56,6 +56,7 @@ export interface AuthUser {
     bio: string | null;
     avatarUrl: string | null;
     bannerUrl?: string | null;
+    profilePhotoUrls?: string[];
     location?: string | null;
     latitude?: number | null;
     longitude?: number | null;
@@ -88,3 +89,4 @@ export interface AuthResponse {
   isNewUser?: boolean;
   onboardingRequired?: boolean;
 }
+

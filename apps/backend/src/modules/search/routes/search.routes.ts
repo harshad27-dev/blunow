@@ -25,7 +25,7 @@ class SearchController {
     }
   };
 
-  getUnifiedSearch = async (req: Request, res: Response) => {
+  getUnifiedSearch = async (req: AuthRequest, res: Response) => {
     try {
       const q = req.query.q as string;
       const type = (req.query.type as string) || "all";
@@ -33,6 +33,7 @@ class SearchController {
       const limit = parseInt(req.query.limit as string) || 20;
 
       const data = await this.repo.getUnifiedSearch(
+        req.user!.id,
         q,
         type,
         limit,

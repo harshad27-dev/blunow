@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
+  Alert,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -15,6 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { storyService } from "@/services/story.service";
+import { moderationService } from "@/services/moderation.service";
+import { useAuthStore } from "@/store/authStore";
 
 const getTimeLeft = (expiresAt?: string) => {
   if (!expiresAt) return "Story";
@@ -33,6 +36,7 @@ export default function StoryDetailScreen() {
   const { storyId } = useLocalSearchParams<{ storyId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((state) => state.user?.id);
 
   const {
     data: storyResponse,
@@ -68,6 +72,43 @@ export default function StoryDetailScreen() {
         // Viewing should never block the story UI.
       });
   }, [queryClient, storyId, story]);
+
+  const showStoryActions = () => {
+    if (!story) return;
+    if (story.authorId === currentUserId) {
+      Alert.alert("Story actions", undefined, [
+        {
+          text: "Delete story",
+          style: "destructive",
+          onPress: async () => {
+            await storyService.deleteStory(storyId);
+            queryClient.invalidateQueries({ queryKey: ["stories"] });
+            queryClient.invalidateQueries({ queryKey: ["user-stories"] });
+            router.back();
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]);
+      return;
+    }
+    Alert.alert("Story actions", undefined, [
+      {
+        text: "Report story",
+        style: "destructive",
+        onPress: async () => {
+          await moderationService.report({
+            contentId: story.id,
+            contentType: "STORY",
+            reportedId: story.authorId,
+            reason: "OTHER",
+            description: "Reported from story details",
+          });
+          Alert.alert("Report received", "Thank you for helping keep Datebl safe.");
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-[#050505]" edges={["top"]}>
@@ -175,6 +216,12 @@ export default function StoryDetailScreen() {
                     {viewsCount}
                   </Text>
                 </View>
+                <TouchableOpacity
+                  className="ml-2 h-10 w-10 items-center justify-center rounded-full bg-black/45"
+                  onPress={showStoryActions}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={21} color="#FFFFFF" />
+                </TouchableOpacity>
               </View>
             </View>
 

@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD COLUMN "profilePhotoUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

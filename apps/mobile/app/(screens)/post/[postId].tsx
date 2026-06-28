@@ -16,6 +16,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import FeedCard from "@/components/FeedCard";
 import CommentsDrawer from "@/components/feed/CommentsDrawer";
 import { postService } from "@/services/post.service";
+import { moderationService } from "@/services/moderation.service";
+import { useAuthStore } from "@/store/authStore";
 
 const getTimeAgo = (dateString?: string) => {
   if (!dateString) return "just now";
@@ -38,6 +40,7 @@ const getTimeAgo = (dateString?: string) => {
 
 const normalizePost = (post: any) => ({
   id: post?.postId || post?.id,
+  authorId: post?.authorId || post?.author?.id,
   author: {
     username:
       post?.author?.profile?.username ||
@@ -60,6 +63,7 @@ export default function PostDetailScreen() {
   const { postId } = useLocalSearchParams<{ postId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
 
   const {
@@ -119,6 +123,58 @@ export default function PostDetailScreen() {
     }
   };
 
+  const deletePost = () => {
+    Alert.alert("Delete post?", "This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await postService.deletePost(postId);
+          await refreshPostLists();
+          router.back();
+        },
+      },
+    ]);
+  };
+
+  const showPostActions = () => {
+    if (!post) return;
+    if (post.authorId === currentUserId) {
+      Alert.alert("Post actions", undefined, [
+        {
+          text: "Edit post",
+          onPress: () =>
+            router.push({
+              pathname: "/(screens)/edit-post",
+              params: { postId },
+            }),
+        },
+        { text: "Delete post", style: "destructive", onPress: deletePost },
+        { text: "Cancel", style: "cancel" },
+      ]);
+      return;
+    }
+
+    Alert.alert("Post actions", undefined, [
+      {
+        text: "Report post",
+        style: "destructive",
+        onPress: async () => {
+          await moderationService.report({
+            contentId: post.id,
+            contentType: "POST",
+            reportedId: post.authorId,
+            reason: "OTHER",
+            description: "Reported from post details",
+          });
+          Alert.alert("Report received", "Thank you for helping keep Datebl safe.");
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#050505]" edges={["top"]}>
       <View className="flex-row items-center border-b border-[#151515] px-4 py-3">
@@ -135,6 +191,14 @@ export default function PostDetailScreen() {
             Details and reactions
           </Text>
         </View>
+        {post ? (
+          <TouchableOpacity
+            className="h-10 w-10 items-center justify-center rounded-full bg-[#111111]"
+            onPress={showPostActions}
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {isLoading ? (

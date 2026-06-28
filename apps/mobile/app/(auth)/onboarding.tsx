@@ -3,9 +3,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,9 +24,11 @@ import {
 import Animated, {
   Easing,
   LinearTransition,
+  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +38,7 @@ import { Radius, Spacing } from "@/constants/spacing";
 import { FontFamily, FontSize } from "@/constants/typography";
 import { useUpdateProfileMutation } from "@/hooks/queries";
 import { useAuthStore } from "@/store/authStore";
+import { postService } from "@/services/post.service";
 import { storage } from "@/utils/storage";
 import { BirthDateCalendar } from "@/components/onboarding/BirthDateCalendar";
 
@@ -82,6 +89,14 @@ const STEP_THEMES = [
       "A few essentials so your profile feels real from the first hello.",
   },
   {
+    accent: "#176B87",
+    colors: ["#7BDFF2", "#B2F0EA", "#FFFFFF"] as const,
+    icon: "images-outline",
+    title: "Add your photos",
+    description:
+      "Upload one to three photos. The first one becomes your profile image.",
+  },
+  {
     accent: "#C62547",
     colors: ["#FF8FA8", "#FFB4C5", "#FFFFFF"] as const,
     icon: "chatbubble-ellipses-outline",
@@ -117,7 +132,8 @@ const STEP_THEMES = [
 type LookingFor = (typeof LOOKING_FOR_OPTIONS)[number]["label"];
 type Gender = (typeof GENDER_OPTIONS)[number]["value"];
 type PermissionState = { location: boolean; notifications: boolean };
-type StepIndex = 0 | 1 | 2 | 3 | 4;
+type ProfilePhoto = { uri: string; mimeType: string };
+type StepIndex = 0 | 1 | 2 | 3 | 4 | 5;
 type OnboardingProgress = {
   username: string;
   birthDate: string;
@@ -125,6 +141,7 @@ type OnboardingProgress = {
   bio: string;
   currentStep: number;
   permissions: PermissionState;
+  profilePhotos: ProfilePhoto[];
   selectedInterests: string[];
   selectedLookingFor: LookingFor;
 };
@@ -152,6 +169,7 @@ export default function OnboardingScreen() {
   const [selectedLookingFor, setSelectedLookingFor] =
     useState<LookingFor>("Dating");
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [profilePhotos, setProfilePhotos] = useState<ProfilePhoto[]>([]);
   const [permissions, setPermissions] = useState<PermissionState>({
     location: false,
     notifications: false,
@@ -160,6 +178,7 @@ export default function OnboardingScreen() {
   const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
   const stepProgress = useSharedValue(1);
   const contentProgress = useSharedValue(1);
+  const ambientProgress = useSharedValue(0);
   const animatedDirection = useSharedValue<1 | -1>(1);
   const activeTheme = STEP_THEMES[currentStep];
   const previousTheme = STEP_THEMES[previousStep];
@@ -168,6 +187,17 @@ export default function OnboardingScreen() {
   const selectedIntent =
     LOOKING_FOR_OPTIONS.find((item) => item.label === selectedLookingFor) ??
     LOOKING_FOR_OPTIONS[0];
+
+  useEffect(() => {
+    ambientProgress.value = withRepeat(
+      withTiming(1, {
+        duration: 5200,
+        easing: Easing.inOut(Easing.ease),
+      }),
+      -1,
+      true,
+    );
+  }, [ambientProgress]);
 
   useEffect(() => {
     const restoreProgress = async () => {
@@ -180,6 +210,8 @@ export default function OnboardingScreen() {
         const progress = JSON.parse(raw) as Partial<OnboardingProgress>;
         if (progress.bio !== undefined) setBio(progress.bio);
         if (progress.permissions) setPermissions(progress.permissions);
+        if (Array.isArray(progress.profilePhotos))
+          setProfilePhotos(progress.profilePhotos.slice(0, 3));
         if (Array.isArray(progress.selectedInterests))
           setSelectedInterests(progress.selectedInterests);
         if (
@@ -212,6 +244,7 @@ export default function OnboardingScreen() {
       bio,
       currentStep: currentStep + 1,
       permissions,
+      profilePhotos,
       selectedInterests,
       selectedLookingFor,
     };
@@ -223,6 +256,7 @@ export default function OnboardingScreen() {
     gender,
     hasRestoredProgress,
     permissions,
+    profilePhotos,
     selectedInterests,
     selectedLookingFor,
     username,
@@ -248,6 +282,49 @@ export default function OnboardingScreen() {
     },
     [animatedDirection, contentProgress, currentStep, stepProgress],
   );
+  const pickProfilePhotos = useCallback(async () => {
+    if (profilePhotos.length >= 3) {
+      Alert.alert("Photo limit", "You can add up to three profile photos.");
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== "granted") {
+      Alert.alert("Photo access needed", "Allow photo access to add profile images.");
+      return;
+    }
+
+    const remainingSlots = 3 - profilePhotos.length;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: remainingSlots,
+      quality: 0.82,
+    });
+
+    if (result.canceled) return;
+
+    const nextPhotos = await Promise.all(
+      result.assets.slice(0, remainingSlots).map(async (asset) => ({
+        uri: await compressProfilePhoto(asset.uri),
+        mimeType: asset.mimeType || "image/jpeg",
+      })),
+    );
+
+    setProfilePhotos((current) => [...current, ...nextPhotos].slice(0, 3));
+  }, [profilePhotos.length]);
+
+  const removeProfilePhoto = useCallback((uri: string) => {
+    setProfilePhotos((current) => current.filter((photo) => photo.uri !== uri));
+  }, []);
+
+  const makePrimaryPhoto = useCallback((uri: string) => {
+    setProfilePhotos((current) => {
+      const selected = current.find((photo) => photo.uri === uri);
+      if (!selected) return current;
+      return [selected, ...current.filter((photo) => photo.uri !== uri)];
+    });
+  }, []);
   const completeOnboarding = useCallback(
     async ({ useDefaults = false }: { useDefaults?: boolean } = {}) => {
       setServerError("");
@@ -263,6 +340,14 @@ export default function OnboardingScreen() {
               birthDate: toBackendBirthDate(birthDate),
               gender,
             };
+        const profilePhotoUrls = await uploadProfilePhotos(profilePhotos);
+        const profileMediaPayload = profilePhotoUrls.length
+          ? {
+              avatarUrl: profilePhotoUrls[0],
+              bannerUrl: profilePhotoUrls[1] || profilePhotoUrls[0],
+              profilePhotoUrls,
+            }
+          : {};
         await updateProfileMutation.mutateAsync({
           ...profileBasicsPayload,
           bio: bio.trim(),
@@ -272,16 +357,14 @@ export default function OnboardingScreen() {
             ? "Open to friends"
             : selectedIntent.relationship,
           maxDistance: permissions.location ? 50 : 100,
+          ...profileMediaPayload,
           ...locationPayload,
         });
         await refreshUser();
         await storage.delete(Config.ONBOARDING_PROGRESS_KEY);
         router.replace("/(tabs)/discover");
       } catch (error: any) {
-        const message =
-          error?.response?.data?.message ??
-          "Unable to save onboarding. Please try again.";
-        setServerError(Array.isArray(message) ? message[0] : message);
+        setServerError(getOnboardingErrorMessage(error));
       } finally {
         setIsLoading(false);
       }
@@ -291,6 +374,7 @@ export default function OnboardingScreen() {
       birthDate,
       gender,
       permissions.location,
+      profilePhotos,
       refreshUser,
       router,
       selectedIntent.label,
@@ -307,6 +391,7 @@ export default function OnboardingScreen() {
       birthDate,
       bio,
       currentStep,
+      profilePhotos,
       selectedInterests,
       username,
     });
@@ -314,6 +399,24 @@ export default function OnboardingScreen() {
       setServerError(validationError);
       return;
     }
+
+    if (currentStep === 0) {
+      setIsLoading(true);
+      try {
+        await updateProfileMutation.mutateAsync({
+          username: username.trim().toLowerCase(),
+          birthDate: toBackendBirthDate(birthDate),
+          gender,
+        });
+        await refreshUser();
+      } catch (error: any) {
+        setServerError(getOnboardingErrorMessage(error));
+        return;
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
     if (currentStep < ONBOARDING_STEPS - 1) {
       animateToStep(clampStep(currentStep + 1));
       return;
@@ -325,7 +428,11 @@ export default function OnboardingScreen() {
     bio,
     completeOnboarding,
     currentStep,
+    gender,
+    profilePhotos,
+    refreshUser,
     selectedInterests,
+    updateProfileMutation,
     username,
   ]);
 
@@ -335,6 +442,36 @@ export default function OnboardingScreen() {
     animateToStep(clampStep(currentStep - 1));
   }, [animateToStep, currentStep, isLoading]);
 
+  const screenAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      stepProgress.value,
+      [0, 1],
+      [previousTheme.colors[1], activeTheme.colors[1]],
+    ),
+  }));
+  const ambientBandOneStyle = useAnimatedStyle(() => ({
+    opacity: 0.22 + ambientProgress.value * 0.14,
+    transform: [
+      { translateX: -54 + ambientProgress.value * 96 },
+      { translateY: (1 - stepProgress.value) * -12 },
+      { rotate: "-7deg" },
+    ],
+  }));
+  const ambientBandTwoStyle = useAnimatedStyle(() => ({
+    opacity: 0.2 + (1 - ambientProgress.value) * 0.12,
+    transform: [
+      { translateX: 46 - ambientProgress.value * 86 },
+      { translateY: 10 + (1 - stepProgress.value) * 16 },
+      { rotate: "8deg" },
+    ],
+  }));
+  const progressFillAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: activeTheme.accent,
+    width: `${Math.min(
+      100,
+      ((currentStep + stepProgress.value) / ONBOARDING_STEPS) * 100,
+    )}%`,
+  }));
   const gradientAnimatedStyle = useAnimatedStyle(() => ({
     opacity: stepProgress.value,
   }));
@@ -366,7 +503,13 @@ export default function OnboardingScreen() {
   }));
 
   return (
-    <View style={[styles.screen, { backgroundColor: activeTheme.colors[0] }]}>
+    <Animated.View
+      style={[
+        styles.screen,
+        { backgroundColor: activeTheme.colors[0] },
+        screenAnimatedStyle,
+      ]}
+    >
       <StatusBar style="dark" backgroundColor={activeTheme.colors[0]} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -394,6 +537,24 @@ export default function OnboardingScreen() {
               className="h-full w-full"
             />
           </Animated.View>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.ambientBand,
+              styles.ambientBandOne,
+              { backgroundColor: activeTheme.colors[1] },
+              ambientBandOneStyle,
+            ]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.ambientBand,
+              styles.ambientBandTwo,
+              { backgroundColor: activeTheme.accent },
+              ambientBandTwoStyle,
+            ]}
+          />
 
           <Animated.View
             style={[
@@ -402,11 +563,16 @@ export default function OnboardingScreen() {
               topBarAnimatedStyle,
             ]}
           >
-            <View>
+            <View style={styles.topCopy}>
               <Text style={styles.topLabel}>Profile setup</Text>
               <Text style={styles.stepCount}>
                 Step {currentStep + 1} of {ONBOARDING_STEPS}
               </Text>
+              <View style={styles.progressTrack}>
+                <Animated.View
+                  style={[styles.progressFill, progressFillAnimatedStyle]}
+                />
+              </View>
             </View>
             {/* <TouchableOpacity
               accessibilityRole="button"
@@ -483,20 +649,29 @@ export default function OnboardingScreen() {
                         />
                       ) : null}
                       {index === 1 ? (
+                        <ProfilePhotosStep
+                          accent={step.accent}
+                          onAddPhotos={pickProfilePhotos}
+                          onMakePrimary={makePrimaryPhoto}
+                          onRemovePhoto={removeProfilePhoto}
+                          photos={profilePhotos}
+                        />
+                      ) : null}
+                      {index === 2 ? (
                         <BioStep
                           accent={step.accent}
                           bio={bio}
                           onChangeBio={setBio}
                         />
                       ) : null}
-                      {index === 2 ? (
+                      {index === 3 ? (
                         <LookingForStep
                           accent={step.accent}
                           onSelectLookingFor={setSelectedLookingFor}
                           selectedLookingFor={selectedLookingFor}
                         />
                       ) : null}
-                      {index === 3 ? (
+                      {index === 4 ? (
                         <InterestsStep
                           accent={step.accent}
                           onToggleInterest={(interest) =>
@@ -507,7 +682,7 @@ export default function OnboardingScreen() {
                           selectedInterests={selectedInterests}
                         />
                       ) : null}
-                      {index === 4 ? (
+                      {index === 5 ? (
                         <PermissionsStep
                           accent={step.accent}
                           onChangePermissions={setPermissions}
@@ -569,7 +744,7 @@ export default function OnboardingScreen() {
           </Animated.View>
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -738,6 +913,72 @@ function ProfileBasicsStep({
   );
 }
 
+function ProfilePhotosStep({
+  accent,
+  onAddPhotos,
+  onMakePrimary,
+  onRemovePhoto,
+  photos,
+}: {
+  accent: string;
+  onAddPhotos: () => void;
+  onMakePrimary: (uri: string) => void;
+  onRemovePhoto: (uri: string) => void;
+  photos: ProfilePhoto[];
+}) {
+  return (
+    <View>
+      <View style={styles.photoGrid}>
+        {photos.map((photo, index) => (
+          <Pressable
+            key={photo.uri}
+            accessibilityRole="button"
+            accessibilityLabel={index === 0 ? "Primary profile photo" : "Make primary profile photo"}
+            onPress={() => onMakePrimary(photo.uri)}
+            style={[styles.photoTile, index === 0 && { borderColor: accent }]}
+          >
+            <Image source={{ uri: photo.uri }} style={styles.photoTileImage} />
+            <LinearGradient
+              colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.58)"]}
+              style={styles.photoTileOverlay}
+            />
+            {index === 0 ? (
+              <View style={[styles.primaryPhotoBadge, { backgroundColor: accent }]}> 
+                <Ionicons name="person" size={13} color={Colors.white} />
+                <Text style={styles.primaryPhotoText}>Profile</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Remove photo"
+              activeOpacity={0.8}
+              onPress={() => onRemovePhoto(photo.uri)}
+              style={styles.removePhotoButton}
+            >
+              <Ionicons name="close" size={15} color={Colors.white} />
+            </TouchableOpacity>
+          </Pressable>
+        ))}
+        {photos.length < 3 ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            activeOpacity={0.82}
+            onPress={onAddPhotos}
+            style={[styles.addPhotoTile, { borderColor: `${accent}55` }]}
+          >
+            <View style={[styles.addPhotoIcon, { backgroundColor: `${accent}18` }]}> 
+              <Ionicons name="add" size={24} color={accent} />
+            </View>
+            <Text style={[styles.addPhotoText, { color: accent }]}>Add photo</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <Text style={styles.helperText}>
+        {photos.length}/3 selected. Tap a photo to make it your profile image.
+      </Text>
+    </View>
+  );
+}
 function BioStep({
   accent,
   bio,
@@ -1099,6 +1340,88 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 30,
   },
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  photoTile: {
+    aspectRatio: 0.78,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderColor: "rgba(28,28,28,0.1)",
+    borderRadius: Radius.lg,
+    borderWidth: 2,
+    flexBasis: "30%",
+    flexGrow: 1,
+    maxWidth: "31.5%",
+    minHeight: 138,
+    overflow: "hidden",
+  },
+  photoTileImage: {
+    height: "100%",
+    width: "100%",
+  },
+  photoTileOverlay: {
+    bottom: 0,
+    height: "56%",
+    left: 0,
+    position: "absolute",
+    right: 0,
+  },
+  primaryPhotoBadge: {
+    alignItems: "center",
+    borderRadius: Radius.full,
+    bottom: 8,
+    flexDirection: "row",
+    gap: 4,
+    left: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    position: "absolute",
+  },
+  primaryPhotoText: {
+    color: Colors.white,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
+  },
+  removePhotoButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.48)",
+    borderRadius: Radius.full,
+    height: 28,
+    justifyContent: "center",
+    position: "absolute",
+    right: 8,
+    top: 8,
+    width: 28,
+  },
+  addPhotoTile: {
+    alignItems: "center",
+    aspectRatio: 0.78,
+    backgroundColor: "rgba(255,255,255,0.74)",
+    borderRadius: Radius.lg,
+    borderStyle: "dashed",
+    borderWidth: 1.5,
+    flexBasis: "30%",
+    flexGrow: 1,
+    justifyContent: "center",
+    maxWidth: "31.5%",
+    minHeight: 138,
+    padding: Spacing.sm,
+  },
+  addPhotoIcon: {
+    alignItems: "center",
+    borderRadius: Radius.full,
+    height: 42,
+    justifyContent: "center",
+    marginBottom: 8,
+    width: 42,
+  },
+  addPhotoText: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
+    textAlign: "center",
+  },
   formStack: { gap: Spacing.md },
   inputWrap: {
     backgroundColor: "rgba(255,255,255,0.92)",
@@ -1282,6 +1605,30 @@ const styles = StyleSheet.create({
     fontSize: FontSize.base,
   },
 });
+const compressProfilePhoto = async (uri: string) => {
+  const result = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1200 } }],
+    { compress: 0.78, format: ImageManipulator.SaveFormat.JPEG },
+  );
+  return result.uri;
+};
+
+const uploadProfilePhotos = async (photos: ProfilePhoto[]) => {
+  const urls: string[] = [];
+  for (const photo of photos.slice(0, 3)) {
+    const url = await postService.uploadMedia(photo.uri, photo.mimeType);
+    if (url) urls.push(url);
+  }
+  return urls;
+};
+
+const getOnboardingErrorMessage = (error: any) => {
+  const message =
+    error?.response?.data?.message ??
+    "Unable to save onboarding. Please try again.";
+  return Array.isArray(message) ? message[0] : message;
+};
 async function getLocationPayload() {
   const permission = await Location.requestForegroundPermissionsAsync();
   if (permission.status !== Location.PermissionStatus.GRANTED) return {};
@@ -1310,19 +1657,23 @@ const validateStep = ({
   birthDate,
   bio,
   currentStep,
+  profilePhotos,
   selectedInterests,
   username,
 }: {
   birthDate: string;
   bio: string;
   currentStep: StepIndex;
+  profilePhotos: ProfilePhoto[];
   selectedInterests: string[];
   username: string;
 }) => {
   if (currentStep === 0) return validateProfileBasics(username, birthDate);
-  if (currentStep === 1 && bio.trim().length < 12)
+  if (currentStep === 1 && profilePhotos.length < 1)
+    return "Add at least one profile photo.";
+  if (currentStep === 2 && bio.trim().length < 12)
     return "Write a bio with at least 12 characters.";
-  if (currentStep === 3 && selectedInterests.length < 3)
+  if (currentStep === 4 && selectedInterests.length < 3)
     return "Pick at least three interests.";
   return "";
 };
@@ -1373,3 +1724,13 @@ const parseBirthDate = (birthDate: string) => {
 
 const toBackendBirthDate = (birthDate: string) =>
   (parseBirthDate(birthDate) ?? new Date()).toISOString();
+
+
+
+
+
+
+
+
+
+

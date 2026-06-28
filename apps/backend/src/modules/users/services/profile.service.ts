@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { UsersRepository } from "../models/users.repository";
 import { eventBus } from "../../../events/event-bus";
 import { EVENTS } from "../../../events/event-constants";
@@ -19,6 +20,7 @@ export class ProfileService {
       longitude?: number;
       avatarUrl?: string;
       bannerUrl?: string;
+      profilePhotoUrls?: string[];
       interests?: string[];
       interestedIn?: string[];
       lookingFor?: string[];
@@ -43,13 +45,24 @@ export class ProfileService {
     }
 
     const userData = sexuality ? { sexuality } : {};
-    const profile = await this.usersRepository.updateProfileAndUser(
-      userId,
-      updateData,
-      userData,
-    );
-    eventBus.emit(EVENTS.USER.PROFILE_UPDATED, { userId });
-    return profile;
+    try {
+      const profile = await this.usersRepository.updateProfileAndUser(
+        userId,
+        updateData,
+        userData,
+      );
+      eventBus.emit(EVENTS.USER.PROFILE_UPDATED, { userId });
+      return profile;
+    } catch (error) {
+      if (isUniqueUsernameError(error)) {
+        const usernameError = new Error("Username is already taken.") as Error & {
+          statusCode?: number;
+        };
+        usernameError.statusCode = 409;
+        throw usernameError;
+      }
+      throw error;
+    }
   }
 
   async updatePreferences(
@@ -75,9 +88,18 @@ export class ProfileService {
   }
 }
 
+
+const isUniqueUsernameError = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  error.code === "P2002" &&
+  Array.isArray(error.meta?.target) &&
+  error.meta.target.includes("username");
 const getBirthDateFromAge = (age: number) => {
   const date = new Date();
   date.setFullYear(date.getFullYear() - age);
   date.setHours(0, 0, 0, 0);
   return date;
 };
+
+
+

@@ -325,7 +325,7 @@ export default function ChatListScreen() {
             className="px-24 text-center text-[34px] font-extrabold text-text-primary"
             numberOfLines={1}
           >
-            Matches
+            Chats
           </Text>
 
           <View className="absolute right-0 flex-row items-center">

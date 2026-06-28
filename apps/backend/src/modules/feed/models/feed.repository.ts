@@ -32,6 +32,15 @@ export class FeedRepository {
       where: {
         isPublic: true,
         isDeleted: false,
+        author: {
+          blockedByUsers: { none: { blockerId: params.userId } },
+          blockedUsers: { none: { blockedId: params.userId } },
+          OR: [
+            { id: params.userId },
+            { profile: { is: { isPrivate: false } } },
+            { followers: { some: { followerId: params.userId } } },
+          ],
+        },
         ...(cursorPost
           ? {
               OR: [

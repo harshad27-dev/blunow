@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
+import { CuratedMatchCard } from "@/components/discover/CuratedMatchCard";
 import { DailyPromptBanner } from "@/components/discover/DailyPromptBanner";
 import { DiscoverSectionHeader } from "@/components/discover/DiscoverSectionHeader";
 import { EmptyMiniState } from "@/components/discover/EmptyMiniState";
@@ -26,11 +27,13 @@ import { SuggestedPersonCard } from "@/components/discover/SuggestedPersonCard";
 import { TrendingPostCard } from "@/components/discover/TrendingPostCard";
 import { Colors } from "@/constants/colors";
 import {
+  DAILY_CURATED_MATCH_LIMIT,
   DISCOVER_SCREEN_PADDING,
   EXPLORE_FILTERS,
   FALLBACK_PROFILE_IMAGE,
   TRENDING_POSTS,
 } from "@/constants/discover";
+import type { TrendingPost } from "@/constants/discover";
 import { FontFamily, FontSize } from "@/constants/typography";
 import {
   useDiscoverPeopleQuery,
@@ -41,6 +44,38 @@ import type { DiscoverProfile } from "@/types/match.types";
 
 const { width } = Dimensions.get("window");
 
+const getCuratedRank = (profile: DiscoverProfile) => {
+  const onlineBoost = profile.online ? 8 : 0;
+  const verifiedBoost = profile.verified ? 5 : 0;
+  const interestBoost = Math.min(profile.interests?.length || 0, 4) * 2;
+  return profile.matchScore + onlineBoost + verifiedBoost + interestBoost;
+};
+
+const getCuratedReasons = (profile: DiscoverProfile) => {
+  const reasons: string[] = [];
+
+  if (profile.matchScore >= 85) reasons.push("High compatibility");
+  else if (profile.matchScore >= 70) reasons.push("Strong profile fit");
+
+  if (profile.online) reasons.push("Active now");
+  if (profile.verified) reasons.push("Verified profile");
+  if (profile.interests?.[0]) reasons.push(`Likes ${profile.interests[0]}`);
+  if (profile.distance) reasons.push(`${profile.distance} away`);
+
+  return reasons.length > 0 ? reasons : ["Good conversation potential"];
+};
+
+const getNextDropLabel = () => {
+  const now = new Date();
+  const nextDrop = new Date(now);
+  nextDrop.setDate(now.getDate() + 1);
+  nextDrop.setHours(9, 0, 0, 0);
+
+  return nextDrop.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 export default function DiscoverScreen() {
   const router = useRouter();
 
@@ -49,6 +84,9 @@ export default function DiscoverScreen() {
   );
 
   const [skippedProfileIds, setSkippedProfileIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [savedProfileIds, setSavedProfileIds] = useState<Set<string>>(
     () => new Set(),
   );
 
@@ -75,9 +113,29 @@ export default function DiscoverScreen() {
     [profiles, skippedProfileIds],
   );
 
-  const suggestedPeople = useMemo(
-    () => visibleProfiles.slice(0, 8),
+  const dailyCuratedMatches = useMemo(
+    () =>
+      [...visibleProfiles]
+        .sort((first, second) => getCuratedRank(second) - getCuratedRank(first))
+        .slice(0, DAILY_CURATED_MATCH_LIMIT)
+        .map((profile) => ({
+          profile,
+          reasons: getCuratedReasons(profile),
+        })),
     [visibleProfiles],
+  );
+
+  const dailyCuratedProfileIds = useMemo(
+    () => new Set(dailyCuratedMatches.map((item) => item.profile.id)),
+    [dailyCuratedMatches],
+  );
+
+  const suggestedPeople = useMemo(
+    () =>
+      visibleProfiles
+        .filter((profile) => !dailyCuratedProfileIds.has(profile.id))
+        .slice(0, 8),
+    [dailyCuratedProfileIds, visibleProfiles],
   );
 
   const nearbyPeople = useMemo(
@@ -85,7 +143,9 @@ export default function DiscoverScreen() {
     [visibleProfiles],
   );
 
-  const trendingPosts = realTrendingPosts.length > 0
+  const nextDropLabel = useMemo(getNextDropLabel, []);
+
+  const trendingPosts: TrendingPost[] = realTrendingPosts.length > 0
     ? realTrendingPosts
     : TRENDING_POSTS;
 
@@ -115,6 +175,20 @@ export default function DiscoverScreen() {
     setSkippedProfileIds((current) => {
       const next = new Set(current);
       next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSavedProfile = (id: string) => {
+    setSavedProfileIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
       return next;
     });
   };
@@ -285,8 +359,62 @@ export default function DiscoverScreen() {
         />
 
         <DiscoverSectionHeader
+          title="Today's curated picks"
+          subtitle={`Only ${DAILY_CURATED_MATCH_LIMIT} intentional matches, ranked by compatibility and activity`}
+          action={`Next ${nextDropLabel}`}
+        />
+
+        <View style={styles.curatedSummary}>
+          <View style={styles.curatedSummaryItem}>
+            <Ionicons name="albums-outline" size={15} color={Colors.textPrimary} />
+            <Text style={styles.curatedSummaryText}>
+              {dailyCuratedMatches.length}/{DAILY_CURATED_MATCH_LIMIT} picks left
+            </Text>
+          </View>
+          <View style={styles.curatedSummaryItem}>
+            <Ionicons name="bookmark-outline" size={15} color={Colors.textPrimary} />
+            <Text style={styles.curatedSummaryText}>{savedProfileIds.size} saved</Text>
+          </View>
+        </View>
+
+        {dailyCuratedMatches.length > 0 ? (
+          <FlatList
+            data={dailyCuratedMatches}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.profile.id}
+            contentContainerStyle={styles.curatedList}
+            renderItem={({ item, index }) => (
+              <CuratedMatchCard
+                profile={item.profile}
+                reasons={item.reasons}
+                position={index + 1}
+                total={dailyCuratedMatches.length}
+                disabled={sendMatchRequest.isPending}
+                saved={savedProfileIds.has(item.profile.id)}
+                onPress={() => openProfile(item.profile.id)}
+                onConnect={() =>
+                  sendRequest(
+                    item.profile,
+                    `Hi ${item.profile.name}, you showed up in my curated picks.`,
+                  )
+                }
+                onPass={() => skipProfile(item.profile.id)}
+                onSave={() => toggleSavedProfile(item.profile.id)}
+              />
+            )}
+          />
+        ) : (
+          <EmptyMiniState
+            icon="sparkles-outline"
+            title="Today's picks are done"
+            text="Check back at the next drop for a fresh curated set."
+          />
+        )}
+
+        <DiscoverSectionHeader
           title="Suggested people"
-          subtitle="Based on your activity, interests, and location"
+          subtitle="Browse more people after your daily picks"
           action="See all"
         />
 
@@ -484,6 +612,32 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: Colors.black,
   },
+  curatedSummary: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+    paddingHorizontal: DISCOVER_SCREEN_PADDING,
+  },
+  curatedSummaryItem: {
+    alignItems: "center",
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 38,
+    paddingHorizontal: 12,
+  },
+  curatedSummaryText: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.xs,
+    marginLeft: 7,
+  },
+  curatedList: {
+    paddingHorizontal: DISCOVER_SCREEN_PADDING,
+    paddingTop: 14,
+  },
   suggestedList: {
     gap: 14,
     paddingHorizontal: DISCOVER_SCREEN_PADDING,
@@ -509,3 +663,4 @@ const styles = StyleSheet.create({
     paddingVertical: 22,
   },
 });
+

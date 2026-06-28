@@ -268,7 +268,10 @@ export default function EditProfileScreen() {
     const label = type === "avatar" ? "avatar" : "banner";
 
     Alert.alert(`${formatOption(label)} photo`, undefined, [
-      { text: hasPhoto ? "Change photo" : "Add photo", onPress: () => pickPhoto(type) },
+      {
+        text: hasPhoto ? "Change photo" : "Add photo",
+        onPress: () => pickPhoto(type),
+      },
       ...(hasPhoto
         ? [
             {
@@ -289,8 +292,12 @@ export default function EditProfileScreen() {
     try {
       setIsUploading(true);
       setUploadProgress(0);
-      let finalAvatarUrl: string | null | undefined = avatarUri ? profile?.avatarUrl : null;
-      let finalCoverUrl: string | null | undefined = coverUri ? profile?.bannerUrl : null;
+      let finalAvatarUrl: string | null | undefined = avatarUri
+        ? profile?.avatarUrl
+        : null;
+      let finalCoverUrl: string | null | undefined = coverUri
+        ? profile?.bannerUrl
+        : null;
       const uploadTasks = [
         avatarUri && avatarUri !== profile?.avatarUrl ? "avatar" : null,
         coverUri && coverUri !== profile?.bannerUrl ? "cover" : null,
@@ -304,7 +311,10 @@ export default function EditProfileScreen() {
           avatarMimeType || "image/jpeg",
           (progress) =>
             setUploadProgress(
-              Math.round(completedUploads * progressStep + progress * (progressStep / 100)),
+              Math.round(
+                completedUploads * progressStep +
+                  progress * (progressStep / 100),
+              ),
             ),
         );
         completedUploads += 1;
@@ -316,7 +326,10 @@ export default function EditProfileScreen() {
           coverMimeType || "image/jpeg",
           (progress) =>
             setUploadProgress(
-              Math.round(completedUploads * progressStep + progress * (progressStep / 100)),
+              Math.round(
+                completedUploads * progressStep +
+                  progress * (progressStep / 100),
+              ),
             ),
         );
         completedUploads += 1;
@@ -360,173 +373,172 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView className="flex-1" style={styles.screen}>
       <StatusBar style="dark" backgroundColor={Colors.bg} />
-      <LinearGradient
-        colors={Colors.gradientBg}
-        style={styles.fill}
-      >
-        <View className="flex-row items-center justify-between px-5 pb-5 pt-2">
-          <TouchableOpacity
-            className="h-11 w-11 items-center justify-center rounded-2xl border"
-            style={styles.iconButton}
-            onPress={() => router.back()}
-            activeOpacity={0.78}
-          >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-
-          <View className="items-center">
-            <Text className="text-[22px] font-extrabold" style={styles.titleText}>
-              Edit profile
-            </Text>
-            <View className="mt-2 flex-row items-center rounded-full border p-1" style={styles.segment}>
-              <View className="rounded-full px-3 py-1" style={styles.segmentActive}>
-                <Text className="text-xs font-extrabold" style={styles.primaryButtonText}>
-                  Edit
-                </Text>
-              </View>
-              <Text className="px-3 text-xs font-semibold" style={styles.mutedText}>
-                Preview
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            className="h-11 min-w-[68px] items-center justify-center rounded-2xl px-4"
-            style={styles.primaryButton}
-            onPress={saveProfile}
-            disabled={isUploading || updateProfileMutation.isPending}
-            activeOpacity={0.78}
-          >
-            {isUploading || updateProfileMutation.isPending ? (
-              <ActivityIndicator size="small" color={Colors.textInverse} />
-            ) : (
-              <Text className="text-sm font-extrabold" style={styles.primaryButtonText}>
-                Done
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          className="flex-1"
-          contentContainerClassName="px-5 pb-10"
-          showsVerticalScrollIndicator={false}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.headerIcon}
+          onPress={() => router.back()}
+          activeOpacity={0.78}
         >
-          <View className="overflow-hidden rounded-[30px] border shadow-2xl" style={styles.card}>
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerTitle}>Edit profile</Text>
+          <Text style={styles.headerSubtitle}>
+            Photos, story, and preferences
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            (isUploading || updateProfileMutation.isPending) &&
+              styles.saveButtonDisabled,
+          ]}
+          onPress={saveProfile}
+          disabled={isUploading || updateProfileMutation.isPending}
+          activeOpacity={0.8}
+        >
+          {isUploading || updateProfileMutation.isPending ? (
+            <ActivityIndicator size="small" color={Colors.textInverse} />
+          ) : (
+            <>
+              <Ionicons name="checkmark" size={18} color={Colors.textInverse} />
+              <Text style={styles.saveButtonText}>Save</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.mediaPanel}>
+          <TouchableOpacity
+            style={styles.coverButton}
+            onPress={() => openPhotoActions("cover")}
+            activeOpacity={0.88}
+          >
+            {coverUri ? (
+              <Image
+                source={{ uri: coverUri }}
+                style={styles.coverImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <LinearGradient
+                colors={Colors.gradientPrimary}
+                style={styles.coverPlaceholder}
+              >
+                <Ionicons
+                  name="image-outline"
+                  size={34}
+                  color={Colors.onImageMuted}
+                />
+              </LinearGradient>
+            )}
+            <LinearGradient
+              colors={[
+                Colors.overlayDarkSoft,
+                Colors.transparent,
+                Colors.overlayDark,
+              ]}
+              locations={[0, 0.48, 1]}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <MediaAction
+              icon={coverUri ? "sync-outline" : "camera-outline"}
+              label={coverUri ? "Change cover" : "Add cover"}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.profileStrip}>
             <TouchableOpacity
-              className="relative h-[178px]"
-              style={styles.coverTouchable}
-              onPress={() => openPhotoActions("cover")}
+              style={styles.avatarButton}
+              onPress={() => openPhotoActions("avatar")}
               activeOpacity={0.88}
             >
-              {coverUri ? (
-                <Image source={{ uri: coverUri }} className="h-full w-full" />
+              {avatarUri ? (
+                <Image
+                  source={{ uri: avatarUri }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
               ) : (
                 <LinearGradient
-                  colors={Colors.gradientPrimary}
-                  style={styles.coverPlaceholder}
-                />
+                  colors={Colors.gradientCard}
+                  style={styles.avatarPlaceholder}
+                >
+                  <Text style={styles.initialsText}>
+                    {getInitials(username || user?.username)}
+                  </Text>
+                </LinearGradient>
               )}
-              <LinearGradient
-                colors={[Colors.transparent, Colors.primary + "B8"]}
-                style={StyleSheet.absoluteFillObject}
-              />
-              <View className="absolute bottom-4 right-4 h-11 w-11 items-center justify-center rounded-2xl border" style={styles.photoButton}>
-                <Ionicons name={coverUri ? "ellipsis-horizontal" : "camera-outline"} size={18} color={Colors.textInverse} />
+              <View style={styles.avatarEditBadge}>
+                <Ionicons name="camera" size={17} color={Colors.textInverse} />
               </View>
             </TouchableOpacity>
 
-            <View className="px-5 pb-6">
-              <TouchableOpacity
-                className="-mt-12 h-24 w-24 rounded-[28px] border-2 p-1"
-                style={styles.avatarButton}
-                onPress={() => openPhotoActions("avatar")}
-                activeOpacity={0.88}
-              >
-                {avatarUri ? (
-                  <Image
-                    source={{ uri: avatarUri }}
-                    className="h-full w-full rounded-[26px]"
-                  />
-                ) : (
-                  <LinearGradient
-                    colors={Colors.gradientCard}
-                    style={styles.avatarPlaceholder}
-                  >
-                    <Ionicons name="person" size={42} color={Colors.textMuted} />
-                  </LinearGradient>
-                )}
-                <View className="absolute -bottom-1 -right-1 h-8 w-8 items-center justify-center rounded-2xl shadow-lg" style={styles.addBadge}>
-                  <Ionicons name={avatarUri ? "ellipsis-horizontal" : "add"} size={18} color={Colors.textInverse} />
-                </View>
-              </TouchableOpacity>
-
-              <View style={styles.completionCard}>
-                <View style={styles.completionRow}>
-                  <Text style={styles.completionTitle}>{completion}% complete</Text>
-                  <Text style={styles.completionHint}>{getCompletionHint(completion)}</Text>
-                </View>
-                <View style={styles.completionTrack}>
-                  <View
-                    style={[
-                      styles.completionFill,
-                      { width: `${completion}%` },
-                    ]}
-                  />
-                </View>
-                {isUploading ? (
-                  <Text style={styles.uploadText}>
-                    Uploading photos... {uploadProgress}%
-                  </Text>
-                ) : null}
-              </View>
-
-              <Text className="mt-4 text-xl font-extrabold" style={styles.titleText}>
+            <View style={styles.profileCopy}>
+              <Text style={styles.profileName} numberOfLines={1}>
                 {username || "Your profile"}
               </Text>
-              <Text className="mt-1 text-sm font-medium leading-5" style={styles.bodyText}>
-                Tune your profile details and dating preferences.
+              <Text style={styles.profileMeta} numberOfLines={2}>
+                {bio ||
+                  "Add a short bio so people know what kind of connection you are here for."}
               </Text>
-              <View className="mt-4 flex-row flex-wrap gap-2">
-                <InfoPill
-                  icon="sparkles-outline"
-                  label={`${interests.length} interests`}
-                />
-                <InfoPill icon="navigate-outline" label={`${maxDistance} km`} />
-                <InfoPill
-                  icon="heart-outline"
-                  label={lookingFor[0] || "New friends"}
-                />
-              </View>
             </View>
           </View>
+        </View>
 
-          <SectionTitle title="Profile" />
-          <View className="overflow-hidden rounded-[26px] border shadow-xl" style={styles.card}>
-            {profileItems.map((item, index) => (
-              <SettingRow
-                key={item.key}
-                item={item}
-                isLast={index === profileItems.length - 1}
-                onPress={() => setActiveSheet(item.key)}
-              />
-            ))}
-          </View>
+        <View style={styles.quickStats}>
+          <QuickStat
+            icon="sparkles-outline"
+            value={String(interests.length)}
+            label="Interests"
+          />
+          <QuickStat
+            icon="navigate-outline"
+            value={maxDistance}
+            label="Km range"
+          />
+          <QuickStat
+            icon="heart-outline"
+            value={lookingFor[0] || "New"}
+            label="Looking for"
+          />
+        </View>
 
-          <SectionTitle title="Dating Preferences" />
-          <View className="overflow-hidden rounded-[26px] border shadow-xl" style={styles.card}>
-            {datingItems.map((item, index) => (
-              <SettingRow
-                key={item.key}
-                item={item}
-                isLast={index === datingItems.length - 1}
-                onPress={() => setActiveSheet(item.key)}
-              />
-            ))}
-          </View>
-        </ScrollView>
-      </LinearGradient>
+        <CompletionPanel
+          completion={completion}
+          isUploading={isUploading}
+          uploadProgress={uploadProgress}
+        />
 
+        <SectionTitle title="Profile details" />
+        <View style={styles.sectionCard}>
+          {profileItems.map((item, index) => (
+            <SettingRow
+              key={item.key}
+              item={item}
+              isLast={index === profileItems.length - 1}
+              onPress={() => setActiveSheet(item.key)}
+            />
+          ))}
+        </View>
+
+        <SectionTitle title="Dating preferences" />
+        <View style={styles.sectionCard}>
+          {datingItems.map((item, index) => (
+            <SettingRow
+              key={item.key}
+              item={item}
+              isLast={index === datingItems.length - 1}
+              onPress={() => setActiveSheet(item.key)}
+            />
+          ))}
+        </View>
+      </ScrollView>
       <EditDrawer
         activeSheet={activeSheet}
         onClose={() => setActiveSheet(null)}
@@ -569,21 +581,73 @@ export default function EditProfileScreen() {
 }
 
 const SectionTitle = ({ title }: { title: string }) => (
-  <Text className="mb-3 ml-1 mt-7 text-sm font-extrabold uppercase tracking-wider" style={styles.sectionTitle}>
-    {title}
-  </Text>
+  <Text style={styles.sectionTitle}>{title}</Text>
 );
 
-const InfoPill = ({
+const MediaAction = ({
   icon,
   label,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
 }) => (
-  <View className="flex-row items-center rounded-full border px-3 py-2" style={styles.infoPill}>
-    <Ionicons name={icon} size={14} color={Colors.primaryLight} />
-    <Text className="ml-1.5 text-xs font-bold" style={styles.titleText}>{label}</Text>
+  <View style={styles.mediaAction}>
+    <Ionicons name={icon} size={18} color={Colors.textInverse} />
+    <Text style={styles.mediaActionText}>{label}</Text>
+  </View>
+);
+
+const QuickStat = ({
+  icon,
+  value,
+  label,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: string;
+  label: string;
+}) => (
+  <View style={styles.quickStatCard}>
+    <View style={styles.quickStatIcon}>
+      <Ionicons name={icon} size={18} color={Colors.primary} />
+    </View>
+    <Text style={styles.quickStatValue} numberOfLines={1}>
+      {value}
+    </Text>
+    <Text style={styles.quickStatLabel} numberOfLines={1}>
+      {label}
+    </Text>
+  </View>
+);
+
+const CompletionPanel = ({
+  completion,
+  isUploading,
+  uploadProgress,
+}: {
+  completion: number;
+  isUploading: boolean;
+  uploadProgress: number;
+}) => (
+  <View style={styles.completionCard}>
+    <View style={styles.completionIcon}>
+      <Ionicons name="heart" size={25} color={Colors.primaryLight} />
+    </View>
+    <View style={styles.completionCopy}>
+      <View style={styles.completionRow}>
+        <Text style={styles.completionTitle}>{completion}% complete</Text>
+        <Text style={styles.completionHint}>
+          {getCompletionHint(completion)}
+        </Text>
+      </View>
+      <View style={styles.completionTrack}>
+        <View style={[styles.completionFill, { width: `${completion}%` }]} />
+      </View>
+      {isUploading ? (
+        <Text style={styles.uploadText}>
+          Uploading photos... {uploadProgress}%
+        </Text>
+      ) : null}
+    </View>
   </View>
 );
 
@@ -597,28 +661,24 @@ const SettingRow = ({
   onPress: () => void;
 }) => (
   <TouchableOpacity
-    className="min-h-[78px] flex-row items-center gap-4 px-4"
-    style={!isLast && styles.rowBorder}
+    style={[styles.settingRow, !isLast && styles.rowBorder]}
     onPress={onPress}
     activeOpacity={0.78}
   >
-    <View className="h-11 w-11 items-center justify-center rounded-[17px] border" style={styles.rowIconBox}>
-      <Ionicons name={item.icon} size={20} color={Colors.primary} />
+    <View style={styles.rowIconBox}>
+      <Ionicons name={item.icon} size={20} color={Colors.textPrimary} />
     </View>
-    <View className="flex-1">
-      <Text className="text-[15px] font-bold" style={styles.titleText}>{item.title}</Text>
-      <Text
-        className="mt-1 text-sm font-medium"
-        style={styles.bodyText}
-        numberOfLines={1}
-      >
+    <View style={styles.rowCopy}>
+      <Text style={styles.rowTitle}>{item.title}</Text>
+      <Text style={styles.rowValue} numberOfLines={1}>
         {item.value}
       </Text>
     </View>
-    <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+    <View style={styles.rowChevron}>
+      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+    </View>
   </TouchableOpacity>
 );
-
 const EditDrawer = ({
   activeSheet,
   onClose,
@@ -660,9 +720,19 @@ const EditDrawer = ({
     animationType="slide"
     onRequestClose={onClose}
   >
-    <Pressable className="flex-1" style={styles.drawerBackdrop} onPress={onClose} />
-    <View className="absolute bottom-0 left-0 right-0 max-h-[74%] rounded-t-[32px] border pt-3 shadow-2xl" style={styles.drawer}>
-      <View className="mb-3 h-1.5 w-12 self-center rounded-full" style={styles.drawerHandle} />
+    <Pressable
+      className="flex-1"
+      style={styles.drawerBackdrop}
+      onPress={onClose}
+    />
+    <View
+      className="absolute bottom-0 left-0 right-0 max-h-[74%] rounded-t-[32px] border pt-3 shadow-2xl"
+      style={styles.drawer}
+    >
+      <View
+        className="mb-3 h-1.5 w-12 self-center rounded-full"
+        style={styles.drawerHandle}
+      />
       <View className="flex-row items-center justify-between px-5 pb-3">
         <TouchableOpacity
           className="h-10 w-10 items-center justify-center rounded-2xl border"
@@ -671,7 +741,10 @@ const EditDrawer = ({
         >
           <Ionicons name="close" size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text className="flex-1 text-center text-lg font-extrabold" style={styles.titleText}>
+        <Text
+          className="flex-1 text-center text-lg font-extrabold"
+          style={styles.titleText}
+        >
           {getSheetTitle(activeSheet)}
         </Text>
         <TouchableOpacity
@@ -679,7 +752,12 @@ const EditDrawer = ({
           style={styles.primaryButton}
           onPress={onClose}
         >
-          <Text className="text-sm font-extrabold" style={styles.primaryButtonText}>Done</Text>
+          <Text
+            className="text-sm font-extrabold"
+            style={styles.primaryButtonText}
+          >
+            Done
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -860,7 +938,11 @@ const ListSelector = ({
             {formatLabel(option)}
           </Text>
           {active ? (
-            <Ionicons name="checkmark-circle" size={21} color={Colors.primary} />
+            <Ionicons
+              name="checkmark-circle"
+              size={21}
+              color={Colors.primary}
+            />
           ) : null}
         </TouchableOpacity>
       );
@@ -938,142 +1020,62 @@ const getProfileCompletion = ({
 };
 
 const getCompletionHint = (completion: number) =>
-  completion >= 100 ? "Looking sharp" : "Add avatar, bio, interests, location, looking for";
+  completion >= 100
+    ? "Looking sharp"
+    : "Add avatar, bio, interests, location, looking for";
 
+const getInitials = (value?: string | null) => {
+  const fallback = "ME";
+  if (!value?.trim()) return fallback;
+
+  const initials = value
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
+  return initials || fallback;
+};
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: Colors.bg,
   },
-  titleText: {
-    color: Colors.textPrimary,
-  },
-  bodyText: {
-    color: Colors.textSecondary,
-  },
-  mutedText: {
-    color: Colors.textMuted,
-  },
-  sectionTitle: {
-    color: Colors.primaryLight,
-  },
-  iconButton: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-  },
-  primaryButton: {
-    backgroundColor: Colors.primary,
-  },
-  primaryButtonText: {
-    color: Colors.textInverse,
-  },
-  segment: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-  },
-  segmentActive: {
-    backgroundColor: Colors.primary,
-  },
-  card: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-  },
-  coverTouchable: {
-    backgroundColor: Colors.bgElevated,
-  },
-  photoButton: {
-    backgroundColor: Colors.primary + "BF",
-    borderColor: Colors.textInverse + "26",
-  },
   avatarButton: {
     backgroundColor: Colors.bg,
-    borderColor: Colors.bgCard,
+    borderColor: Colors.bg,
+    borderRadius: 30,
+    borderWidth: 4,
+    height: 104,
+    marginTop: -38,
+    padding: 3,
+    width: 104,
+  },
+  avatarEditBadge: {
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderColor: Colors.bg,
+    borderRadius: 16,
+    borderWidth: 2,
+    bottom: -1,
+    height: 34,
+    justifyContent: "center",
+    position: "absolute",
+    right: -1,
+    width: 34,
+  },
+  avatarImage: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 25,
+    height: "100%",
+    width: "100%",
   },
   avatarPlaceholder: {
     alignItems: "center",
-    borderRadius: 24,
+    borderRadius: 25,
     height: "100%",
     justifyContent: "center",
     width: "100%",
-  },
-  coverPlaceholder: {
-    height: "100%",
-    width: "100%",
-  },
-  fill: {
-    flex: 1,
-  },
-  addBadge: {
-    backgroundColor: Colors.primary,
-  },
-  infoPill: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
-  },
-  completionCard: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginTop: 16,
-    padding: 14,
-  },
-  completionFill: {
-    backgroundColor: Colors.primary,
-    borderRadius: 999,
-    height: "100%",
-  },
-  completionHint: {
-    color: Colors.textSecondary,
-    flex: 1,
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "right",
-  },
-  completionRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  completionTitle: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  completionTrack: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: 999,
-    height: 8,
-    marginTop: 10,
-    overflow: "hidden",
-  },
-  uploadText: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 8,
-  },
-  rowBorder: {
-    borderBottomColor: Colors.border,
-    borderBottomWidth: 1,
-  },
-  rowIconBox: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
-  },
-  drawerBackdrop: {
-    backgroundColor: Colors.primary + "CC",
-  },
-  drawer: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-  },
-  drawerHandle: {
-    backgroundColor: Colors.border,
-  },
-  profileInput: {
-    backgroundColor: Colors.bgInput,
-    borderColor: Colors.border,
-    color: Colors.textPrimary,
   },
   chipButton: {
     backgroundColor: Colors.bgCard,
@@ -1105,6 +1107,312 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: Colors.textPrimary,
   },
+  completionCard: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginTop: 14,
+    padding: 16,
+  },
+  completionCopy: {
+    flex: 1,
+  },
+  completionFill: {
+    backgroundColor: Colors.primary,
+    borderRadius: 999,
+    height: "100%",
+  },
+  completionHint: {
+    color: Colors.textSecondary,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  completionIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 18,
+    height: 48,
+    justifyContent: "center",
+    marginRight: 14,
+    width: 48,
+  },
+  completionRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  completionTitle: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  completionTrack: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 999,
+    height: 8,
+    marginTop: 10,
+    overflow: "hidden",
+  },
+  content: {
+    paddingBottom: 36,
+  },
+  coverButton: {
+    backgroundColor: Colors.bgElevated,
+    height: 238,
+    overflow: "hidden",
+  },
+  coverImage: {
+    height: "100%",
+    width: "100%",
+  },
+  coverPlaceholder: {
+    alignItems: "center",
+    height: "100%",
+    justifyContent: "center",
+    width: "100%",
+  },
+  drawer: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+  },
+  drawerBackdrop: {
+    backgroundColor: Colors.overlayDark,
+  },
+  drawerHandle: {
+    backgroundColor: Colors.border,
+  },
+  header: {
+    alignItems: "center",
+    backgroundColor: Colors.bg,
+    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    gap: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  iconButton: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  primaryButton: {
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    minHeight: 40,
+    justifyContent: "center",
+  },
+  primaryButtonText: {
+    color: Colors.textInverse,
+  },
+  titleText: {
+    color: Colors.textPrimary,
+  },
+  headerIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  headerSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  headerTitle: {
+    color: Colors.textPrimary,
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  initialsText: {
+    color: Colors.textPrimary,
+    fontSize: 30,
+    fontWeight: "900",
+  },
+  mediaAction: {
+    alignItems: "center",
+    backgroundColor: Colors.overlayDark,
+    borderColor: Colors.overlayLightSoft,
+    borderRadius: 999,
+    borderWidth: 1,
+    bottom: 18,
+    flexDirection: "row",
+    gap: 8,
+    minHeight: 42,
+    paddingHorizontal: 15,
+    position: "absolute",
+    right: 18,
+  },
+  mediaActionText: {
+    color: Colors.textInverse,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  mediaPanel: {
+    backgroundColor: Colors.bgCard,
+    borderBottomColor: Colors.border,
+    borderBottomWidth: 1,
+    overflow: "hidden",
+  },
+  profileCopy: {
+    flex: 1,
+    paddingBottom: 14,
+    paddingLeft: 14,
+    paddingTop: 12,
+  },
+  profileMeta: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  profileName: {
+    color: Colors.textPrimary,
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  profileStrip: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    paddingHorizontal: 20,
+  },
+  profileInput: {
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+    color: Colors.textPrimary,
+  },
+  quickStatCard: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 106,
+    padding: 12,
+  },
+  quickStatIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 14,
+    height: 34,
+    justifyContent: "center",
+    marginBottom: 10,
+    width: 34,
+  },
+  quickStatLabel: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2,
+    textTransform: "uppercase",
+  },
+  quickStats: {
+    flexDirection: "row",
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 14,
+  },
+  quickStatValue: {
+    color: Colors.textPrimary,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  rowBorder: {
+    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rowChevron: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 13,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  rowCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  rowIconBox: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 16,
+    height: 42,
+    justifyContent: "center",
+    marginRight: 14,
+    width: 42,
+  },
+  rowTitle: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  rowValue: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+  saveButton: {
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    flexDirection: "row",
+    gap: 6,
+    height: 44,
+    justifyContent: "center",
+    minWidth: 82,
+    paddingHorizontal: 15,
+  },
+  saveButtonDisabled: {
+    opacity: 0.72,
+  },
+  saveButtonText: {
+    color: Colors.textInverse,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  sectionCard: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginHorizontal: 20,
+    overflow: "hidden",
+  },
+  sectionTitle: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 1,
+    marginBottom: 10,
+    marginHorizontal: 22,
+    marginTop: 26,
+    textTransform: "uppercase",
+  },
   selectorButton: {
     alignItems: "center",
     backgroundColor: Colors.bgCard,
@@ -1130,5 +1438,18 @@ const styles = StyleSheet.create({
   },
   selectorTextActive: {
     color: Colors.textPrimary,
+  },
+  settingRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    minHeight: 74,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  uploadText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 8,
   },
 });

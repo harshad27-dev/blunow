@@ -16,6 +16,7 @@ interface ProfileHeaderProps {
   onBackPress?: () => void;
   onConnectPress?: () => void;
   onMessagePress?: () => void;
+  onMorePress?: () => void;
 }
 
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -29,6 +30,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onBackPress,
   onConnectPress,
   onMessagePress,
+  onMorePress,
 }) => {
   return (
     <View style={styles.container}>
@@ -66,6 +68,15 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             <Ionicons name="settings-outline" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
         )}
+        {!isOwnProfile && onMorePress ? (
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={onMorePress}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="ellipsis-horizontal" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Avatar & Info */}

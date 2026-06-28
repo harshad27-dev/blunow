@@ -60,19 +60,32 @@ export class SocialRepository {
       likesReceived,
       conversationsCount,
       savedPostsCount,
-      profileViews: 0,
+      profileViews: stats.profileViews,
     };
   }
 
   async verifyProfile(userId: string, idPhotoUrl: string, faceVideoUrl: string) {
-    return prisma.userVerification.create({
-      data: {
+    return prisma.userVerification.upsert({
+      where: { userId },
+      create: {
         userId,
         idDocumentUrl: idPhotoUrl,
         selfieUrl: faceVideoUrl,
         status: 'PENDING'
-      }
+      },
+      update: {
+        idDocumentUrl: idPhotoUrl,
+        selfieUrl: faceVideoUrl,
+        status: 'PENDING',
+        submittedAt: new Date(),
+        verifiedAt: null,
+        rejectionReason: null,
+      },
     });
+  }
+
+  async getVerification(userId: string) {
+    return prisma.userVerification.findUnique({ where: { userId } });
   }
 
   async followUser(followerId: string, followingId: string) {

@@ -5,7 +5,16 @@ import { EVENTS } from '../../../events/event-constants';
 export class ReportsService {
   private repository = new ModerationRepository();
 
-  async createReport(reporterId: string, data: { reportedId: string; reason: any; description?: string }) {
+  async createReport(
+    reporterId: string,
+    data: {
+      contentId: string;
+      contentType: any;
+      reportedId?: string;
+      reason: any;
+      description?: string;
+    },
+  ) {
     const report = await this.repository.createReport({ ...data, reporterId });
     eventBus.emit(EVENTS.MODERATION.REPORT_CREATED, { reportId: report.id });
     return report;

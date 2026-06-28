@@ -62,7 +62,7 @@ export default function Header() {
           <TouchableOpacity 
             className={ACTION_BUTTON_CLASS}
             activeOpacity={0.78}
-            onPress={() => router.push('/(screens)/chat' as any)}
+            onPress={() => router.push('/(tabs)/chat')}
             style={HEADER_SHADOW}
           >
             <Ionicons

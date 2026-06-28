@@ -3,6 +3,7 @@ import { ChatRepository } from "../models/chat.repository";
 import { eventBus } from "../../../events/event-bus";
 import { EVENTS } from "../../../events/event-constants";
 import { AppError } from "../../../common/middleware/error.middleware";
+import { prisma } from "../../../prisma/prisma";
 
 export class MessageService {
   private messageRepository = new MessageRepository();
@@ -18,7 +19,30 @@ export class MessageService {
     if (chat.user1Id !== userId && chat.user2Id !== userId) {
       throw new AppError("Forbidden", 403);
     }
-    return this.messageRepository.findByChatId(chatId, pagination);
+    const messages = await this.messageRepository.findByChatId(
+      chatId,
+      pagination,
+    );
+    const otherUserId =
+      chat.user1Id === userId ? chat.user2Id : chat.user1Id;
+    const privacy = await prisma.userPrivacyPreference.findUnique({
+      where: { userId: otherUserId },
+      select: { readReceipts: true },
+    });
+
+    if (privacy?.readReceipts !== false) return messages;
+
+    return messages.map((message) =>
+      message.senderId === userId
+        ? {
+            ...message,
+            isRead: false,
+            readReceipts: message.readReceipts.filter(
+              (receipt) => receipt.readByUserId !== otherUserId,
+            ),
+          }
+        : message,
+    );
   }
 
   async sendMessage(
@@ -62,6 +86,16 @@ export class MessageService {
     if (chat.user1Id !== userId && chat.user2Id !== userId) {
       throw new AppError("Forbidden", 403);
     }
-    return this.messageRepository.markAllRead(chatId, userId);
+    const [result, privacy] = await Promise.all([
+      this.messageRepository.markAllRead(chatId, userId),
+      prisma.userPrivacyPreference.findUnique({
+        where: { userId },
+        select: { readReceipts: true },
+      }),
+    ]);
+    return {
+      ...result,
+      shareReceipt: privacy?.readReceipts !== false,
+    };
   }
 }

@@ -23,6 +23,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/authStore";
 import { matchService } from "@/services/match.service";
+import { userService } from "@/services/user.service";
+import { moderationService } from "@/services/moderation.service";
 import { Colors } from "@/constants/colors";
 import { FontFamily, FontSize } from "@/constants/typography";
 import { Radius, Spacing } from "@/constants/spacing";
@@ -46,7 +48,7 @@ export default function UserDetailScreen() {
   const { user: currentUser } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<
-    "connect" | "message" | null
+    "connect" | "message" | "follow" | null
   >(null);
 
   const isOwnProfile = currentUser?.id === userId;
@@ -208,6 +210,60 @@ export default function UserDetailScreen() {
     userId,
   ]);
 
+  const handleFollow = React.useCallback(async () => {
+    if (!userId || actionLoading) return;
+    const isFollowing = Boolean(userProfile?.isFollowing);
+    try {
+      setActionLoading("follow");
+      if (isFollowing) {
+        await userService.unfollowUser(userId);
+      } else {
+        await userService.followUser(userId);
+      }
+      queryClient.setQueryData(
+        ["user-profile", userId],
+        { ...userProfile, isFollowing: !isFollowing },
+      );
+      queryClient.invalidateQueries({ queryKey: ["user-stats", userId] });
+    } catch (error: any) {
+      Alert.alert(
+        "Unable to update follow",
+        error?.response?.data?.message || "Please try again.",
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  }, [actionLoading, queryClient, userId, userProfile]);
+
+  const showSafetyActions = React.useCallback(() => {
+    if (!userId) return;
+    Alert.alert(getDisplayName(), "Profile actions", [
+      {
+        text: "Report profile",
+        onPress: async () => {
+          await moderationService.report({
+            contentId: userId,
+            contentType: "USER",
+            reportedId: userId,
+            reason: "OTHER",
+            description: "Reported from profile",
+          });
+          Alert.alert("Report received", "Thank you for helping keep Datebl safe.");
+        },
+      },
+      {
+        text: "Block user",
+        style: "destructive",
+        onPress: async () => {
+          await userService.blockUser(userId);
+          queryClient.invalidateQueries({ queryKey: ["blocked-users"] });
+          router.back();
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [getDisplayName, queryClient, router, userId]);
+
   if (profileLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.emptyState}>
@@ -257,6 +313,7 @@ export default function UserDetailScreen() {
           onEditPress={() => router.push("/(screens)/edit-profile")}
           onConnectPress={handleConnect}
           onMessagePress={handleMessage}
+          onMorePress={showSafetyActions}
         />
 
         {/* Stats Section */}
@@ -265,6 +322,18 @@ export default function UserDetailScreen() {
             postsCount={stats?.postsCount || 0}
             followersCount={stats?.followers || 0}
             followingCount={stats?.following || 0}
+            onFollowersPress={() =>
+              router.push({
+                pathname: "/(screens)/social-list",
+                params: { userId, mode: "followers" },
+              })
+            }
+            onFollowingPress={() =>
+              router.push({
+                pathname: "/(screens)/social-list",
+                params: { userId, mode: "following" },
+              })
+            }
           />
         </View>
 
@@ -351,6 +420,27 @@ export default function UserDetailScreen() {
         {!isOwnProfile && (
           <View style={styles.actionRow}>
             <TouchableOpacity
+              style={[styles.followAction, !!actionLoading && styles.disabledAction]}
+              onPress={handleFollow}
+              disabled={!!actionLoading}
+              activeOpacity={0.84}
+            >
+              {actionLoading === "follow" ? (
+                <ActivityIndicator color={Colors.textPrimary} size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={userProfile.isFollowing ? "person-remove-outline" : "person-add-outline"}
+                    size={19}
+                    color={Colors.textPrimary}
+                  />
+                  <Text style={styles.followActionText}>
+                    {userProfile.isFollowing ? "Following" : "Follow"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.primaryAction, !!actionLoading && styles.disabledAction]}
               onPress={handleConnect}
               disabled={!!actionLoading}
@@ -412,6 +502,23 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: Colors.bg,
     flex: 1,
+  },
+  followAction: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: Spacing.md,
+  },
+  followActionText: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+    marginLeft: Spacing.xs,
   },
   scroll: {
     flex: 1,

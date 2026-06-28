@@ -30,6 +30,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type StoryItem = {
   id: string;
@@ -87,6 +88,7 @@ const getTimeLeft = (expiresAt?: string) => {
 export default function FeedScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const scrollY = useSharedValue(0);
   const {
@@ -391,6 +393,11 @@ export default function FeedScreen() {
 
   return (
     <Screen edges={["left", "right"]}>
+      <View
+        pointerEvents="none"
+        className="absolute left-0 right-0 top-0 z-30 bg-bg"
+        style={{ height: insets.top }}
+      />
       <Animated.View
         className="absolute left-0 right-0 top-0 z-20"
         style={headerAnimatedStyle}

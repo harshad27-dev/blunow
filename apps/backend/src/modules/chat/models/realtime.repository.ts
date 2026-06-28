@@ -27,6 +27,11 @@ export class RealtimeRepository {
   }
 
   async getOnlineStatus(userId: string) {
+    const privacy = await prisma.userPrivacyPreference.findUnique({
+      where: { userId },
+      select: { showOnlineStatus: true },
+    });
+    if (privacy?.showOnlineStatus === false) return null;
     const key = `online:${userId}`;
     const data = await redis.hgetall(key);
     if (!data.isOnline) return null;
@@ -39,11 +44,20 @@ export class RealtimeRepository {
   }
 
   async getBatchOnlineStatus(userIds: string[]) {
+    const hiddenUsers = await prisma.userPrivacyPreference.findMany({
+      where: {
+        userId: { in: userIds },
+        showOnlineStatus: false,
+      },
+      select: { userId: true },
+    });
+    const hiddenIds = new Set(hiddenUsers.map((item) => item.userId));
     const pipeline = redis.pipeline();
     userIds.forEach(id => pipeline.hgetall(`online:${id}`));
     const results = await pipeline.exec();
     
     return userIds.map((id, idx) => {
+      if (hiddenIds.has(id)) return { userId: id, isOnline: false };
       const err = results?.[idx]?.[0];
       const data = results?.[idx]?.[1] as any;
       if (!data || !data.isOnline) return { userId: id, isOnline: false };

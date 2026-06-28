@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
 
@@ -7,29 +7,41 @@ interface ProfileStatsProps {
   postsCount: number;
   followersCount: number;
   followingCount: number;
+  onFollowersPress?: () => void;
+  onFollowingPress?: () => void;
 }
 
 export const ProfileStats: React.FC<ProfileStatsProps> = ({
   postsCount,
   followersCount,
   followingCount,
+  onFollowersPress,
+  onFollowingPress,
 }) => {
   return (
     <View style={styles.container}>
       <StatItem label="Posts" count={postsCount} />
       <View style={styles.divider} />
-      <StatItem label="Followers" count={followersCount} />
+      <StatItem label="Followers" count={followersCount} onPress={onFollowersPress} />
       <View style={styles.divider} />
-      <StatItem label="Following" count={followingCount} />
+      <StatItem label="Following" count={followingCount} onPress={onFollowingPress} />
     </View>
   );
 };
 
-const StatItem = ({ label, count }: { label: string; count: number }) => (
-  <View style={styles.statBox}>
+const StatItem = ({
+  label,
+  count,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  onPress?: () => void;
+}) => (
+  <TouchableOpacity style={styles.statBox} onPress={onPress} disabled={!onPress}>
     <Text style={styles.countText}>{count}</Text>
     <Text style={styles.labelOffline}>{label}</Text>
-  </View>
+  </TouchableOpacity>
 );
 
 const styles = StyleSheet.create({

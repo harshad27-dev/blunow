@@ -96,7 +96,11 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <View style={{ flex: 1, backgroundColor: Colors.bg }}>
           <AuthGuard />
-          <StatusBar style="dark" backgroundColor={Colors.bg} />
+          <StatusBar
+            style="dark"
+            backgroundColor={Colors.bg}
+            translucent={false}
+          />
           <Stack
             screenOptions={{
               headerShown: false,

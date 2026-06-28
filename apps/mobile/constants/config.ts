@@ -1,9 +1,13 @@
-// Change this to your machine's local IP when testing on a physical device
-const DEV_API_URL = 'http://192.168.1.42:3001';
-const PROD_API_URL = 'https://api.blunow.app';
+const DEFAULT_DEV_API_URL = "http://10.223.212.248:3001";
+const DEFAULT_PROD_API_URL = "https://api.blunow.app";
+
+const API_URL = (
+  process.env.EXPO_PUBLIC_API_URL ||
+  (__DEV__ ? DEFAULT_DEV_API_URL : DEFAULT_PROD_API_URL)
+).replace(/\/$/, "");
 
 export const Config = {
-  API_URL: __DEV__ ? DEV_API_URL : PROD_API_URL,
+  API_URL,
   TOKEN_KEY: 'blunow_access_token',
   REFRESH_TOKEN_KEY: 'blunow_refresh_token',
   ONBOARDING_PROGRESS_KEY: 'blunow_onboarding_progress',

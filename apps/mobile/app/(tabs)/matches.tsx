@@ -54,10 +54,10 @@ const INTEREST_OPTIONS = [
 ];
 const AGE_OPTIONS = [18, 21, 24, 27, 30, 35, 40, 50];
 const DISTANCE_OPTIONS = [10, 25, 50, 100, 250, 500];
-const GENDER_OPTIONS: Array<{
+const GENDER_OPTIONS: {
   label: string;
   value: NonNullable<MatchRecommendationFilters["gender"]>;
-}> = [
+}[] = [
   { label: "Any", value: "ANY" },
   { label: "Men", value: "MALE" },
   { label: "Women", value: "FEMALE" },
@@ -94,6 +94,7 @@ export default function MatchesScreen() {
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [isRequestsModalVisible, setIsRequestsModalVisible] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [pendingRequestAction, setPendingRequestAction] = useState<{
     requestId: string;
     status: "ACCEPTED" | "REJECTED";
@@ -135,6 +136,10 @@ export default function MatchesScreen() {
   React.useEffect(() => {
     setActiveIndex(0);
   }, [filters]);
+
+  React.useEffect(() => {
+    setActivePhotoIndex(0);
+  }, [profile?.id]);
 
   const moveToNextCard = () => {
     if (profiles.length === 0) return;
@@ -443,7 +448,8 @@ export default function MatchesScreen() {
     );
   }
 
-  const profileImage = profile.imageUrl || fallbackProfileImage;
+  const profileImages = getProfileImages(profile);
+  const profileImage = profileImages[activePhotoIndex] || profileImages[0] || fallbackProfileImage;
 
   return (
     <View className="flex-1" style={styles.screen}>
@@ -455,7 +461,7 @@ export default function MatchesScreen() {
 
       <Animated.View className="absolute inset-0" style={{ opacity: fade }}>
         <Image
-          key={profile.id}
+          key={`${profile.id}-${activePhotoIndex}`}
           source={{ uri: profileImage }}
           className="h-full w-full"
           resizeMode="cover"
@@ -564,6 +570,24 @@ export default function MatchesScreen() {
             locations={[0, 0.42, 1]}
             style={styles.bottomContentShade}
           />
+
+          {profileImages.length > 1 ? (
+            <View className="mb-3 flex-row gap-2">
+              {profileImages.map((imageUrl, index) => (
+                <TouchableOpacity
+                  key={`${imageUrl}-${index}`}
+                  activeOpacity={0.84}
+                  onPress={() => setActivePhotoIndex(index)}
+                  style={[
+                    styles.profilePhotoThumb,
+                    index === activePhotoIndex && styles.profilePhotoThumbActive,
+                  ]}
+                >
+                  <Image source={{ uri: imageUrl }} style={styles.profilePhotoThumbImage} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
 
           <View className="mb-3 flex-row items-center justify-between">
             <ProgressDots activeIndex={activeIndex} total={profiles.length} />
@@ -1280,6 +1304,15 @@ const SwitchRow = ({
   </View>
 );
 
+const getProfileImages = (profile: MatchRecommendation) => {
+  const images = [
+    ...(profile.profilePhotoUrls ?? []),
+    profile.imageUrl,
+    profile.avatarUrl ?? undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(images)).slice(0, 3);
+};
 const getActiveFilterCount = (filters: MatchRecommendationFilters) => {
   let count = 0;
   if (filters.minAge !== defaultFilters.minAge) count += 1;
@@ -1383,6 +1416,22 @@ const styles = StyleSheet.create({
   photoIconCircle: {
     backgroundColor: Colors.primary + "8F",
   },
+  profilePhotoThumb: {
+    borderColor: Colors.textInverse + "52",
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 54,
+    overflow: "hidden",
+    width: 42,
+  },
+  profilePhotoThumbActive: {
+    borderColor: Colors.textInverse,
+    borderWidth: 2,
+  },
+  profilePhotoThumbImage: {
+    height: "100%",
+    width: "100%",
+  },
   nextProfileImage: {
     borderColor: Colors.textInverse + "CC",
   },
@@ -1418,3 +1467,4 @@ const styles = StyleSheet.create({
     right: 0,
   },
 });
+

@@ -61,8 +61,10 @@ export function registerChatGateway(io: Server): void {
 
     // Mark messages as read
     socket.on('chat:read', async (chatId: string) => {
-      await messageService.markAsRead(chatId, userId);
-      socket.to(`chat:${chatId}`).emit('chat:read', { chatId, userId });
+      const result = await messageService.markAsRead(chatId, userId);
+      if (result.shareReceipt) {
+        socket.to(`chat:${chatId}`).emit('chat:read', { chatId, userId });
+      }
     });
 
     socket.on('disconnect', () => {

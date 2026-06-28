@@ -9,7 +9,10 @@ export class UsersController {
 
   getUser = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const user = await this.usersService.getUserById(req.params.id);
+      const user = await this.usersService.getUserById(
+        req.params.id,
+        req.user!.id,
+      );
       res.status(200).json({ success: true, data: user });
     } catch (error: any) {
       res.status(error.statusCode ?? 404).json({ success: false, message: error.message });
@@ -47,6 +50,15 @@ export class UsersController {
     try {
       await this.usersService.deactivateUser(req.user!.id);
       res.status(200).json({ success: true, message: 'Account deactivated' });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 500).json({ success: false, message: error.message });
+    }
+  };
+
+  deleteAccount = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      await this.usersService.deleteUser(req.user!.id);
+      res.status(200).json({ success: true, message: 'Account deleted' });
     } catch (error: any) {
       res.status(error.statusCode ?? 500).json({ success: false, message: error.message });
     }

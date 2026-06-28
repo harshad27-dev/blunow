@@ -45,6 +45,19 @@ export const postService = {
     return response.data;
   },
 
+  updatePost: async (
+    postId: string,
+    payload: Pick<CreatePostPayload, "caption" | "isPublic" | "isAnonymous">,
+  ) => {
+    const response = await api.patch("/posts/" + postId, payload);
+    return response.data;
+  },
+
+  deletePost: async (postId: string) => {
+    const response = await api.delete("/posts/" + postId);
+    return response.data;
+  },
+
   getPost: async (postId: string) => {
     const response = await api.get(`/posts/${postId}`);
     return response.data;
@@ -114,6 +127,27 @@ export const postService = {
 
   unlikeComment: async (postId: string, commentId: string) => {
     const response = await api.delete(`/posts/${postId}/comments/${commentId}/like`);
+    return response.data;
+  },
+
+  updateComment: async (postId: string, commentId: string, content: string) => {
+    const response = await api.patch(
+      "/posts/" + postId + "/comments/" + commentId,
+      { content },
+    );
+    return response.data;
+  },
+
+  reportComment: async (
+    postId: string,
+    commentId: string,
+    reason: string,
+    description?: string,
+  ) => {
+    const response = await api.post(
+      "/posts/" + postId + "/comments/" + commentId + "/report",
+      { reason, description },
+    );
     return response.data;
   },
 };

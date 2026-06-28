@@ -1,0 +1,1 @@
+-- No-op migration retained to keep local migration history valid.

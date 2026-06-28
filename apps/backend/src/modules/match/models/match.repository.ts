@@ -98,7 +98,7 @@ export class MatchRepository {
     limit = 20,
     filters: MatchRecommendationFilters = {},
   ) {
-    const [currentUser, existingRequests, existingMatches, incomingRequests, dismissals] = await Promise.all([
+    const [currentUser, existingRequests, existingMatches, incomingRequests, dismissals, blocks] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         include: { profile: true },
@@ -123,6 +123,12 @@ export class MatchRepository {
         where: { userId },
         select: { dismissedUserId: true },
       }),
+      prisma.userBlock.findMany({
+        where: {
+          OR: [{ blockerId: userId }, { blockedId: userId }],
+        },
+        select: { blockerId: true, blockedId: true },
+      }),
     ]);
 
     const excludedUserIds = new Set<string>([userId]);
@@ -141,6 +147,11 @@ export class MatchRepository {
       excludedUserIds.add(match.user2Id);
     });
     dismissals.forEach((dismissal) => excludedUserIds.add(dismissal.dismissedUserId));
+    blocks.forEach((block) => {
+      excludedUserIds.add(
+        block.blockerId === userId ? block.blockedId : block.blockerId,
+      );
+    });
 
     const preferenceGenders =
       filters.useMyPreference && currentUser?.profile?.interestedIn?.length
@@ -151,6 +162,14 @@ export class MatchRepository {
       where: {
         id: { notIn: Array.from(excludedUserIds) },
         isActive: true,
+        AND: [
+          {
+            OR: [
+              { privacyPreference: { is: null } },
+              { privacyPreference: { is: { discoverable: true } } },
+            ],
+          },
+        ],
         profile: {
           is: {
             ...(filters.gender && filters.gender !== 'ANY'
@@ -197,6 +216,9 @@ export class MatchRepository {
       );
       const online = user.updatedAt >= new Date(Date.now() - 15 * 60 * 1000);
 
+      const profileWithPhotos = user.profile as (typeof user.profile & { profilePhotoUrls?: string[] }) | null;
+      const profilePhotoUrls = profileWithPhotos?.profilePhotoUrls ?? [];
+
       return {
         id: user.id,
         name: user.profile?.username ?? user.email.split('@')[0],
@@ -211,8 +233,9 @@ export class MatchRepository {
         online,
         verified: user.verification?.status === 'VERIFIED' || user.isVerified,
         quote: user.profile?.bio ?? 'No bio provided yet.',
-        imageUrl: user.profile?.bannerUrl || user.profile?.avatarUrl || '',
+        imageUrl: profilePhotoUrls[0] || user.profile?.bannerUrl || user.profile?.avatarUrl || '',
         avatarUrl: user.profile?.avatarUrl,
+        profilePhotoUrls,
         interests,
         matchScore: Math.min(99, 70 + sharedInterestCount * 6),
         chatRequests: incomingRequests.length,
@@ -308,3 +331,4 @@ const normalizePreferenceGenders = (values: string[]) => {
 
   return normalized.length ? normalized : undefined;
 };
+

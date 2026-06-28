@@ -20,7 +20,10 @@ export class PostsController {
 
   getPost = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const post = await this.postsService.getPostById(req.params.id);
+      const post = await this.postsService.getPostById(
+        req.params.id,
+        req.user!.id,
+      );
       res.status(200).json({ success: true, data: post });
     } catch (error: any) {
       res

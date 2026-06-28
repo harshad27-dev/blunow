@@ -7,6 +7,9 @@ const controller = new NotificationsController();
 
 router.use(authenticate);
 
+router.get('/preferences', controller.getPreferences);
+router.patch('/preferences', controller.updatePreferences);
+
 // GET /api/notifications
 router.get('/', controller.getNotifications);
 

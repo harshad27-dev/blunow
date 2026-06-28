@@ -61,9 +61,9 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="rooms"
+          name="chat"
           options={{
-            title: 'Rooms',
+            title: 'Chat',
             tabBarIcon: ({ color, size, focused }) =>
               tabIcon(focused, 'chatbubbles', 'chatbubbles-outline')({ color, size }),
           }}

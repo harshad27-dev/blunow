@@ -74,13 +74,21 @@ export default function SettingsScreen() {
       items: [
         {
           id: '1',
-          title: 'Personal Information',
+          title: 'Account',
+          subtitle: 'Profile, verification, and account access',
           icon: 'person-outline',
-          onPress: () => router.push('/(screens)/edit-profile'),
+          onPress: () => router.push('/(screens)/account-settings'),
+        },
+        {
+          id: '1b',
+          title: 'Privacy & Safety',
+          subtitle: 'Visibility, activity, and blocked users',
+          icon: 'eye-off-outline',
+          onPress: () => router.push('/(screens)/privacy'),
         },
         {
           id: '2',
-          title: 'Privacy & Security',
+          title: 'Session Security',
           subtitle: 'Session and account protection',
           icon: 'shield-checkmark-outline',
           onPress: () =>
@@ -92,7 +100,15 @@ export default function SettingsScreen() {
         {
           id: '3',
           title: 'Notifications',
+          subtitle: 'Choose which updates you receive',
           icon: 'notifications-outline',
+          onPress: () => router.push('/(screens)/notification-preferences'),
+        },
+        {
+          id: '3b',
+          title: 'Notification Inbox',
+          subtitle: 'Review recent account activity',
+          icon: 'mail-unread-outline',
           onPress: () => router.push('/(screens)/notifications'),
         },
       ]
@@ -105,24 +121,30 @@ export default function SettingsScreen() {
           title: 'Help Center',
           icon: 'help-circle-outline',
           onPress: () =>
-            Alert.alert('Help Center', 'Support content will be available here soon.'),
+            router.push({
+              pathname: '/(screens)/legal/[document]',
+              params: { document: 'help' },
+            }),
         },
         {
           id: '5',
           title: 'Community Guidelines',
           icon: 'book-outline',
           onPress: () =>
-            Alert.alert(
-              'Community Guidelines',
-              'Be respectful, stay authentic, and report anything unsafe.',
-            ),
+            router.push({
+              pathname: '/(screens)/legal/[document]',
+              params: { document: 'guidelines' },
+            }),
         },
         {
           id: '6',
-          title: 'About Datebl',
-          icon: 'information-circle-outline',
+          title: 'Terms of Service',
+          icon: 'document-text-outline',
           onPress: () =>
-            Alert.alert('About Datebl', 'Datebl Version 1.0.0'),
+            router.push({
+              pathname: '/(screens)/legal/[document]',
+              params: { document: 'terms' },
+            }),
         },
       ]
     },

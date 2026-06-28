@@ -21,6 +21,7 @@ const updateProfileSchema = z.object({
   longitude: z.number().min(-180).max(180).optional(),
   avatarUrl: z.string().url().nullable().optional(),
   bannerUrl: z.string().url().nullable().optional(),
+  profilePhotoUrls: z.array(z.string().url()).min(1).max(3).optional(),
   interests: z.array(z.string()).max(20).optional(),
   interestedIn: z.array(z.string()).max(10).optional(),
   lookingFor: z.array(z.string()).max(10).optional(),
@@ -45,6 +46,17 @@ const updatePreferencesSchema = z.object({
 const updateInterestsSchema = z.object({
   interests: z.array(z.string()).min(1).max(20),
 });
+
+const updatePrivacySchema = z
+  .object({
+    isPrivate: z.boolean().optional(),
+    discoverable: z.boolean().optional(),
+    showOnlineStatus: z.boolean().optional(),
+    readReceipts: z.boolean().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one privacy setting is required",
+  });
 
 export const validateUpdateProfile = (
   req: Request,
@@ -93,3 +105,20 @@ export const validateUpdateInterests = (
   req.body = result.data;
   next();
 };
+
+export const validateUpdatePrivacy = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  const result = updatePrivacySchema.safeParse(req.body);
+  if (!result.success) {
+    res
+      .status(400)
+      .json({ success: false, errors: result.error.flatten().fieldErrors });
+    return;
+  }
+  req.body = result.data;
+  next();
+};
+

@@ -8,51 +8,57 @@ datasource db {
 }
 
 model User {
-  id               String               @id @default(uuid())
-  email            String               @unique
-  passwordHash     String?
-  googleId         String?              @unique
-  role             Role                 @default(USER)
-  isActive         Boolean              @default(true)
-  isVerified       Boolean              @default(false)
-  fcmToken         String?
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  banExpiresAt     DateTime?
-  banStatus        BanStatus            @default(NONE)
-  sexuality        Sexuality            @default(STRAIGHT)
-  strikeCount      Int                  @default(0)
-  bans             Ban[]
-  chatsAsUser1     Chat[]               @relation("ChatUser1")
-  chatsAsUser2     Chat[]               @relation("ChatUser2")
-  comments         Comment[]
-  commentLikes     CommentLike[]
-  confessions      Confession[]
-  receivedRequests MatchRequest[]       @relation("ReceivedRequests")
-  sentRequests     MatchRequest[]       @relation("SentRequests")
-  dismissedRecommendations MatchDismissal[] @relation("DismissedRecommendations")
-  dismissedByUsers MatchDismissal[]      @relation("DismissedByUsers")
-  matchesAsUser1   Match[]              @relation("MatchUser1")
-  matchesAsUser2   Match[]              @relation("MatchUser2")
-  mediaFiles       Media[]
-  readReceipts     MessageReadReceipt[]
-  messages         Message[]
-  notifications    Notification[]
-  postLikes        PostLike[]
-  savedPosts       PostSave[]
-  posts            Post[]
-  profile          Profile?
-  refreshTokens    RefreshToken[]
-  reportsAbout     Report[]             @relation("ReportedUser")
-  reportsCreated   Report[]             @relation("ReporterUser")
-  roomMemberships  RoomMembership[]
-  stories          Story[]
-  storyViews       StoryView[]
-  following        UserFollow[]         @relation("UserFollowing")
-  followers        UserFollow[]         @relation("UserFollowers")
-  stats            UserStat?
-  verification     UserVerification?
-  violations       UserViolation[]
+  id                       String                  @id @default(uuid())
+  email                    String                  @unique
+  passwordHash             String?
+  googleId                 String?                 @unique
+  role                     Role                    @default(USER)
+  isActive                 Boolean                 @default(true)
+  isVerified               Boolean                 @default(false)
+  fcmToken                 String?
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  banExpiresAt             DateTime?
+  banStatus                BanStatus               @default(NONE)
+  sexuality                Sexuality               @default(STRAIGHT)
+  strikeCount              Int                     @default(0)
+  bans                     Ban[]
+  chatsAsUser1             Chat[]                  @relation("ChatUser1")
+  chatsAsUser2             Chat[]                  @relation("ChatUser2")
+  comments                 Comment[]
+  commentLikes             CommentLike[]
+  confessions              Confession[]
+  receivedRequests         MatchRequest[]          @relation("ReceivedRequests")
+  sentRequests             MatchRequest[]          @relation("SentRequests")
+  dismissedRecommendations MatchDismissal[]        @relation("DismissedRecommendations")
+  dismissedByUsers         MatchDismissal[]        @relation("DismissedByUsers")
+  matchesAsUser1           Match[]                 @relation("MatchUser1")
+  matchesAsUser2           Match[]                 @relation("MatchUser2")
+  mediaFiles               Media[]
+  readReceipts             MessageReadReceipt[]
+  messages                 Message[]
+  notifications            Notification[]
+  notificationPreference   NotificationPreference?
+  privacyPreference        UserPrivacyPreference?
+  blockedUsers             UserBlock[]             @relation("UserBlocker")
+  blockedByUsers           UserBlock[]             @relation("UserBlocked")
+  postLikes                PostLike[]
+  savedPosts               PostSave[]
+  posts                    Post[]
+  profile                  Profile?
+  refreshTokens            RefreshToken[]
+  reportsAbout             Report[]                @relation("ReportedUser")
+  reportsCreated           Report[]                @relation("ReporterUser")
+  roomMemberships          RoomMembership[]
+  stories                  Story[]
+  storyViews               StoryView[]
+  following                UserFollow[]            @relation("UserFollowing")
+  followers                UserFollow[]            @relation("UserFollowers")
+  stats                    UserStat?
+  verification             UserVerification?
+  violations               UserViolation[]
+  profileViewsMade         ProfileView[]           @relation("ProfileViewViewer")
+  profileViewsReceived     ProfileView[]           @relation("ProfileViewTarget")
 
   @@map("users")
 }
@@ -66,6 +72,7 @@ model Profile {
   gender       Gender
   avatarUrl    String?
   bannerUrl    String?
+  profilePhotoUrls String[] @default([])
   location     String?
   latitude     Float?
   longitude    Float?
@@ -96,11 +103,26 @@ model UserStat {
   postsCount            Int      @default(0)
   matchCount            Int      @default(0)
   storiesCount          Int      @default(0)
+  profileViews          Int      @default(0)
   averageEngagementRate Float    @default(0.0)
   lastUpdated           DateTime @default(now())
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_stats")
+}
+
+model ProfileView {
+  id           String   @id @default(uuid())
+  viewerId     String
+  viewedUserId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  viewer       User     @relation("ProfileViewViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  viewedUser   User     @relation("ProfileViewTarget", fields: [viewedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, viewedUserId])
+  @@index([viewedUserId, createdAt])
+  @@map("profile_views")
 }
 
 model UserFollow {
@@ -238,18 +260,18 @@ model PostSave {
 }
 
 model Comment {
-  id        String   @id @default(uuid())
+  id        String        @id @default(uuid())
   postId    String
   authorId  String
   parentId  String?
   content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
   likes     CommentLike[]
-  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  replies   Comment[] @relation("CommentReplies")
+  parent    Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  post      Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  replies   Comment[]     @relation("CommentReplies")
 
   @@map("comments")
 }
@@ -403,6 +425,46 @@ model Notification {
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
+}
+
+model NotificationPreference {
+  userId      String   @id
+  pushEnabled Boolean  @default(true)
+  matches     Boolean  @default(true)
+  messages    Boolean  @default(true)
+  likes       Boolean  @default(true)
+  comments    Boolean  @default(true)
+  storyViews  Boolean  @default(true)
+  confessions Boolean  @default(true)
+  roomInvites Boolean  @default(true)
+  system      Boolean  @default(true)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+model UserPrivacyPreference {
+  userId           String   @id
+  discoverable     Boolean  @default(true)
+  showOnlineStatus Boolean  @default(true)
+  readReceipts     Boolean  @default(true)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt        DateTime @updatedAt
+
+  @@map("user_privacy_preferences")
+}
+
+model UserBlock {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   User     @relation("UserBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("UserBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("user_blocks")
 }
 
 model Media {
@@ -609,3 +671,4 @@ enum FlagStatus {
   QUEUED_FOR_REVIEW
   AUTO_REMOVED
 }
+

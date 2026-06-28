@@ -31,6 +31,8 @@ import { useAuthStore } from "@/store/authStore";
 import { Colors } from "@/constants/colors";
 import type { ChatMessage, ChatMessageType } from "@/types/chat.types";
 import { postService } from "@/services/post.service";
+import { moderationService } from "@/services/moderation.service";
+import { userService } from "@/services/user.service";
 import { useQueryClient } from "@tanstack/react-query";
 
 type PendingMessage = ChatMessage & { isPending?: boolean };
@@ -299,6 +301,31 @@ export default function ChatRoomScreen() {
       {
         text: isArchived ? "Unarchive" : "Archive",
         onPress: () => updateSettingsMutation.mutate({ archived: !isArchived }),
+      },
+      {
+        text: "Report user",
+        onPress: async () => {
+          const reportedId = otherParticipant?.id || getParam(params.userId);
+          if (!reportedId) return;
+          await moderationService.report({
+            contentId: reportedId,
+            contentType: "USER",
+            reportedId,
+            reason: "HARASSMENT",
+            description: "Reported from a conversation",
+          });
+          Alert.alert("Report received", "Our safety team will review it.");
+        },
+      },
+      {
+        text: "Block user",
+        style: "destructive",
+        onPress: async () => {
+          const reportedId = otherParticipant?.id || getParam(params.userId);
+          if (!reportedId) return;
+          await userService.blockUser(reportedId);
+          router.replace("/(tabs)/chat");
+        },
       },
       { text: "Cancel", style: "cancel" },
     ]);

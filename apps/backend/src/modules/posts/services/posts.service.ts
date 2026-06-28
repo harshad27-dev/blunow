@@ -2,6 +2,7 @@ import { PostsRepository } from "../models/posts.repository";
 import { eventBus } from "../../../events/event-bus";
 import { EVENTS } from "../../../events/event-constants";
 import { AppError } from "../../../common/middleware/error.middleware";
+import { prisma } from "../../../prisma/prisma";
 
 export class PostsService {
   private postsRepository = new PostsRepository();
@@ -21,9 +22,16 @@ export class PostsService {
     return maskAnonymousPost(post);
   }
 
-  async getPostById(id: string) {
+  async getPostById(id: string, viewerId: string) {
     const post = await this.postsRepository.findById(id);
     if (!post) throw new AppError("Post not found", 404);
+    if (
+      post.authorId !== viewerId &&
+      (!post.isPublic ||
+        !(await this.canViewUserContent(viewerId, post.authorId)))
+    ) {
+      throw new AppError("Post not found", 404);
+    }
     return maskAnonymousPost(post);
   }
 
@@ -55,11 +63,48 @@ export class PostsService {
   }
 
   async getUserPosts(userId: string, viewerId?: string) {
+    if (
+      viewerId &&
+      viewerId !== userId &&
+      !(await this.canViewUserContent(viewerId, userId))
+    ) {
+      return [];
+    }
     const posts = await this.postsRepository.findByAuthorId(
       userId,
       userId === viewerId,
     );
     return posts.map(maskAnonymousPost);
+  }
+
+  private async canViewUserContent(viewerId: string, userId: string) {
+    const [profile, follow, block] = await Promise.all([
+      prisma.profile.findUnique({
+        where: { userId },
+        select: { isPrivate: true },
+      }),
+      prisma.userFollow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: viewerId,
+            followingId: userId,
+          },
+        },
+        select: { followerId: true },
+      }),
+      prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: viewerId, blockedId: userId },
+            { blockerId: userId, blockedId: viewerId },
+          ],
+        },
+        select: { blockerId: true },
+      }),
+    ]);
+
+    if (block) return false;
+    return !profile?.isPrivate || Boolean(follow);
   }
 
   async getSavedPosts(userId: string) {

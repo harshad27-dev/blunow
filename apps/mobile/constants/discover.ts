@@ -1,6 +1,7 @@
 import type { Ionicons } from "@expo/vector-icons";
 
 export const DISCOVER_SCREEN_PADDING = 20;
+export const DAILY_CURATED_MATCH_LIMIT = 5;
 
 export const FALLBACK_PROFILE_IMAGE =
   "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
@@ -66,3 +67,4 @@ export const TRENDING_POSTS: TrendingPost[] = [
     height: 246,
   },
 ];
+

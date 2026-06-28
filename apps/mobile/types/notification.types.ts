@@ -18,3 +18,15 @@ export type AppNotification = {
   isRead: boolean;
   createdAt: string;
 };
+
+export type NotificationPreferences = {
+  pushEnabled: boolean;
+  matches: boolean;
+  messages: boolean;
+  likes: boolean;
+  comments: boolean;
+  storyViews: boolean;
+  confessions: boolean;
+  roomInvites: boolean;
+  system: boolean;
+};

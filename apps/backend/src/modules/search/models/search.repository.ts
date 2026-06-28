@@ -7,7 +7,7 @@ export class SearchRepository {
     offset: number,
     category = "For you",
   ) {
-    const [currentUser, excludedRequests, excludedMatches, users] =
+    const [currentUser, excludedRequests, excludedMatches, blocks, users] =
       await Promise.all([
         prisma.user.findUnique({
           where: { id: currentUserId },
@@ -25,11 +25,24 @@ export class SearchRepository {
           },
           select: { user1Id: true, user2Id: true },
         }),
+        prisma.userBlock.findMany({
+          where: {
+            OR: [
+              { blockerId: currentUserId },
+              { blockedId: currentUserId },
+            ],
+          },
+          select: { blockerId: true, blockedId: true },
+        }),
         prisma.user.findMany({
           where: {
             id: { not: currentUserId },
             isActive: true,
             profile: { isNot: null },
+            OR: [
+              { privacyPreference: { is: null } },
+              { privacyPreference: { is: { discoverable: true } } },
+            ],
           },
           include: {
             profile: true,
@@ -51,6 +64,11 @@ export class SearchRepository {
     excludedMatches.forEach((match) => {
       excludedUserIds.add(
         match.user1Id === currentUserId ? match.user2Id : match.user1Id,
+      );
+    });
+    blocks.forEach((block) => {
+      excludedUserIds.add(
+        block.blockerId === currentUserId ? block.blockedId : block.blockerId,
       );
     });
 
@@ -124,6 +142,7 @@ export class SearchRepository {
   }
 
   async getUnifiedSearch(
+    currentUserId: string,
     query: string,
     type: string,
     limit: number,
@@ -139,12 +158,25 @@ export class SearchRepository {
         SELECT u.id, prof.username, prof."avatarUrl", prof.bio, prof."birthDate", prof.interests, prof.location
         FROM "users" u
         JOIN "profiles" prof ON u.id = prof."userId"
-        WHERE to_tsvector('english', prof.username || ' ' || COALESCE(prof.bio, '')) @@ plainto_tsquery('english', $1)
+        LEFT JOIN "user_privacy_preferences" privacy ON privacy."userId" = u.id
+        WHERE (
+          to_tsvector('english', prof.username || ' ' || COALESCE(prof.bio, '')) @@ plainto_tsquery('english', $1)
+          OR prof.username ILIKE '%' || $1 || '%'
+        )
+        AND u.id <> $4
+        AND u."isActive" = true
+        AND COALESCE(privacy.discoverable, true) = true
+        AND NOT EXISTS (
+          SELECT 1 FROM "user_blocks" block
+          WHERE (block."blockerId" = $4 AND block."blockedId" = u.id)
+             OR (block."blockedId" = $4 AND block."blockerId" = u.id)
+        )
         LIMIT $2 OFFSET $3
       `,
         query,
         limit,
         offset,
+        currentUserId,
       );
       users = u as any[];
     }
@@ -157,7 +189,12 @@ export class SearchRepository {
         SELECT p.id, p.caption, p."mediaUrls", u.id as "authorId"
         FROM "posts" p
         JOIN "users" u ON p."authorId" = u.id
-        WHERE to_tsvector('english', COALESCE(p.caption, '')) @@ plainto_tsquery('english', $1)
+        WHERE (
+          to_tsvector('english', COALESCE(p.caption, '')) @@ plainto_tsquery('english', $1)
+          OR p.caption ILIKE '%' || $1 || '%'
+        )
+        AND p."isPublic" = true
+        AND p."isDeleted" = false
         LIMIT $2 OFFSET $3
       `,
         query,

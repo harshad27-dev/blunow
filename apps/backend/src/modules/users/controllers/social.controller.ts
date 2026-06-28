@@ -13,6 +13,15 @@ export class SocialController {
     } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
   };
 
+  getVerification = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const data = await this.repo.getVerification(req.user!.id);
+      res.status(200).json({ success: true, data });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e.message });
+    }
+  };
+
   getStats = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const userId = req.params.userId || req.user!.id; // fallback to current user if not provided in some context

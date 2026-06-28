@@ -108,8 +108,8 @@ export const useUserStatsQuery = (userId?: string) => {
         };
       }
       return {
-        followers: data.stats.followers || 0,
-        following: data.stats.following || 0,
+        followers: data.stats.followers ?? data.stats.followerCount ?? 0,
+        following: data.stats.following ?? data.stats.followingCount ?? 0,
         postsCount: data.stats.postsCount || 0,
         matchCount: data.stats.matchCount || 0,
         storiesCount: data.stats.storiesCount || 0,
