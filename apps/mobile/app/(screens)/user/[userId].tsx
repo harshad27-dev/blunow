@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,11 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { ProfileHeader } from "@/components/profile/ProfileHeader";
-import { ProfileStats } from "@/components/profile/ProfileStats";
+import { LinearGradient } from "expo-linear-gradient";
 import { ProfilePostGrid } from "@/components/profile/ProfilePostGrid";
 import {
   useUserProfileQuery,
@@ -27,7 +28,34 @@ import { userService } from "@/services/user.service";
 import { moderationService } from "@/services/moderation.service";
 import { Colors } from "@/constants/colors";
 import { FontFamily, FontSize } from "@/constants/typography";
-import { Radius, Spacing } from "@/constants/spacing";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const DEFAULT_COVER =
+  "https://images.unsplash.com/photo-1518391846015-55a9cc003b25?q=80&w=1600&auto=format&fit=crop";
+
+const interestIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+  fitness: "barbell-outline",
+  travel: "airplane-outline",
+  music: "musical-notes-outline",
+  coffee: "cafe-outline",
+  coding: "code-slash-outline",
+  gaming: "game-controller-outline",
+  art: "color-palette-outline",
+  photography: "camera-outline",
+  food: "restaurant-outline",
+  reading: "book-outline",
+  yoga: "body-outline",
+  hiking: "trail-sign-outline",
+};
+
+const interestColors = [
+  Colors.primaryLight,
+  Colors.secondary,
+  "#7C6E5E",
+  Colors.warning,
+  Colors.success,
+  "#9A7B6A",
+];
 
 const calculateAge = (birthDateString?: string | null) => {
   if (!birthDateString) return 0;
@@ -41,10 +69,16 @@ const calculateAge = (birthDateString?: string | null) => {
   return age;
 };
 
+const formatLabel = (str?: string | null) => {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase().replace(/_/g, " ");
+};
+
 export default function UserDetailScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const { user: currentUser } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<
@@ -266,9 +300,9 @@ export default function UserDetailScreen() {
 
   if (profileLoading && !refreshing) {
     return (
-      <SafeAreaView style={styles.emptyState}>
+      <View style={[styles.screen, styles.centerContent]}>
         <ActivityIndicator color={Colors.primary} size="large" />
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -289,11 +323,30 @@ export default function UserDetailScreen() {
     );
   }
 
+  const profile = userProfile.profile;
+  const displayName = profile?.username || userProfile.username || "User Detail";
+  const handle = userProfile.username || profile?.username || "username";
+  const coverUrl = profile?.bannerUrl || DEFAULT_COVER;
+  const avatarUrl = profile?.avatarUrl;
+  const age = calculateAge(profile?.birthDate);
+  const city = profile?.location || "Not specified";
+  const gender = formatLabel(profile?.gender || userProfile.gender || "Add gender");
+  const sexuality = formatLabel(userProfile.sexuality || "Straight");
+  const interests = profile?.interests || [];
+  const bio = profile?.bio || "No bio provided.";
+
+  const getInterestIcon = (interest: string): keyof typeof Ionicons.glyphMap => {
+    const norm = interest.toLowerCase().trim();
+    return interestIcons[norm] || "sparkles-outline";
+  };
+
   return (
-    <SafeAreaView style={styles.screen} edges={[]}>
+    <View style={styles.screen}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom + (isOwnProfile ? 40 : 120), 140),
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -303,406 +356,687 @@ export default function UserDetailScreen() {
           />
         }
       >
-        <ProfileHeader
-          username={userProfile.username}
-          bio={userProfile.profile?.bio}
-          avatarUrl={userProfile.profile?.avatarUrl}
-          bannerUrl={userProfile.profile?.bannerUrl}
-          isOwnProfile={isOwnProfile}
-          onBackPress={() => router.back()}
-          onEditPress={() => router.push("/(screens)/edit-profile")}
-          onConnectPress={handleConnect}
-          onMessagePress={handleMessage}
-          onMorePress={showSafetyActions}
-        />
-
-        {/* Stats Section */}
-        <View style={styles.statsWrap}>
-          <ProfileStats
-            postsCount={stats?.postsCount || 0}
-            followersCount={stats?.followers || 0}
-            followingCount={stats?.following || 0}
-            onFollowersPress={() =>
-              router.push({
-                pathname: "/(screens)/social-list",
-                params: { userId, mode: "followers" },
-              })
-            }
-            onFollowingPress={() =>
-              router.push({
-                pathname: "/(screens)/social-list",
-                params: { userId, mode: "following" },
-              })
-            }
+        {/* Cinematic Cover Banner */}
+        <View style={styles.bannerContainer}>
+          <Image source={{ uri: coverUrl }} style={styles.bannerImage} resizeMode="cover" />
+          
+          {/* Top dark vignette */}
+          <LinearGradient
+            colors={["rgba(0,0,0,0.4)", "transparent"]}
+            style={styles.topVignette}
           />
-        </View>
+          {/* Bottom fade transitions banner to screen background */}
+          <LinearGradient
+            colors={["transparent", Colors.bg]}
+            style={styles.bottomFade}
+          />
 
-        {/* About & Info Section */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>About</Text>
+          {/* Floating nav controls */}
+          <View style={[styles.headerControls, { top: Math.max(insets.top + 8, 14) }]}>
+            <TouchableOpacity
+              style={styles.glassHeaderBtn}
+              onPress={() => router.back()}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="chevron-back" size={22} color="#fff" />
+            </TouchableOpacity>
 
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons
-                  name="calendar-outline"
-                  size={18}
-                  color={Colors.textSecondary}
-                />
-              </View>
-              <View style={styles.infoBody}>
-                <Text style={styles.infoLabel}>Age</Text>
-                <Text style={styles.infoValue}>
-                  {calculateAge(userProfile.profile?.birthDate) || "Not specified"}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons
-                  name="location-outline"
-                  size={18}
-                  color={Colors.textSecondary}
-                />
-              </View>
-              <View style={styles.infoBody}>
-                <Text style={styles.infoLabel}>Location</Text>
-                <Text style={styles.infoValue}>
-                  {userProfile.profile?.location || "Not specified"}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons
-                  name="information-circle-outline"
-                  size={18}
-                  color={Colors.textSecondary}
-                />
-              </View>
-              <View style={styles.infoBody}>
-                <Text style={styles.infoLabel}>Bio</Text>
-                <Text style={styles.bioText}>
-                  {userProfile.profile?.bio || "No bio provided."}
-                </Text>
-              </View>
-            </View>
+            {!isOwnProfile && (
+              <TouchableOpacity
+                style={styles.glassHeaderBtn}
+                onPress={showSafetyActions}
+                activeOpacity={0.82}
+              >
+                <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
+            {isOwnProfile && (
+              <TouchableOpacity
+                style={styles.glassHeaderBtn}
+                onPress={() => router.push("/(screens)/edit-profile")}
+                activeOpacity={0.82}
+              >
+                <Ionicons name="create-outline" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Interests Section */}
-        {userProfile.profile?.interests &&
-          userProfile.profile.interests.length > 0 && (
-            <View style={styles.sectionWrap}>
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Interests</Text>
-                <View style={styles.chipRow}>
-                  {userProfile.profile.interests.map(
-                    (interest: string, index: number) => (
-                      <View
-                        key={`${interest}-${index}`}
-                        style={styles.interestChip}
-                      >
-                        <Text style={styles.interestText}>
-                          #{interest}
-                        </Text>
-                      </View>
-                    ),
-                  )}
-                </View>
+        {/* Content lift section */}
+        <View style={styles.mainContentLift}>
+          {/* Avatar double-bordered ring */}
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarBorderRing}>
+              <View style={styles.avatarInnerBorder}>
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitial}>
+                      {displayName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
               </View>
+            </View>
+
+            {isOwnProfile && (
+              <TouchableOpacity
+                style={styles.avatarEditBadge}
+                onPress={() => router.push("/(screens)/edit-profile")}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="pencil" size={14} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Identity details */}
+          <View style={styles.identityContainer}>
+            <View style={styles.nameVerifiedRow}>
+              <Text style={styles.nameText} numberOfLines={1}>
+                {displayName}
+              </Text>
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark" size={13} color="#fff" />
+              </View>
+            </View>
+
+            <View style={styles.handleStatusRow}>
+              <Text style={styles.handleText}>@{handle}</Text>
+              <View style={styles.onlineBadge}>
+                <View style={styles.onlineDot} />
+                <Text style={styles.onlineText}>Online</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Horizontal Meta Pills Scroll */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.metaScroll}
+            contentContainerStyle={styles.metaScrollContent}
+          >
+            {age > 0 && <MetaPill icon="calendar-outline" label={`${age} years`} />}
+            <MetaPill icon="location-outline" label={city} />
+            {gender && <MetaPill icon="male-female-outline" label={gender} />}
+            {sexuality && <MetaPill icon="heart-outline" label={sexuality} />}
+          </ScrollView>
+
+          {/* Stats section */}
+          <View style={styles.statsPanel}>
+            <StatItem
+              label="Posts"
+              value={stats?.postsCount || 0}
+            />
+            <View style={styles.statsSeparator} />
+            <StatItem
+              label="Followers"
+              value={stats?.followers || 0}
+              onPress={() =>
+                router.push({
+                  pathname: "/(screens)/social-list",
+                  params: { userId, mode: "followers" },
+                })
+              }
+            />
+            <View style={styles.statsSeparator} />
+            <StatItem
+              label="Following"
+              value={stats?.following || 0}
+              onPress={() =>
+                router.push({
+                  pathname: "/(screens)/social-list",
+                  params: { userId, mode: "following" },
+                })
+              }
+            />
+          </View>
+
+          {/* Bio block card */}
+          <View style={styles.editorialCard}>
+            <Text style={styles.editorialCardTitle}>Vibe & Bio</Text>
+            <Text style={styles.bioContentText}>{bio}</Text>
+          </View>
+
+          {/* Interests section scroll */}
+          {interests.length > 0 && (
+            <View style={styles.editorialCard}>
+              <Text style={styles.editorialCardTitle}>Interests</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.interestsScrollContent}
+              >
+                {interests.map((interest: string, idx: number) => {
+                  const tagColor = interestColors[idx % interestColors.length];
+                  return (
+                    <View
+                      key={`${interest}-${idx}`}
+                      style={[styles.interestChip, { borderColor: tagColor + "3a", backgroundColor: tagColor + "0e" }]}
+                    >
+                      <Ionicons name={getInterestIcon(interest)} size={14} color={tagColor} />
+                      <Text style={[styles.interestChipText, { color: tagColor }]}>
+                        {interest}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
             </View>
           )}
 
-        {/* Action Buttons (Sticky-like feel but in scroll) */}
-        {!isOwnProfile && (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.followAction, !!actionLoading && styles.disabledAction]}
-              onPress={handleFollow}
-              disabled={!!actionLoading}
-              activeOpacity={0.84}
-            >
-              {actionLoading === "follow" ? (
-                <ActivityIndicator color={Colors.textPrimary} size="small" />
-              ) : (
-                <>
-                  <Ionicons
-                    name={userProfile.isFollowing ? "person-remove-outline" : "person-add-outline"}
-                    size={19}
-                    color={Colors.textPrimary}
-                  />
-                  <Text style={styles.followActionText}>
-                    {userProfile.isFollowing ? "Following" : "Follow"}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.primaryAction, !!actionLoading && styles.disabledAction]}
-              onPress={handleConnect}
-              disabled={!!actionLoading}
-              activeOpacity={0.84}
-            >
-              {actionLoading === "connect" ? (
-                <ActivityIndicator color={Colors.textInverse} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="heart" size={20} color={Colors.textInverse} />
-                  <Text style={styles.primaryActionText}>Connect</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.secondaryAction, !!actionLoading && styles.disabledAction]}
-              onPress={handleMessage}
-              disabled={!!actionLoading}
-              activeOpacity={0.84}
-            >
-              {actionLoading === "message" ? (
-                <ActivityIndicator color={Colors.textPrimary} size="small" />
-              ) : (
-                <Ionicons
-                  name="chatbubble-outline"
-                  size={24}
-                  color={Colors.textPrimary}
-                />
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Tabs / Post Section */}
-        <View style={styles.tabsWrap}>
-          <View style={styles.activeTab}>
-            <Text style={styles.activeTabText}>Posts</Text>
-          </View>
-        </View>
-
-        <View style={styles.postsWrap}>
-          {postsLoading && !refreshing ? (
-            <View style={styles.postsLoading}>
-              <ActivityIndicator color={Colors.primary} size="small" />
+          {/* Section tab segmented control */}
+          <View style={styles.tabSectionWrap}>
+            <View style={styles.tabIndicatorBar}>
+              <Text style={styles.tabIndicatorText}>Shared Posts</Text>
+              <View style={styles.tabCountBadge}>
+                <Text style={styles.tabCountText}>{stats?.postsCount || 0}</Text>
+              </View>
             </View>
-          ) : (
-            <ProfilePostGrid posts={posts || []} onPostPress={openPost} />
-          )}
-        </View>
+          </View>
 
-        <View style={styles.bottomSpacer} />
+          {/* Posts list grid */}
+          <View style={styles.postsGridWrap}>
+            {postsLoading && !refreshing ? (
+              <View style={styles.postsLoadingSpinner}>
+                <ActivityIndicator color={Colors.primary} size="small" />
+              </View>
+            ) : (
+              <ProfilePostGrid posts={posts || []} onPostPress={openPost} />
+            )}
+          </View>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Floating Glass Actions Bar (non-own profile only) */}
+      {!isOwnProfile && (
+        <View
+          style={[
+            styles.floatingActionBar,
+            { bottom: Math.max(insets.bottom + 12, 20) },
+          ]}
+        >
+          {/* Follow Button */}
+          <TouchableOpacity
+            style={[styles.actionRoundBtn, styles.actionRoundBtnMuted]}
+            onPress={handleFollow}
+            disabled={actionLoading !== null}
+            activeOpacity={0.84}
+          >
+            {actionLoading === "follow" ? (
+              <ActivityIndicator color={Colors.textPrimary} size="small" />
+            ) : (
+              <Ionicons
+                name={userProfile.isFollowing ? "person-remove" : "person-add"}
+                size={20}
+                color={userProfile.isFollowing ? Colors.primaryLight : Colors.textPrimary}
+              />
+            )}
+          </TouchableOpacity>
+
+          {/* Connect (Like/Heart) Button */}
+          <TouchableOpacity
+            style={[styles.actionConnectBtn, actionLoading !== null && styles.actionDisabled]}
+            onPress={handleConnect}
+            disabled={actionLoading !== null}
+            activeOpacity={0.84}
+          >
+            {actionLoading === "connect" ? (
+              <ActivityIndicator color={Colors.textInverse} size="small" />
+            ) : (
+              <>
+                <Ionicons name="heart" size={18} color={Colors.textInverse} />
+                <Text style={styles.actionConnectText}>Connect</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Chat/Message Button */}
+          <TouchableOpacity
+            style={[styles.actionRoundBtn, styles.actionRoundBtnChat]}
+            onPress={handleMessage}
+            disabled={actionLoading !== null}
+            activeOpacity={0.84}
+          >
+            {actionLoading === "message" ? (
+              <ActivityIndicator color={Colors.primaryLight} size="small" />
+            ) : (
+              <Ionicons name="chatbubble-ellipses" size={20} color={Colors.primaryLight} />
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+const MetaPill = ({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) => (
+  <View style={styles.metaPill}>
+    <Ionicons name={icon} size={13} color={Colors.textSecondary} />
+    <Text style={styles.metaPillLabel}>{label}</Text>
+  </View>
+);
+
+const StatItem = ({ label, value, onPress }: { label: string; value: number; onPress?: () => void }) => (
+  <TouchableOpacity
+    disabled={!onPress}
+    onPress={onPress}
+    style={styles.statItemWrap}
+    activeOpacity={0.8}
+  >
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
+  </TouchableOpacity>
+);
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: Colors.bg,
     flex: 1,
   },
-  followAction: {
+  centerContent: {
     alignItems: "center",
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    flexDirection: "row",
     justifyContent: "center",
-    minHeight: 52,
-    paddingHorizontal: Spacing.md,
-  },
-  followActionText: {
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.sm,
-    marginLeft: Spacing.xs,
   },
   scroll: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: Spacing.xl,
-  },
-  statsWrap: {
-    marginTop: Spacing.sm,
-  },
-  sectionWrap: {
-    marginTop: Spacing.md,
-    paddingHorizontal: Spacing.md + 4,
-  },
-  card: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    padding: Spacing.md,
-  },
-  cardTitle: {
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.lg,
-    marginBottom: Spacing.md,
-  },
-  infoRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    paddingVertical: Spacing.sm,
-  },
-  infoIcon: {
-    alignItems: "center",
+  // Banner Cover photo
+  bannerContainer: {
+    height: 320,
+    width: "100%",
+    position: "relative",
     backgroundColor: Colors.bgElevated,
-    borderRadius: Radius.full,
-    height: 38,
+  },
+  bannerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  topVignette: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+  },
+  bottomFade: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+  },
+  headerControls: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    zIndex: 10,
+  },
+  glassHeaderBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.36)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    alignItems: "center",
     justifyContent: "center",
-    marginRight: Spacing.md,
-    width: 38,
   },
-  infoBody: {
-    flex: 1,
+
+  // Main lifted content
+  mainContentLift: {
+    marginTop: -80,
+    paddingHorizontal: 18,
+    zIndex: 5,
   },
-  infoLabel: {
+  avatarContainer: {
+    alignSelf: "flex-start",
+    position: "relative",
+    marginBottom: 16,
+  },
+  avatarBorderRing: {
+    padding: 3,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 36,
+  },
+  avatarInnerBorder: {
+    padding: 2,
+    backgroundColor: Colors.bg,
+    borderRadius: 34,
+  },
+  avatarImage: {
+    width: 108,
+    height: 108,
+    borderRadius: 32,
+    backgroundColor: Colors.bgElevated,
+  },
+  avatarPlaceholder: {
+    width: 108,
+    height: 108,
+    borderRadius: 32,
+    backgroundColor: Colors.bgCard,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitial: {
+    fontSize: 42,
+    fontWeight: "800",
     color: Colors.textSecondary,
-    fontFamily: FontFamily.medium,
-    fontSize: FontSize.xs,
-    textTransform: "uppercase",
   },
-  infoValue: {
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: Colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Identity block
+  identityContainer: {
+    marginBottom: 18,
+  },
+  nameVerifiedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  nameText: {
+    fontSize: 34,
+    fontWeight: "800",
     color: Colors.textPrimary,
-    fontFamily: FontFamily.semiBold,
-    fontSize: FontSize.base,
+    letterSpacing: -0.5,
+    flexShrink: 1,
+  },
+  verifiedBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  handleStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     marginTop: 2,
   },
-  bioText: {
+  handleText: {
+    fontSize: 14,
+    fontWeight: "600",
     color: Colors.textSecondary,
-    fontFamily: FontFamily.regular,
-    fontSize: FontSize.sm,
-    lineHeight: 20,
-    marginTop: 3,
   },
-  chipRow: {
+  onlineBadge: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-  },
-  interestChip: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  interestText: {
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.semiBold,
-    fontSize: FontSize.xs,
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: Spacing.sm + 4,
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.md + 4,
-  },
-  primaryAction: {
     alignItems: "center",
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.lg,
-    flex: 1,
+    gap: 4,
+    backgroundColor: `${Colors.success}15`,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.success,
+  },
+  onlineText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: Colors.success,
+  },
+
+  // Meta pills scroll
+  metaScroll: {
+    marginBottom: 20,
+  },
+  metaScrollContent: {
+    gap: 8,
+    paddingRight: 10,
+  },
+  metaPill: {
     flexDirection: "row",
-    height: 56,
-    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgCard,
   },
-  primaryActionText: {
-    color: Colors.textInverse,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.base,
-    marginLeft: Spacing.sm,
+  metaPillLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.textSecondary,
   },
-  secondaryAction: {
+
+  // Stats row panel
+  statsPanel: {
+    flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: Radius.lg,
     borderWidth: 1,
-    height: 56,
-    justifyContent: "center",
-    width: 56,
+    borderColor: Colors.border,
+    borderRadius: 24,
+    marginBottom: 20,
   },
-  disabledAction: {
-    opacity: 0.62,
+  statItemWrap: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 14,
   },
-  tabsWrap: {
-    borderBottomColor: Colors.border,
-    borderBottomWidth: 1,
-    marginTop: Spacing.xl,
-    paddingHorizontal: Spacing.md + 4,
-  },
-  activeTab: {
-    alignSelf: "flex-start",
-    borderBottomColor: Colors.textPrimary,
-    borderBottomWidth: 2,
-    paddingBottom: Spacing.sm + 4,
-    paddingHorizontal: Spacing.sm,
-  },
-  activeTabText: {
+  statValue: {
+    fontSize: 19,
+    fontWeight: "800",
     color: Colors.textPrimary,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.base,
   },
-  postsWrap: {
+  statLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: Colors.textMuted,
+    letterSpacing: 1.2,
+    marginTop: 2,
+  },
+  statsSeparator: {
+    width: 1,
+    height: 24,
+    backgroundColor: Colors.border,
+  },
+
+  // Editorial content card blocks
+  editorialCard: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 16,
+  },
+  editorialCardTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    marginBottom: 10,
+  },
+  bioContentText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.regular,
+  },
+  interestsScrollContent: {
+    gap: 8,
+  },
+  interestChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  interestChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  // Tab segmented control
+  tabSectionWrap: {
+    borderBottomWidth: 1.5,
+    borderBottomColor: Colors.border,
+    paddingBottom: 10,
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  tabIndicatorBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+  },
+  tabIndicatorText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+  },
+  tabCountBadge: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  tabCountText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: Colors.textSecondary,
+  },
+
+  // Posts listing
+  postsGridWrap: {
     flex: 1,
   },
-  postsLoading: {
+  postsLoadingSpinner: {
     alignItems: "center",
-    paddingVertical: 80,
+    paddingVertical: 40,
   },
-  bottomSpacer: {
-    height: 40,
-  },
+
+  // Empty state profile loading errors
   emptyState: {
     alignItems: "center",
     backgroundColor: Colors.bg,
     flex: 1,
     justifyContent: "center",
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: 28,
   },
   emptyIcon: {
     alignItems: "center",
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
-    borderRadius: Radius.full,
+    borderRadius: 24,
     borderWidth: 1,
     height: 82,
     justifyContent: "center",
-    marginBottom: Spacing.md,
+    marginBottom: 16,
     width: 82,
   },
   emptyTitle: {
     color: Colors.textPrimary,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.xl,
-    marginBottom: Spacing.xs,
+    fontWeight: "800",
+    fontSize: 20,
+    marginBottom: 4,
   },
   emptySubtitle: {
     color: Colors.textSecondary,
-    fontFamily: FontFamily.regular,
-    fontSize: FontSize.sm,
+    fontSize: 14,
     lineHeight: 20,
-    marginBottom: Spacing.lg,
+    marginBottom: 24,
     textAlign: "center",
   },
   emptyButton: {
     backgroundColor: Colors.primary,
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
+    borderRadius: 20,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
   },
   emptyButtonText: {
     color: Colors.textInverse,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.sm,
+    fontWeight: "800",
+    fontSize: 14,
+  },
+
+  // Floating Actions bar overlay
+  floatingActionBar: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    height: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  actionRoundBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  actionRoundBtnMuted: {
+    backgroundColor: "rgba(0,0,0,0.03)",
+    borderColor: Colors.border,
+  },
+  actionRoundBtnChat: {
+    backgroundColor: `${Colors.primaryLight}14`,
+    borderColor: `${Colors.primaryLight}30`,
+  },
+  actionConnectBtn: {
+    flex: 1,
+    height: 50,
+    marginHorizontal: 12,
+    borderRadius: 25,
+    backgroundColor: Colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  actionConnectText: {
+    color: Colors.textInverse,
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  actionDisabled: {
+    opacity: 0.5,
   },
 });

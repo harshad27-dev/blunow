@@ -8,13 +8,13 @@ import {
   NativeSyntheticEvent,
   RefreshControl,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
@@ -253,7 +253,7 @@ export default function DiscoverScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar style="dark" />
         <View style={styles.centerState}>
           <ActivityIndicator color={Colors.textPrimary} size="large" />
           <Text style={styles.centerStateText}>Building your explore feed...</Text>
@@ -264,7 +264,7 @@ export default function DiscoverScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar style="dark" />
 
       <ScrollView
         style={styles.container}
@@ -304,21 +304,12 @@ export default function DiscoverScreen() {
           onPress={() => router.push("/(screens)/search")}
           activeOpacity={0.86}
         >
-          <View style={styles.searchIconBox}>
-            <Ionicons name="search" size={18} color={Colors.black} />
-          </View>
-
-          <View style={styles.searchBody}>
-            <Text style={styles.searchLabel}>Search people</Text>
-            <Text style={styles.searchText}>
-              Names, interests, cities, and vibes...
-            </Text>
-          </View>
-
+          <Ionicons name="search" size={20} color={Colors.textSecondary} />
+          <Text style={styles.searchLabel}>Search people, interests, vibes...</Text>
           <Ionicons
             name="chevron-forward"
-            size={20}
-            color={Colors.textSecondary}
+            size={18}
+            color={Colors.textMuted}
           />
         </TouchableOpacity>
 
@@ -553,36 +544,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
-    borderRadius: 24,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     marginHorizontal: DISCOVER_SCREEN_PADDING,
     marginTop: 22,
-    minHeight: 68,
-    paddingHorizontal: 14,
-  },
-  searchIconBox: {
-    alignItems: "center",
-    backgroundColor: Colors.white,
-    borderRadius: 18,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
-  searchBody: {
-    flex: 1,
-    marginLeft: 12,
+    minHeight: 54,
+    paddingHorizontal: 16,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
   },
   searchLabel: {
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.sm,
-  },
-  searchText: {
     color: Colors.textSecondary,
-    fontFamily: FontFamily.regular,
-    fontSize: FontSize.xs,
-    marginTop: 3,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.sm,
+    flex: 1,
+    marginLeft: 12,
   },
   filterList: {
     gap: 10,

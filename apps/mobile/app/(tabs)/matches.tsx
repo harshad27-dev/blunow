@@ -3,17 +3,19 @@ import {
   Animated,
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   Modal,
+  PanResponder,
   ScrollView,
   StyleSheet,
-  StatusBar,
   Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
@@ -35,9 +37,9 @@ import type {
   MatchRequest,
 } from "@/types/match.types";
 
-const bottomActionHeight = 94;
-const fallbackProfileImage =
-  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
+const bottomActionHeight = 100;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const SWIPE_THRESHOLD = 90;
 const INTEREST_OPTIONS = [
   "Music",
   "Travel",
@@ -76,6 +78,8 @@ const defaultFilters: MatchRecommendationFilters = {
   onlineOnly: false,
 };
 
+const EMPTY_RECOMMENDATIONS: MatchRecommendation[] = [];
+
 type PendingAction = "pass" | "chat" | "like" | "boost" | null;
 
 export default function MatchesScreen() {
@@ -99,13 +103,115 @@ export default function MatchesScreen() {
     requestId: string;
     status: "ACCEPTED" | "REJECTED";
   } | null>(null);
+
   const fade = useRef(new Animated.Value(1)).current;
-  const { data: profiles = [], isLoading } = useMatchRecommendationsQuery(filters);
+  const heartScale = useRef(new Animated.Value(1)).current;
+  const pan = useRef(new Animated.ValueXY()).current;
+
+  // Derived interpolations for swipe tilt + overlays based on vertical swipe (pan.y)
+  const cardRotation = pan.x.interpolate({
+    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+    outputRange: ["-10deg", "0deg", "10deg"],
+    extrapolate: "clamp",
+  });
+  // Down swipe is LIKE (positive y)
+  const likeOpacity = pan.y.interpolate({
+    inputRange: [10, SWIPE_THRESHOLD],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+  // Up swipe is PASS (negative y)
+  const passOpacity = pan.y.interpolate({
+    inputRange: [-SWIPE_THRESHOLD, -10],
+    outputRange: [1, 0],
+    extrapolate: "clamp",
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx),
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false },
+      ),
+      onPanResponderRelease: (_, { dy }) => {
+        if (dy > SWIPE_THRESHOLD) {
+          // Down is LIKE (Y goes positive)
+          Animated.timing(pan, {
+            toValue: { x: 0, y: SCREEN_HEIGHT * 1.5 },
+            duration: 280,
+            useNativeDriver: false,
+          }).start(() => {
+            pan.setValue({ x: 0, y: 0 });
+            handleLikeRef.current();
+          });
+        } else if (dy < -SWIPE_THRESHOLD) {
+          // Up is PASS (Y goes negative)
+          Animated.timing(pan, {
+            toValue: { x: 0, y: -SCREEN_HEIGHT * 1.5 },
+            duration: 280,
+            useNativeDriver: false,
+          }).start(() => {
+            pan.setValue({ x: 0, y: 0 });
+            handleSkipRef.current();
+          });
+        } else {
+          Animated.spring(pan, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false,
+            friction: 6,
+          }).start();
+        }
+      },
+    }),
+  ).current;
+
+  // Stable refs so panResponder closure always has latest handlers
+  const handleLikeRef = useRef(() => {});
+  const handleSkipRef = useRef(() => {});
+
+  const { data: fetchedProfiles, isLoading } = useMatchRecommendationsQuery(filters);
   const { data: incomingRequests = [] } = useIncomingMatchRequestsQuery();
   const sendMatchRequest = useSendMatchRequestMutation();
   const respondMatchRequest = useRespondMatchRequestMutation();
   const dismissRecommendation = useDismissRecommendationMutation();
-  const profile = profiles[activeIndex] as MatchRecommendation | undefined;
+
+  const filterKey = useMemo(() => JSON.stringify(filters), [filters]);
+  const [deck, setDeck] = useState<{
+    filterKey: string;
+    profiles: MatchRecommendation[];
+  }>(() => ({ filterKey, profiles: [] }));
+  const [completedSingleDeckKey, setCompletedSingleDeckKey] = useState<string | null>(null);
+  const profiles = deck.filterKey === filterKey ? deck.profiles : EMPTY_RECOMMENDATIONS;
+  const isSingleProfileComplete =
+    completedSingleDeckKey === filterKey && profiles.length === 1;
+
+  React.useEffect(() => {
+    const recommendations = fetchedProfiles ?? EMPTY_RECOMMENDATIONS;
+
+    setDeck((current) => {
+      const existing = current.filterKey === filterKey ? current.profiles : [];
+      if (recommendations.length === 0) {
+        return current.filterKey === filterKey
+          ? current
+          : { filterKey, profiles: [] };
+      }
+
+      const merged = [...existing];
+      recommendations.forEach((recommendation) => {
+        const index = merged.findIndex((item) => item.id === recommendation.id);
+        if (index === -1) merged.push(recommendation);
+        else merged[index] = recommendation;
+      });
+
+      return { filterKey, profiles: merged };
+    });
+  }, [fetchedProfiles, filterKey]);
+
+  const profile = isSingleProfileComplete
+    ? undefined
+    : (profiles[activeIndex] as MatchRecommendation | undefined);
   const isDeckActionPending = pendingAction !== null;
   const nextProfiles = useMemo(
     () =>
@@ -141,14 +247,33 @@ export default function MatchesScreen() {
     setActivePhotoIndex(0);
   }, [profile?.id]);
 
+  // Pulse animation for match banner
+  React.useEffect(() => {
+    if (!matchBanner) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(heartScale, { toValue: 1.18, duration: 480, useNativeDriver: true }),
+        Animated.timing(heartScale, { toValue: 0.92, duration: 360, useNativeDriver: true }),
+        Animated.timing(heartScale, { toValue: 1.0, duration: 280, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [matchBanner, heartScale]);
+
   const moveToNextCard = () => {
     if (profiles.length === 0) return;
-
     Animated.timing(fade, {
       toValue: 0,
       duration: 150,
       useNativeDriver: true,
     }).start(() => {
+      if (profiles.length === 1) {
+        setCompletedSingleDeckKey(filterKey);
+        fade.setValue(1);
+        return;
+      }
+
       setActiveIndex((current) => (current + 1) % profiles.length);
       Animated.timing(fade, {
         toValue: 1,
@@ -158,9 +283,22 @@ export default function MatchesScreen() {
     });
   };
 
+  // Swipe hint nudge: subtle up/down nudge on first load
+  React.useEffect(() => {
+    if (!profile) return;
+    const timer = setTimeout(() => {
+      Animated.sequence([
+        Animated.timing(pan.y, { toValue: -30, duration: 250, useNativeDriver: false }),
+        Animated.timing(pan.y, { toValue: 30, duration: 350, useNativeDriver: false }),
+        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false, friction: 5 }),
+      ]).start();
+    }, 1200);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleLike = () => {
     if (!profile || isDeckActionPending) return;
-
     setPendingAction("like");
     if (profile.alreadyLikedMe) {
       sendMatchRequest.mutate(
@@ -169,19 +307,11 @@ export default function MatchesScreen() {
           onSuccess: (response: any) => {
             const chatId = response?.data?.chat?.id;
             if (!chatId) {
-              Alert.alert(
-                "Chat not ready",
-                "Match created, but chat is not ready yet.",
-              );
+              Alert.alert("Chat not ready", "Match created, but chat is not ready yet.");
               moveToNextCard();
               return;
             }
-
-            setMatchBanner({
-              name: `${profile.name} ${profile.lastName}`,
-              chatId,
-              profile,
-            });
+            setMatchBanner({ name: `${profile.name} ${profile.lastName}`, chatId, profile });
           },
           onError: moveToNextCard,
           onSettled: () => setPendingAction(null),
@@ -189,7 +319,6 @@ export default function MatchesScreen() {
       );
       return;
     }
-
     sendMatchRequest.mutate(
       { receiverId: profile.id },
       {
@@ -202,22 +331,14 @@ export default function MatchesScreen() {
 
   const handleChatRequest = () => {
     if (!profile || isDeckActionPending) return;
-
     setPendingAction("chat");
     sendMatchRequest.mutate(
       { receiverId: profile.id, message: "Hi, I would like to chat with you." },
       {
         onSuccess: (response: any) => {
           const chatId = response?.data?.chat?.id;
-          if (chatId) {
-            openChat(profile, chatId);
-            return;
-          }
-
-          Alert.alert(
-            "Request sent",
-            "They need to accept your request before chat opens.",
-          );
+          if (chatId) { openChat(profile, chatId); return; }
+          Alert.alert("Request sent", "They need to accept your request before chat opens.");
           moveToNextCard();
         },
         onError: moveToNextCard,
@@ -228,7 +349,6 @@ export default function MatchesScreen() {
 
   const handleMatchRequest = () => {
     if (!profile || isDeckActionPending) return;
-
     setPendingAction("boost");
     sendMatchRequest.mutate(
       { receiverId: profile.id, message: "I would like to connect with you." },
@@ -242,27 +362,23 @@ export default function MatchesScreen() {
 
   const handleSkip = () => {
     if (!profile || isDeckActionPending) return;
-
     setPendingAction("pass");
     dismissRecommendation.mutate(profile.id, {
       onSuccess: moveToNextCard,
       onError: (error: any) => {
-        Alert.alert(
-          "Pass failed",
-          error?.response?.data?.message || "Unable to dismiss this profile.",
-        );
+        Alert.alert("Pass failed", error?.response?.data?.message || "Unable to dismiss this profile.");
       },
       onSettled: () => setPendingAction(null),
     });
   };
 
+  // Keep stable refs in sync so panResponder closure always calls latest handlers
+  handleLikeRef.current = handleLike;
+  handleSkipRef.current = handleSkip;
+
   const openProfileDetail = () => {
     if (!profile) return;
-
-    router.push({
-      pathname: "/(screens)/user/[userId]",
-      params: { userId: profile.id },
-    });
+    router.push({ pathname: "/(screens)/user/[userId]", params: { userId: profile.id } });
   };
 
   const openChat = (selectedProfile: MatchRecommendation, chatId: string) => {
@@ -272,17 +388,13 @@ export default function MatchesScreen() {
         roomId: chatId,
         userId: selectedProfile.id,
         name: `${selectedProfile.name} ${selectedProfile.lastName}`,
-        avatarUrl: selectedProfile.imageUrl || fallbackProfileImage,
+        avatarUrl: selectedProfile.imageUrl || selectedProfile.avatarUrl || "",
       },
     });
   };
 
-  const respondToIncomingRequest = (
-    request: MatchRequest,
-    status: "ACCEPTED" | "REJECTED",
-  ) => {
+  const respondToIncomingRequest = (request: MatchRequest, status: "ACCEPTED" | "REJECTED") => {
     if (pendingRequestAction) return;
-
     setPendingRequestAction({ requestId: request.id, status });
     respondMatchRequest.mutate(
       { requestId: request.id, status },
@@ -297,21 +409,14 @@ export default function MatchesScreen() {
               params: {
                 roomId: chatId,
                 userId: request.senderId,
-                name:
-                  sender?.profile?.username ||
-                  sender?.username ||
-                  sender?.email ||
-                  "Match",
+                name: sender?.profile?.username || sender?.username || sender?.email || "Match",
                 avatarUrl: sender?.profile?.avatarUrl || "",
               },
             });
           }
         },
         onError: (error: any) => {
-          Alert.alert(
-            "Request failed",
-            error?.response?.data?.message || "Unable to update request.",
-          );
+          Alert.alert("Request failed", error?.response?.data?.message || "Unable to update request.");
         },
         onSettled: () => setPendingRequestAction(null),
       },
@@ -324,10 +429,7 @@ export default function MatchesScreen() {
   };
 
   const applyFilters = () => {
-    setFilters({
-      ...draftFilters,
-      interests: draftFilters.interests ?? [],
-    });
+    setFilters({ ...draftFilters, interests: draftFilters.interests ?? [] });
     setIsFilterModalVisible(false);
   };
 
@@ -337,104 +439,112 @@ export default function MatchesScreen() {
     setIsFilterModalVisible(false);
   };
 
+  // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center" style={styles.screen}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-        <Text className="mt-4 text-sm font-semibold" style={styles.mutedText}>
-          Finding real profiles...
-        </Text>
+      <View style={[styles.screen, styles.centerContent]}>
+        <View style={styles.loadingCard}>
+          <LinearGradient
+            colors={[Colors.bgCard, Colors.bgElevated]}
+            style={styles.loadingGradient}
+          >
+            <View style={styles.loadingIconWrap}>
+              <Ionicons name="heart-circle-outline" size={52} color={Colors.primaryLight} />
+            </View>
+            <ActivityIndicator color={Colors.primary} size="large" style={{ marginTop: 20 }} />
+            <Text style={styles.loadingTitle}>Finding your people</Text>
+            <Text style={styles.loadingSubtitle}>Matching you with real profiles nearby…</Text>
+          </LinearGradient>
+        </View>
       </View>
     );
   }
 
+  // ── Empty state ────────────────────────────────────────────────────────────
   if (!profile) {
     return (
-      <View className="flex-1" style={styles.screen}>
-        <SafeAreaView
-          className="flex-1"
-          style={styles.screen}
-          edges={["top", "left", "right"]}
-        >
-          <View className="flex-row items-center justify-between px-[18px] pt-2">
+      <View style={styles.screen}>
+        <SafeAreaView style={[styles.screen, { flex: 1 }]} edges={["top", "left", "right"]}>
+          {/* Header */}
+          <View style={styles.emptyHeader}>
             <TouchableOpacity
-              className="h-10 w-10 items-center justify-center rounded-full border"
               style={styles.overlayIconButton}
               onPress={() => router.back()}
               activeOpacity={0.82}
             >
-              <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+              <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
             </TouchableOpacity>
             <TouchableOpacity
-              className="h-10 w-10 items-center justify-center rounded-full border"
               style={styles.overlayIconButton}
               onPress={openFilters}
               activeOpacity={0.82}
             >
-              <Ionicons
-                name="options-outline"
-                size={20}
-                color={Colors.textPrimary}
-              />
+              <Ionicons name="options-outline" size={20} color={Colors.textPrimary} />
               {filterCount ? (
-                <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full px-1" style={styles.badge}>
-                  <Text className="text-[10px] font-bold" style={styles.primaryButtonText}>
-                    {filterCount}
-                  </Text>
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{filterCount}</Text>
                 </View>
               ) : null}
             </TouchableOpacity>
           </View>
-          <View className="flex-1 items-center justify-center px-7">
-            <View
-              className="h-20 w-20 items-center justify-center rounded-full border"
-              style={styles.emptyIconWrap}
-            >
-              <Ionicons name="people-outline" size={34} color={Colors.textMuted} />
+
+          {/* Empty card */}
+          <View style={styles.emptyBody}>
+            <View style={styles.emptyCard}>
+              <LinearGradient
+                colors={[Colors.bgCard, Colors.bgElevated]}
+                style={styles.emptyCardGradient}
+              >
+                <View style={styles.emptyIconCircle}>
+                  <Ionicons
+                    name={isSingleProfileComplete ? "checkmark-circle-outline" : "people-outline"}
+                    size={48}
+                    color={Colors.primaryLight}
+                  />
+                </View>
+                <Text style={styles.emptyTitle}>
+                  {isSingleProfileComplete ? "You're all caught up" : "No profiles yet"}
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  {isSingleProfileComplete
+                    ? "You've seen everyone matching your preferences. Check back soon for someone new."
+                    : filterCount
+                      ? "Try relaxing your filters to see more real profiles."
+                      : "Real users will appear here once they complete their profile."}
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={
+                    isSingleProfileComplete
+                      ? () => setCompletedSingleDeckKey(null)
+                      : filterCount
+                        ? resetFilters
+                        : () => router.push("/(screens)/edit-profile")
+                  }
+                  activeOpacity={0.84}
+                >
+                  <Ionicons
+                    name={
+                      isSingleProfileComplete || filterCount
+                        ? "refresh"
+                        : "person-circle-outline"
+                    }
+                    size={18}
+                    color={Colors.textInverse}
+                  />
+                  <Text style={styles.emptyButtonText}>
+                    {isSingleProfileComplete
+                      ? "Show again"
+                      : filterCount
+                        ? "Reset filters"
+                        : "Complete profile"}
+                  </Text>
+                </TouchableOpacity>
+              </LinearGradient>
             </View>
-            <Text className="mt-5 text-center text-2xl font-bold" style={styles.titleText}>
-              No profiles yet
-            </Text>
-            <Text className="mt-2 text-center text-sm leading-5" style={styles.mutedText}>
-              {filterCount
-                ? "Try relaxing your filters to see more real profiles."
-                : "Real users will appear here after they create an account and complete their profile."}
-            </Text>
-            {filterCount ? (
-              <TouchableOpacity
-                className="mt-6 h-12 flex-row items-center rounded-full px-5"
-                style={styles.primaryButton}
-                onPress={resetFilters}
-                activeOpacity={0.84}
-              >
-                <Ionicons
-                  name="refresh"
-                  size={20}
-                  color={Colors.textInverse}
-                />
-                <Text className="ml-2 text-sm font-bold" style={styles.primaryButtonText}>
-                  Reset filters
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                className="mt-6 h-12 flex-row items-center rounded-full px-5"
-                style={styles.primaryButton}
-                onPress={() => router.push("/(screens)/edit-profile")}
-                activeOpacity={0.84}
-              >
-                <Ionicons
-                  name="person-circle-outline"
-                  size={20}
-                  color={Colors.textInverse}
-                />
-                <Text className="ml-2 text-sm font-bold" style={styles.primaryButtonText}>
-                  Complete profile
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
         </SafeAreaView>
+
         <FilterModal
           visible={isFilterModalVisible}
           filters={draftFilters}
@@ -448,94 +558,176 @@ export default function MatchesScreen() {
     );
   }
 
+  // ── Main card ──────────────────────────────────────────────────────────────
   const profileImages = getProfileImages(profile);
-  const profileImage = profileImages[activePhotoIndex] || profileImages[0] || fallbackProfileImage;
+  const profileImage = profileImages[activePhotoIndex] || profileImages[0];
+  const profileInterests = (profile.interests ?? []).slice(0, 5);
+  const profileInitial = profile.name?.charAt(0)?.toUpperCase() ?? "?";
+
+  // Photo tap navigation: left 38% → prev, right 38% → next, center → profile detail
+  const handlePhotoTap = (x: number, screenW: number) => {
+    const leftZone = screenW * 0.35;
+    const rightZone = screenW * 0.65;
+    if (x < leftZone) {
+      setActivePhotoIndex((i) => Math.max(0, i - 1));
+    } else if (x > rightZone) {
+      setActivePhotoIndex((i) => Math.min(profileImages.length - 1, i + 1));
+    } else {
+      openProfileDetail();
+    }
+  };
 
   return (
-    <View className="flex-1" style={styles.screen}>
-      <StatusBar
-        barStyle="light-content"
-        translucent
-        backgroundColor="transparent"
-      />
+    <View style={styles.screen}>
+      <StatusBar style="light" translucent backgroundColor="transparent" />
 
-      <Animated.View className="absolute inset-0" style={{ opacity: fade }}>
-        <Image
-          key={`${profile.id}-${activePhotoIndex}`}
-          source={{ uri: profileImage }}
-          className="h-full w-full"
-          resizeMode="cover"
+      {/* Full-screen photo or gradient fallback */}
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            opacity: fade,
+            transform: [
+              { translateX: pan.x },
+              { translateY: pan.y },
+              { rotate: cardRotation },
+            ],
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        {profileImage ? (
+          <Image
+            key={`${profile.id}-${activePhotoIndex}`}
+            source={{ uri: profileImage }}
+            style={StyleSheet.absoluteFillObject}
+            resizeMode="cover"
+          />
+        ) : (
+          <ProfileImageFallback initial={profileInitial} />
+        )}
+
+        {/* Transparent tap zones over photo */}
+        <TouchableOpacity
+          style={styles.photoTapZone}
+          activeOpacity={1}
+          onPress={(e) => handlePhotoTap(e.nativeEvent.locationX, SCREEN_WIDTH)}
         />
+
+        {/* LIKE indicator */}
+        <Animated.View
+          style={[styles.swipeOverlay, styles.swipeOverlayLike, { opacity: likeOpacity }]}
+          pointerEvents="none"
+        >
+          <View style={styles.swipeLabel}>
+            <Ionicons name="heart" size={22} color={Colors.success} />
+            <Text style={[styles.swipeLabelText, { color: Colors.success }]}>LIKE</Text>
+          </View>
+        </Animated.View>
+
+        {/* PASS indicator */}
+        <Animated.View
+          style={[styles.swipeOverlay, styles.swipeOverlayPass, { opacity: passOpacity }]}
+          pointerEvents="none"
+        >
+          <View style={styles.swipeLabel}>
+            <Ionicons name="close" size={22} color={Colors.error} />
+            <Text style={[styles.swipeLabelText, { color: Colors.error }]}>PASS</Text>
+          </View>
+        </Animated.View>
       </Animated.View>
 
+      {/* Top vignette */}
       <LinearGradient
-        colors={[
-          Colors.overlayDark,
-          Colors.overlayDarkSoft,
-          Colors.overlayDarkSoft,
-          Colors.overlayDarkStrong,
-        ]}
-        locations={[0, 0.28, 0.54, 1]}
-        className="absolute inset-0"
-        style={StyleSheet.absoluteFillObject}
+        colors={["rgba(0,0,0,0.52)", "rgba(0,0,0,0.10)", "transparent"]}
+        locations={[0, 0.28, 0.56]}
+        style={styles.topGradient}
+        pointerEvents="none"
       />
 
-      <SafeAreaView className="flex-1" edges={["top", "left", "right"]}>
-        <View className="flex-row items-start justify-between px-[18px] pt-2">
-          <View className="flex-row items-start">
+      {/* Bottom content gradient — warm sepia tint */}
+      <LinearGradient
+        colors={[
+          "transparent",
+          "rgba(18,14,10,0.42)",
+          "rgba(18,14,10,0.82)",
+          "rgba(18,14,10,0.97)",
+        ]}
+        locations={[0.1, 0.46, 0.74, 1]}
+        style={styles.bottomGradient}
+        pointerEvents="none"
+      />
+
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
             <TouchableOpacity
-              className="mr-3 h-10 w-10 items-center justify-center rounded-full border"
-              style={styles.floatingIconButton}
+              style={styles.glassIconBtn}
               onPress={() => router.back()}
               activeOpacity={0.82}
             >
-              <Ionicons name="arrow-back" size={24} color={Colors.textInverse} />
+              <Ionicons name="arrow-back" size={22} color="#fff" />
             </TouchableOpacity>
-
           </View>
 
-          <View className="flex-row items-center gap-2.5">
-            <View className="h-9 flex-row items-center rounded-full px-3" style={styles.photoPrimaryPill}>
-              <Ionicons name="people" size={15} color={Colors.textInverse} />
-              <Text className="ml-1.5 text-xs font-bold" style={styles.photoPrimaryText}>
-                {profiles.length} profiles
-              </Text>
+          <View style={styles.headerRight}>
+            {/* Profile count pill */}
+            <View style={styles.countPill}>
+              <Ionicons name="people" size={14} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.countPillText}>{profiles.length}</Text>
             </View>
+
+            {/* Photo thumbnails in header */}
+            {profileImages.length > 1 && (
+              <View style={styles.thumbRow}>
+                {profileImages.map((imgUrl, idx) => (
+                  <TouchableOpacity
+                    key={`thumb-${idx}`}
+                    onPress={() => setActivePhotoIndex(idx)}
+                    activeOpacity={0.82}
+                    style={[styles.thumb, idx === activePhotoIndex && styles.thumbActive]}
+                  >
+                    <Image source={{ uri: imgUrl }} style={styles.thumbImage} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Filter button */}
             <TouchableOpacity
-              className="h-10 w-10 items-center justify-center rounded-full border"
-              style={styles.floatingIconButton}
+              style={styles.glassIconBtn}
               onPress={openFilters}
               activeOpacity={0.82}
             >
-              <Ionicons
-                name="options-outline"
-                size={20}
-                color={Colors.textInverse}
-              />
+              <Ionicons name="options-outline" size={20} color="#fff" />
               {filterCount ? (
-                <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full px-1" style={styles.badge}>
-                  <Text className="text-[10px] font-bold" style={styles.primaryButtonText}>
-                    {filterCount}
-                  </Text>
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{filterCount}</Text>
                 </View>
               ) : null}
             </TouchableOpacity>
           </View>
         </View>
 
+        {/* ── Incoming requests ── */}
         {incomingRequests.length ? (
-          <View className="mx-[18px] mt-4 rounded-[24px] border p-3" style={styles.requestPanel}>
-            <View className="mb-2 flex-row items-center justify-between">
-              <Text className="text-sm font-extrabold" style={styles.photoText}>
-                Requests
+          <View style={styles.requestPanel}>
+            <View style={styles.requestPanelHeader}>
+              <Text style={styles.requestPanelTitle}>
+                💌 Waiting for you
               </Text>
               <TouchableOpacity
                 onPress={() => setIsRequestsModalVisible(true)}
                 activeOpacity={0.84}
               >
-                <Text className="text-xs font-bold" style={styles.photoMutedText}>
-                  {incomingRequests.length > 2 ? "View all" : `${incomingRequests.length} waiting`}
-                </Text>
+                <View style={styles.requestPanelBadge}>
+                  <Text style={styles.requestPanelBadgeText}>
+                    {incomingRequests.length > 2
+                      ? `+${incomingRequests.length - 2} more`
+                      : `${incomingRequests.length} waiting`}
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
             {incomingRequests.slice(0, 2).map((request) => (
@@ -555,164 +747,143 @@ export default function MatchesScreen() {
           </View>
         ) : null}
 
+        {/* ── Bottom content area ── */}
         <View
-          className="relative flex-1 justify-end px-[18px]"
-          style={{
-            paddingBottom: Math.max(
-              insets.bottom + bottomActionHeight + 18,
-              126,
-            ),
-          }}
+          style={[
+            styles.bottomContent,
+            { paddingBottom: Math.max(insets.bottom + bottomActionHeight + 20, 130) },
+          ]}
         >
-          <LinearGradient
-            pointerEvents="none"
-            colors={[Colors.transparent, Colors.overlayDark, Colors.overlayDarkStrong]}
-            locations={[0, 0.42, 1]}
-            style={styles.bottomContentShade}
-          />
+          <Animated.View style={{ opacity: fade, width: "100%" }}>
 
-          {profileImages.length > 1 ? (
-            <View className="mb-3 flex-row gap-2">
-              {profileImages.map((imageUrl, index) => (
-                <TouchableOpacity
-                  key={`${imageUrl}-${index}`}
-                  activeOpacity={0.84}
-                  onPress={() => setActivePhotoIndex(index)}
-                  style={[
-                    styles.profilePhotoThumb,
-                    index === activePhotoIndex && styles.profilePhotoThumbActive,
-                  ]}
-                >
-                  <Image source={{ uri: imageUrl }} style={styles.profilePhotoThumbImage} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
-
-          <View className="mb-3 flex-row items-center justify-between">
-            <ProgressDots activeIndex={activeIndex} total={profiles.length} />
-            <View className="h-[42px] w-[72px] flex-row">
-              {nextProfiles.map((item: MatchRecommendation, index: number) => (
-                <Image
-                  key={item.id}
-                  source={{ uri: item.imageUrl || fallbackProfileImage }}
-                  className={`absolute h-[42px] w-[42px] rounded-[15px] border-2 ${
-                    index === 0 ? "right-[26px] z-10" : "right-0"
-                  }`}
-                  style={styles.nextProfileImage}
-                />
-              ))}
-            </View>
-          </View>
-
-          <Animated.View className="w-full" style={{ opacity: fade }}>
-            <View className="flex-row items-center justify-between">
+            {/* Status + score */}
+            <View style={styles.pillRow}>
               <StatusPill online={profile.online} />
               <ScorePill score={profile.matchScore} />
             </View>
 
-            <View className="mt-4 flex-row items-center">
+            {/* Name row */}
+            <View style={styles.nameRow}>
               <Text
-                className="flex-1"
                 numberOfLines={1}
                 adjustsFontSizeToFit
-                style={{
-                  fontFamily: FontFamily.darleston,
-                  fontSize: 58,
-                  includeFontPadding: false,
-                  lineHeight: 66,
-                  color: Colors.textInverse,
-                }}
+                style={[styles.nameText, { fontFamily: FontFamily.darleston }]}
               >
                 {profile.name}
               </Text>
-              <View className="ml-3 flex-row items-center rounded-full px-3 py-2" style={styles.photoSoftPill}>
-                <Text className="text-base font-bold" style={styles.photoText}>
-                  {profile.age}
-                </Text>
+              <View style={styles.agePill}>
+                <Text style={styles.agePillText}>{profile.age}</Text>
                 {profile.verified ? (
-                  <View className="ml-1.5 h-[18px] w-[18px] items-center justify-center rounded-full" style={styles.photoPrimaryPill}>
-                    <Ionicons name="checkmark" size={11} color={Colors.textInverse} />
+                  <View style={styles.verifiedDot}>
+                    <Ionicons name="checkmark" size={10} color="#fff" />
                   </View>
                 ) : null}
               </View>
             </View>
 
-            <Text
-              className="-mt-1 text-sm font-semibold"
-              style={styles.photoSecondaryText}
-              numberOfLines={1}
-            >
-              {profile.name} {profile.lastName}
-            </Text>
-
-            <View className="mt-4 gap-2">
-              <ProfileInfo
-                icon="location-outline"
-                label="Location"
-                value={profile.city}
-              />
-              <ProfileInfo
-                icon="navigate-outline"
-                label="Distance"
-                value={profile.distance}
-              />
+            {/* Location row */}
+            <View style={styles.locationRow}>
+              <Ionicons name="location" size={13} color="rgba(255,255,255,0.65)" />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {profile.city}
+              </Text>
+              {profile.distance ? (
+                <>
+                  <View style={styles.locationDot} />
+                  <Ionicons name="navigate" size={13} color="rgba(255,255,255,0.65)" />
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {profile.distance}
+                  </Text>
+                </>
+              ) : null}
             </View>
 
+            {/* Interests */}
+            {profileInterests.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.interestsScroll}
+                contentContainerStyle={styles.interestsContent}
+              >
+                {profileInterests.map((interest, idx) => (
+                  <View key={`${interest}-${idx}`} style={styles.interestChip}>
+                    <Text style={styles.interestChipText}>{interest}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* View profile CTA */}
             <TouchableOpacity
-              className="mt-4 h-12 flex-row items-center justify-center rounded-full"
-              style={styles.photoPrimaryPill}
+              style={styles.viewProfileBtn}
               onPress={openProfileDetail}
               activeOpacity={0.84}
             >
-              <Text className="mr-2 text-sm font-bold" style={styles.photoPrimaryText}>
-                View profile
-              </Text>
-              <Ionicons name="arrow-forward" size={16} color={Colors.textInverse} />
+              <Text style={styles.viewProfileText}>Full Profile</Text>
+              <Ionicons name="arrow-forward" size={15} color="#fff" />
             </TouchableOpacity>
           </Animated.View>
         </View>
 
+        {/* ── Action bar ── */}
         <View
-          className="absolute left-[18px] right-[18px] h-[94px] flex-row items-center justify-between rounded-[30px] border px-3.5 shadow-2xl"
           style={[
             styles.actionBar,
-            { bottom: Math.max(insets.bottom + 12, 24) },
+            { bottom: Math.max(insets.bottom + 14, 26) },
           ]}
         >
-          <RoundAction
+          {/* Pass */}
+          <ActionButton
             icon="close"
-            label="Pass"
-            tone="muted"
+            iconColor="rgba(255,255,255,0.82)"
+            bgStyle={styles.actionCircleMuted}
             onPress={handleSkip}
             disabled={isDeckActionPending}
             loading={pendingAction === "pass"}
           />
-          <RoundAction
+
+          {/* Chat */}
+          <ActionButton
             icon="chatbubble-ellipses"
-            label="Chat"
+            iconColor={Colors.primaryLight}
+            bgStyle={styles.actionCircleChat}
             badge={profile.chatRequests}
-            tone="chat"
             onPress={handleChatRequest}
             disabled={isDeckActionPending}
             loading={pendingAction === "chat"}
           />
+
+          {/* Like — large heart */}
           <HeartAction
             onPress={handleLike}
             disabled={isDeckActionPending}
             loading={pendingAction === "like"}
           />
-          <RoundAction
+
+          {/* Boost */}
+          <ActionButton
             icon="flash"
-            label="Boost"
-            tone="boost"
+            iconColor={Colors.warning}
+            bgStyle={styles.actionCircleBoost}
             onPress={handleMatchRequest}
             disabled={isDeckActionPending}
             loading={pendingAction === "boost"}
           />
+
+          {/* Profile detail shortcut */}
+          <ActionButton
+            icon="person"
+            iconColor="rgba(255,255,255,0.82)"
+            bgStyle={styles.actionCircleMuted}
+            onPress={openProfileDetail}
+            disabled={false}
+            loading={false}
+          />
         </View>
       </SafeAreaView>
 
+      {/* ── Modals ── */}
       <FilterModal
         visible={isFilterModalVisible}
         filters={draftFilters}
@@ -732,52 +903,51 @@ export default function MatchesScreen() {
         onClose={() => setIsRequestsModalVisible(false)}
       />
 
+      {/* ── Match banner overlay ── */}
       {matchBanner ? (
-        <View
-          className="absolute inset-0 z-20 items-center justify-center px-7"
-          style={styles.matchOverlay}
-        >
+        <View style={styles.matchOverlay}>
           <LinearGradient
-            colors={Colors.gradientCard}
-            className="h-24 w-24 items-center justify-center rounded-full"
-          >
-            <Ionicons name="heart" size={46} color={Colors.primary} />
-          </LinearGradient>
-          <Text className="mt-6 text-center text-[38px] font-bold" style={styles.photoText}>
-            {"It's a Match!"}
-          </Text>
-          <Text className="mt-3 text-center text-base leading-[23px]" style={styles.photoSecondaryText}>
-            {matchBanner.name} already liked you. Chat is ready to open.
-          </Text>
-          <View className="mt-7 flex-row gap-2.5">
-            <TouchableOpacity
-              className="h-[54px] flex-row items-center rounded-full px-5"
-              style={styles.photoPrimaryPill}
-              onPress={() => {
-                const matched = matchBanner;
-                setMatchBanner(null);
-                openChat(matched.profile, matched.chatId);
-              }}
-              activeOpacity={0.86}
-            >
-              <Ionicons name="chatbubble" size={20} color={Colors.textInverse} />
-              <Text className="ml-2 text-base font-bold" style={styles.photoPrimaryText}>
-                Open Chat
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="h-[54px] items-center justify-center rounded-full border px-[18px]"
-              style={styles.floatingButton}
-              onPress={() => {
-                setMatchBanner(null);
-                moveToNextCard();
-              }}
-              activeOpacity={0.86}
-            >
-              <Text className="text-base font-bold" style={styles.photoText}>
-                Keep Matching
-              </Text>
-            </TouchableOpacity>
+            colors={["rgba(18,14,10,0.96)", "rgba(28,20,14,0.98)"]}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.matchContent}>
+            <Animated.View style={[styles.matchHeartWrap, { transform: [{ scale: heartScale }] }]}>
+              <LinearGradient
+                colors={[Colors.bgCard, Colors.bgElevated]}
+                style={styles.matchHeartGradient}
+              >
+                <Ionicons name="heart" size={52} color={Colors.primary} />
+              </LinearGradient>
+            </Animated.View>
+
+            <Text style={[styles.matchTitle, { fontFamily: FontFamily.darleston }]}>
+              {"It's a Match!"}
+            </Text>
+            <Text style={styles.matchSubtitle}>
+              {matchBanner.name} already liked you.{"\n"}Your chat is ready to open.
+            </Text>
+
+            <View style={styles.matchButtons}>
+              <TouchableOpacity
+                style={styles.matchOpenChat}
+                onPress={() => {
+                  const matched = matchBanner;
+                  setMatchBanner(null);
+                  openChat(matched.profile, matched.chatId);
+                }}
+                activeOpacity={0.86}
+              >
+                <Ionicons name="chatbubble" size={20} color="#fff" />
+                <Text style={styles.matchOpenChatText}>Open Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.matchKeepGoing}
+                onPress={() => { setMatchBanner(null); moveToNextCard(); }}
+                activeOpacity={0.86}
+              >
+                <Text style={styles.matchKeepGoingText}>Keep Matching</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       ) : null}
@@ -785,156 +955,91 @@ export default function MatchesScreen() {
   );
 }
 
-const ProgressDots = ({
-  activeIndex,
-  total,
-}: {
-  activeIndex: number;
-  total: number;
-}) => {
-  const maxVisibleDots = 5;
-  const visibleDotCount = Math.min(total, maxVisibleDots);
-  const maxStartIndex = Math.max(total - visibleDotCount, 0);
+// ─── Story-style progress bar ─────────────────────────────────────────────────
+
+const StoryProgressBar = ({ activeIndex, total }: { activeIndex: number; total: number }) => {
+  const maxBars = 8;
+  const count = Math.min(total, maxBars);
   const startIndex =
-    total <= maxVisibleDots
+    total <= maxBars
       ? 0
-      : Math.min(Math.max(activeIndex - Math.floor(visibleDotCount / 2), 0), maxStartIndex);
-  const visibleIndexes = Array.from(
-    { length: visibleDotCount },
-    (_, index) => startIndex + index,
-  );
+      : Math.min(
+          Math.max(activeIndex - Math.floor(maxBars / 2), 0),
+          total - maxBars,
+        );
 
   return (
-    <View
-      className="h-8 flex-row items-center gap-1.5 rounded-full border px-3"
-      style={[styles.floatingButton, styles.progressDots]}
-    >
-      {visibleIndexes.map((index) => (
+    <View style={styles.storyBarWrap}>
+      {Array.from({ length: count }, (_, i) => startIndex + i).map((idx) => (
         <View
-          key={index}
-          className={`h-2 rounded-full ${index === activeIndex ? "w-[26px]" : "w-2"}`}
-          style={index === activeIndex ? styles.activeDot : styles.inactiveDot}
+          key={idx}
+          style={[styles.storyBarSegment, idx === activeIndex && styles.storyBarSegmentActive]}
         />
       ))}
-      {total > maxVisibleDots ? (
-        <Text className="ml-1 text-xs font-bold" style={styles.photoText}>
-          {activeIndex + 1}/{total}
-        </Text>
-      ) : null}
     </View>
   );
 };
 
+// ─── Status / Score pills ─────────────────────────────────────────────────────
+
 const StatusPill = ({ online }: { online: boolean }) => (
-  <View
-    className="flex-row items-center rounded-full border px-3 py-2"
-    style={styles.floatingButton}
-  >
+  <View style={styles.statusPill}>
     <View
-      className="mr-2 h-2 w-2 rounded-full"
-      style={{ backgroundColor: online ? Colors.success : Colors.textMuted }}
+      style={[
+        styles.statusDot,
+        { backgroundColor: online ? Colors.success : "rgba(255,255,255,0.4)" },
+      ]}
     />
-    <Text className="text-xs font-bold" style={styles.photoText}>
-      {online ? "Online now" : "Away"}
-    </Text>
+    <Text style={styles.statusPillText}>{online ? "Online now" : "Away"}</Text>
   </View>
 );
 
 const ScorePill = ({ score }: { score: number }) => (
-  <View
-    className="flex-row items-center rounded-full px-3 py-2"
-    style={styles.photoPrimaryPill}
-  >
-    <Ionicons name="sparkles" size={14} color={Colors.textInverse} />
-    <Text className="ml-1.5 text-xs font-bold" style={styles.photoPrimaryText}>
-      {score}% match
-    </Text>
+  <View style={styles.scorePill}>
+    <Ionicons name="sparkles" size={13} color="#fff" />
+    <Text style={styles.scorePillText}>{score}% match</Text>
   </View>
 );
 
-const ProfileInfo = ({
-  icon,
-  label,
-  value,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-}) => (
-  <View className="flex-row items-center">
-    <View
-      className="mr-3 h-9 w-9 items-center justify-center rounded-full"
-      style={styles.photoIconCircle}
-    >
-      <Ionicons name={icon} size={15} color={Colors.textInverse} />
-    </View>
-    <View className="flex-1">
-      <Text className="text-xs font-bold" style={styles.photoMutedText} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text className="mt-0.5 text-sm font-bold" style={styles.photoText} numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
-  </View>
-);
+// ─── Action buttons ───────────────────────────────────────────────────────────
 
-const RoundAction = ({
+const ActionButton = ({
   icon,
-  label,
+  iconColor,
+  bgStyle,
   onPress,
   badge,
-  tone,
   disabled,
   loading,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
+  iconColor: string;
+  bgStyle: object;
   onPress: () => void;
   badge?: number;
-  tone: "muted" | "chat" | "boost";
   disabled?: boolean;
   loading?: boolean;
-}) => {
-  const color =
-    tone === "chat"
-      ? Colors.primaryLight
-      : tone === "boost"
-        ? Colors.warning
-        : Colors.textInverse;
-
-  return (
-    <TouchableOpacity
-      className="min-w-14 items-center justify-center"
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.82}
-      style={disabled ? styles.disabledAction : undefined}
-    >
-      <View
-        className="h-[50px] w-[50px] items-center justify-center rounded-full border"
-        style={styles.actionIconCircle}
-      >
-        {loading ? (
-          <ActivityIndicator color={color} size="small" />
-        ) : (
-          <Ionicons name={icon} size={23} color={color} />
-        )}
-        {badge ? (
-          <View
-            className="absolute -right-1 -top-1 min-w-5 items-center rounded-full px-1"
-            style={styles.badge}
-          >
-            <Text className="text-[10px] font-bold leading-[18px]" style={styles.primaryButtonText}>
-              {badge}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-      <Text className="mt-1 text-[11px] font-bold" style={styles.photoSecondaryText}>{label}</Text>
-    </TouchableOpacity>
-  );
-};
+}) => (
+  <TouchableOpacity
+    style={[styles.actionBtnWrap, disabled && styles.disabledAction]}
+    onPress={onPress}
+    disabled={disabled}
+    activeOpacity={0.8}
+  >
+    <View style={[styles.actionCircle, bgStyle]}>
+      {loading ? (
+        <ActivityIndicator color={iconColor} size="small" />
+      ) : (
+        <Ionicons name={icon} size={22} color={iconColor} />
+      )}
+      {badge ? (
+        <View style={styles.actionBadge}>
+          <Text style={styles.actionBadgeText}>{badge}</Text>
+        </View>
+      ) : null}
+    </View>
+  </TouchableOpacity>
+);
 
 const HeartAction = ({
   onPress,
@@ -946,27 +1051,27 @@ const HeartAction = ({
   loading?: boolean;
 }) => (
   <TouchableOpacity
-    className="min-w-[74px] items-center justify-center"
-    activeOpacity={0.84}
+    style={[styles.heartBtnWrap, disabled && styles.disabledAction]}
     onPress={onPress}
     disabled={disabled}
-    style={disabled ? styles.disabledAction : undefined}
+    activeOpacity={0.84}
   >
     <LinearGradient
-      colors={Colors.gradientCard}
-      start={{ x: 0.08, y: 0.08 }}
-      end={{ x: 1, y: 1 }}
-      className="h-[70px] w-[70px] items-center justify-center rounded-full"
+      colors={[Colors.bgCard, Colors.bgElevated]}
+      start={{ x: 0.1, y: 0.1 }}
+      end={{ x: 0.9, y: 0.9 }}
+      style={styles.heartCircle}
     >
       {loading ? (
-        <ActivityIndicator color={Colors.primary} size="small" />
+        <ActivityIndicator color={Colors.primary} size="large" />
       ) : (
-        <Ionicons name="heart" size={33} color={Colors.primary} />
+        <Ionicons name="heart" size={38} color={Colors.primary} />
       )}
     </LinearGradient>
-    <Text className="mt-1 text-[11px] font-bold" style={styles.photoText}>Like</Text>
   </TouchableOpacity>
 );
+
+// ─── Incoming request row ─────────────────────────────────────────────────────
 
 const IncomingRequestRow = ({
   request,
@@ -985,57 +1090,62 @@ const IncomingRequestRow = ({
     request.sender?.profile?.username ||
     request.sender?.username ||
     request.sender?.email ||
-    "Datebl user";
+    "Someone";
   const avatarUrl = request.sender?.profile?.avatarUrl;
 
   return (
-    <View className="mt-2 flex-row items-center rounded-[18px] p-2" style={styles.incomingRow}>
+    <View style={styles.requestRow}>
+      {/* Avatar */}
       {avatarUrl ? (
-        <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-[15px]" />
+        <View style={styles.requestAvatarRing}>
+          <Image source={{ uri: avatarUrl }} style={styles.requestAvatar} />
+        </View>
       ) : (
-        <View className="h-11 w-11 items-center justify-center rounded-[15px]" style={styles.avatarFallback}>
-          <Text className="text-base font-extrabold" style={styles.photoText}>
-            {name.charAt(0).toUpperCase()}
-          </Text>
+        <View style={[styles.requestAvatarRing, styles.requestAvatarFallback]}>
+          <Text style={styles.requestAvatarInitial}>{name.charAt(0).toUpperCase()}</Text>
         </View>
       )}
-      <View className="ml-3 flex-1">
-        <Text className="text-sm font-extrabold" style={styles.photoText} numberOfLines={1}>
-          {name}
-        </Text>
-        <Text className="mt-0.5 text-xs font-semibold" style={styles.photoMutedText} numberOfLines={1}>
-          {request.message || "Wants to connect"}
+
+      {/* Info */}
+      <View style={styles.requestInfo}>
+        <Text style={styles.requestName} numberOfLines={1}>{name}</Text>
+        <Text style={styles.requestMessage} numberOfLines={1}>
+          {request.message || "Wants to connect with you"}
         </Text>
       </View>
+
+      {/* Reject */}
       <TouchableOpacity
-        className="mr-2 h-9 w-9 items-center justify-center rounded-full"
-        style={styles.photoPrimaryPill}
-        disabled={disabled}
-        onPress={onAccept}
-        activeOpacity={0.84}
-      >
-        {pendingStatus === "ACCEPTED" ? (
-          <ActivityIndicator color={Colors.textInverse} size="small" />
-        ) : (
-          <Ionicons name="checkmark" size={18} color={Colors.textInverse} />
-        )}
-      </TouchableOpacity>
-      <TouchableOpacity
-        className="h-9 w-9 items-center justify-center rounded-full"
-        style={styles.actionIconCircle}
-        disabled={disabled}
+        style={styles.requestRejectBtn}
         onPress={onReject}
+        disabled={disabled}
         activeOpacity={0.84}
       >
         {pendingStatus === "REJECTED" ? (
-          <ActivityIndicator color={Colors.textInverse} size="small" />
+          <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
         ) : (
-          <Ionicons name="close" size={18} color={Colors.textInverse} />
+          <Ionicons name="close" size={16} color="rgba(255,255,255,0.6)" />
+        )}
+      </TouchableOpacity>
+
+      {/* Accept */}
+      <TouchableOpacity
+        style={styles.requestAcceptBtn}
+        onPress={onAccept}
+        disabled={disabled}
+        activeOpacity={0.84}
+      >
+        {pendingStatus === "ACCEPTED" ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <Ionicons name="checkmark" size={16} color="#fff" />
         )}
       </TouchableOpacity>
     </View>
   );
 };
+
+// ─── Requests modal ───────────────────────────────────────────────────────────
 
 const RequestsModal = ({
   visible,
@@ -1047,39 +1157,34 @@ const RequestsModal = ({
 }: {
   visible: boolean;
   requests: MatchRequest[];
-  pendingAction: {
-    requestId: string;
-    status: "ACCEPTED" | "REJECTED";
-  } | null;
+  pendingAction: { requestId: string; status: "ACCEPTED" | "REJECTED" } | null;
   onAccept: (request: MatchRequest) => void;
   onReject: (request: MatchRequest) => void;
   onClose: () => void;
 }) => (
   <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <View className="flex-1 justify-end" style={styles.modalBackdrop}>
-      <View className="max-h-[78%] rounded-t-[30px] px-5 pb-8 pt-4" style={styles.requestSheet}>
-        <View className="mb-4 flex-row items-center justify-between">
-          <Text className="text-xl font-extrabold" style={styles.photoText}>
-            Incoming requests
-          </Text>
-          <TouchableOpacity
-            className="h-10 w-10 items-center justify-center rounded-full"
-            style={styles.actionIconCircle}
-            onPress={onClose}
-            activeOpacity={0.84}
-          >
-            <Ionicons name="close" size={20} color={Colors.textInverse} />
+    <View style={styles.modalBackdrop}>
+      <View style={styles.requestSheet}>
+        {/* Handle */}
+        <View style={styles.sheetHandle} />
+
+        <View style={styles.sheetHeader}>
+          <View>
+            <Text style={styles.sheetTitle}>Incoming requests</Text>
+            <Text style={styles.sheetSubtitle}>{requests.length} people want to connect</Text>
+          </View>
+          <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose} activeOpacity={0.84}>
+            <Ionicons name="close" size={20} color={Colors.textPrimary} />
           </TouchableOpacity>
         </View>
-        <ScrollView showsVerticalScrollIndicator={false}>
+
+        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "72%" }}>
           {requests.map((request) => (
             <IncomingRequestRow
               key={request.id}
               request={request}
               disabled={Boolean(pendingAction)}
-              pendingStatus={
-                pendingAction?.requestId === request.id ? pendingAction.status : null
-              }
+              pendingStatus={pendingAction?.requestId === request.id ? pendingAction.status : null}
               onAccept={() => onAccept(request)}
               onReject={() => onReject(request)}
             />
@@ -1089,6 +1194,8 @@ const RequestsModal = ({
     </View>
   </Modal>
 );
+
+// ─── Filter modal ─────────────────────────────────────────────────────────────
 
 const FilterModal = ({
   visible,
@@ -1119,25 +1226,25 @@ const FilterModal = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end" style={styles.modalBackdrop}>
-        <View className="max-h-[86%] rounded-t-[30px] px-5 pb-8 pt-4" style={styles.sheet}>
-          <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-xl font-extrabold" style={styles.titleText}>
-              Filters
-            </Text>
-            <TouchableOpacity
-              className="h-10 w-10 items-center justify-center rounded-full"
-              style={styles.floatingButtonLight}
-              onPress={onClose}
-              activeOpacity={0.84}
-            >
+      <View style={styles.modalBackdrop}>
+        <View style={styles.filterSheet}>
+          {/* Handle */}
+          <View style={styles.sheetHandle} />
+
+          <View style={styles.sheetHeader}>
+            <View>
+              <Text style={styles.sheetTitle}>Filters</Text>
+              <Text style={styles.sheetSubtitle}>Refine who you see</Text>
+            </View>
+            <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose} activeOpacity={0.84}>
               <Ionicons name="close" size={20} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            <FilterSection title="Age">
-              <View className="flex-row flex-wrap gap-2">
+            {/* Age */}
+            <FilterSection title="Age range" icon="calendar-outline">
+              <View style={styles.chipRow}>
                 {AGE_OPTIONS.map((age) => (
                   <FilterChip
                     key={`min-${age}`}
@@ -1147,7 +1254,7 @@ const FilterModal = ({
                   />
                 ))}
               </View>
-              <View className="mt-2 flex-row flex-wrap gap-2">
+              <View style={[styles.chipRow, { marginTop: 8 }]}>
                 {AGE_OPTIONS.map((age) => (
                   <FilterChip
                     key={`max-${age}`}
@@ -1159,8 +1266,9 @@ const FilterModal = ({
               </View>
             </FilterSection>
 
-            <FilterSection title="Distance">
-              <View className="flex-row flex-wrap gap-2">
+            {/* Distance */}
+            <FilterSection title="Max distance" icon="navigate-outline">
+              <View style={styles.chipRow}>
                 {DISTANCE_OPTIONS.map((distance) => (
                   <FilterChip
                     key={distance}
@@ -1172,8 +1280,9 @@ const FilterModal = ({
               </View>
             </FilterSection>
 
-            <FilterSection title="Gender">
-              <View className="flex-row flex-wrap gap-2">
+            {/* Gender */}
+            <FilterSection title="Show me" icon="people-outline">
+              <View style={styles.chipRow}>
                 {GENDER_OPTIONS.map((option) => (
                   <FilterChip
                     key={option.value}
@@ -1185,24 +1294,34 @@ const FilterModal = ({
               </View>
             </FilterSection>
 
-            <SwitchRow
-              label="Use my preference"
-              value={Boolean(filters.useMyPreference)}
-              onValueChange={(value) => updateFilters({ useMyPreference: value })}
-            />
-            <SwitchRow
-              label="Verified only"
-              value={Boolean(filters.verifiedOnly)}
-              onValueChange={(value) => updateFilters({ verifiedOnly: value })}
-            />
-            <SwitchRow
-              label="Online only"
-              value={Boolean(filters.onlineOnly)}
-              onValueChange={(value) => updateFilters({ onlineOnly: value })}
-            />
+            {/* Toggles */}
+            <View style={styles.togglesCard}>
+              <SwitchRow
+                label="Use my preference"
+                icon="heart-outline"
+                value={Boolean(filters.useMyPreference)}
+                onValueChange={(value) => updateFilters({ useMyPreference: value })}
+                last={false}
+              />
+              <SwitchRow
+                label="Verified profiles only"
+                icon="shield-checkmark-outline"
+                value={Boolean(filters.verifiedOnly)}
+                onValueChange={(value) => updateFilters({ verifiedOnly: value })}
+                last={false}
+              />
+              <SwitchRow
+                label="Online now only"
+                icon="radio-outline"
+                value={Boolean(filters.onlineOnly)}
+                onValueChange={(value) => updateFilters({ onlineOnly: value })}
+                last
+              />
+            </View>
 
-            <FilterSection title="Interests">
-              <View className="flex-row flex-wrap gap-2">
+            {/* Interests */}
+            <FilterSection title="Interests" icon="sparkles-outline">
+              <View style={styles.chipRow}>
                 {interests.map((interest) => (
                   <FilterChip
                     key={interest}
@@ -1215,26 +1334,13 @@ const FilterModal = ({
             </FilterSection>
           </ScrollView>
 
-          <View className="mt-5 flex-row gap-3">
-            <TouchableOpacity
-              className="h-12 flex-1 items-center justify-center rounded-full border"
-              style={styles.resetButton}
-              onPress={onReset}
-              activeOpacity={0.84}
-            >
-              <Text className="text-sm font-bold" style={styles.titleText}>
-                Reset
-              </Text>
+          {/* Actions */}
+          <View style={styles.filterActions}>
+            <TouchableOpacity style={styles.resetBtn} onPress={onReset} activeOpacity={0.84}>
+              <Text style={styles.resetBtnText}>Reset</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              className="h-12 flex-1 items-center justify-center rounded-full"
-              style={styles.primaryButton}
-              onPress={onApply}
-              activeOpacity={0.84}
-            >
-              <Text className="text-sm font-bold" style={styles.primaryButtonText}>
-                Apply
-              </Text>
+            <TouchableOpacity style={styles.applyBtn} onPress={onApply} activeOpacity={0.84}>
+              <Text style={styles.applyBtnText}>Apply filters</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1243,17 +1349,22 @@ const FilterModal = ({
   );
 };
 
+// ─── Filter sub-components ────────────────────────────────────────────────────
+
 const FilterSection = ({
   title,
+  icon,
   children,
 }: {
   title: string;
+  icon: keyof typeof Ionicons.glyphMap;
   children: React.ReactNode;
 }) => (
-  <View className="mb-5">
-    <Text className="mb-2 text-sm font-extrabold" style={styles.titleText}>
-      {title}
-    </Text>
+  <View style={styles.filterSection}>
+    <View style={styles.filterSectionHeader}>
+      <Ionicons name={icon} size={14} color={Colors.textSecondary} />
+      <Text style={styles.filterSectionTitle}>{title.toUpperCase()}</Text>
+    </View>
     {children}
   </View>
 );
@@ -1268,15 +1379,11 @@ const FilterChip = ({
   onPress: () => void;
 }) => (
   <TouchableOpacity
-    className="h-9 items-center justify-center rounded-full border px-3"
-    style={selected ? styles.filterChipSelected : styles.filterChip}
+    style={[styles.filterChip, selected && styles.filterChipSelected]}
     onPress={onPress}
     activeOpacity={0.84}
   >
-    <Text
-      className="text-xs font-bold"
-      style={selected ? styles.primaryButtonText : styles.titleText}
-    >
+    <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
       {label}
     </Text>
   </TouchableOpacity>
@@ -1284,17 +1391,24 @@ const FilterChip = ({
 
 const SwitchRow = ({
   label,
+  icon,
   value,
   onValueChange,
+  last,
 }: {
   label: string;
+  icon: keyof typeof Ionicons.glyphMap;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  last: boolean;
 }) => (
-  <View className="mb-4 flex-row items-center justify-between">
-    <Text className="text-sm font-bold" style={styles.titleText}>
-      {label}
-    </Text>
+  <View style={[styles.switchRow, !last && styles.switchRowBorder]}>
+    <View style={styles.switchRowLeft}>
+      <View style={styles.switchRowIcon}>
+        <Ionicons name={icon} size={16} color={Colors.textSecondary} />
+      </View>
+      <Text style={styles.switchRowLabel}>{label}</Text>
+    </View>
     <Switch
       value={value}
       onValueChange={onValueChange}
@@ -1304,15 +1418,39 @@ const SwitchRow = ({
   </View>
 );
 
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
+
+// ─── Profile image fallback ───────────────────────────────────────────────────
+
+const ProfileImageFallback = ({ initial, small }: { initial: string; small?: boolean }) => (
+  <LinearGradient
+    colors={[Colors.bgElevated, Colors.bgCard]}
+    style={StyleSheet.absoluteFillObject}
+  >
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <Text
+        style={{
+          fontSize: small ? 18 : 72,
+          fontWeight: "800",
+          color: Colors.textSecondary,
+          includeFontPadding: false,
+        }}
+      >
+        {initial}
+      </Text>
+    </View>
+  </LinearGradient>
+);
+
 const getProfileImages = (profile: MatchRecommendation) => {
   const images = [
     ...(profile.profilePhotoUrls ?? []),
     profile.imageUrl,
     profile.avatarUrl ?? undefined,
   ].filter((value): value is string => Boolean(value));
-
-  return Array.from(new Set(images)).slice(0, 3);
+  return Array.from(new Set(images)).slice(0, 4);
 };
+
 const getActiveFilterCount = (filters: MatchRecommendationFilters) => {
   let count = 0;
   if (filters.minAge !== defaultFilters.minAge) count += 1;
@@ -1326,145 +1464,710 @@ const getActiveFilterCount = (filters: MatchRecommendationFilters) => {
   return count;
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  screen: {
-    backgroundColor: Colors.bg,
+  // Layout
+  screen: { flex: 1, backgroundColor: Colors.bg },
+  centerContent: { alignItems: "center", justifyContent: "center" },
+
+  // Gradients
+  topGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 180,
+    zIndex: 1,
   },
-  titleText: {
+  bottomGradient: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 500,
+  },
+
+  // Photo tap zone (full-photo transparent overlay for tap navigation)
+  photoTapZone: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+  },
+
+  // Swipe LIKE / PASS overlays
+  swipeOverlay: {
+    position: "absolute",
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderWidth: 2.5,
+    zIndex: 5,
+    alignSelf: "center",
+  },
+  swipeOverlayLike: {
+    top: 140,
+    borderColor: Colors.success,
+    backgroundColor: `${Colors.success}18`,
+  },
+  swipeOverlayPass: {
+    top: 260,
+    borderColor: Colors.error,
+    backgroundColor: `${Colors.error}18`,
+  },
+  swipeLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  swipeLabelText: {
+    fontSize: 16,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+  },
+
+  // Header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 6,
+    zIndex: 10,
+  },
+  headerLeft: { flexDirection: "row", alignItems: "center" },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  glassIconBtn: {
+    height: 42,
+    width: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  countPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  countPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.92)",
+  },
+  filterBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  filterBadgeText: { fontSize: 10, fontWeight: "800", color: "#fff" },
+
+  // Photo thumbnails
+  thumbRow: { flexDirection: "row", gap: 4, alignItems: "center" },
+  thumb: {
+    width: 32,
+    height: 44,
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.35)",
+  },
+  thumbActive: { borderColor: "#fff", borderWidth: 2 },
+  thumbImage: { width: "100%", height: "100%" },
+
+  // Incoming requests panel
+  requestPanel: {
+    marginHorizontal: 18,
+    marginTop: 12,
+    borderRadius: 22,
+    padding: 12,
+    backgroundColor: "rgba(18,14,10,0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    zIndex: 10,
+  },
+  requestPanelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  requestPanelTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#fff",
+  },
+  requestPanelBadge: {
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  requestPanelBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.75)",
+  },
+
+  // Request row
+  requestRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 16,
+    padding: 8,
+    marginBottom: 6,
+  },
+  requestAvatarRing: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: Colors.primaryLight,
+    overflow: "hidden",
+  },
+  requestAvatar: { width: "100%", height: "100%" },
+  requestAvatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  requestAvatarInitial: { fontSize: 16, fontWeight: "800", color: "#fff" },
+  requestInfo: { flex: 1, marginLeft: 10, marginRight: 8 },
+  requestName: { fontSize: 13, fontWeight: "800", color: "#fff" },
+  requestMessage: {
+    fontSize: 11,
+    fontStyle: "italic",
+    color: "rgba(255,255,255,0.6)",
+    marginTop: 2,
+  },
+  requestRejectBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginRight: 6,
+  },
+  requestAcceptBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.success,
+  },
+
+  // Bottom content
+  bottomContent: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
+
+  // Deck row
+  deckRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  nextAvatarsWrap: { width: 68, height: 44, position: "relative" },
+  nextAvatar: {
+    position: "absolute",
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.8)",
+    overflow: "hidden",
+  },
+
+  // Story progress bar
+  storyBarWrap: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 4,
+    marginRight: 12,
+    alignItems: "center",
+    height: 24,
+  },
+  storyBarSegment: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.32)",
+  },
+  storyBarSegmentActive: {
+    backgroundColor: "#fff",
+  },
+
+  // Pills
+  pillRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 7 },
+  statusPillText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  scorePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
+  },
+  scorePillText: { fontSize: 12, fontWeight: "800", color: "#fff" },
+
+  // Name row
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  nameText: {
+    flex: 1,
+    fontSize: 62,
+    includeFontPadding: false,
+    lineHeight: 70,
+    color: "#fff",
+  },
+  agePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginLeft: 10,
+    gap: 5,
+  },
+  agePillText: { fontSize: 16, fontWeight: "800", color: "#fff" },
+  verifiedDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Location
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 14,
+  },
+  locationText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.72)",
+  },
+  locationDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.4)",
+    marginHorizontal: 2,
+  },
+
+  // Interests
+  interestsScroll: { marginBottom: 14 },
+  interestsContent: { gap: 8 },
+  interestChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  interestChipText: { fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.9)" },
+
+  // View profile button
+  viewProfileBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    marginBottom: 4,
+  },
+  viewProfileText: { fontSize: 14, fontWeight: "800", color: "#fff" },
+
+  // Action bar
+  actionBar: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    height: 100,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    borderRadius: 32,
+    backgroundColor: "rgba(18,14,10,0.86)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    zIndex: 10,
+  },
+  actionBtnWrap: { alignItems: "center", justifyContent: "center", minWidth: 52 },
+  actionCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  actionCircleMuted: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  actionCircleChat: {
+    backgroundColor: `${Colors.primaryLight}22`,
+    borderColor: `${Colors.primaryLight}44`,
+  },
+  actionCircleBoost: {
+    backgroundColor: `${Colors.warning}1A`,
+    borderColor: `${Colors.warning}44`,
+  },
+  actionBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  actionBadgeText: { fontSize: 10, fontWeight: "800", color: "#fff" },
+  heartBtnWrap: { alignItems: "center", justifyContent: "center" },
+  heartCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  disabledAction: { opacity: 0.5 },
+
+  // Match overlay
+  matchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  matchContent: {
+    alignItems: "center",
+    paddingHorizontal: 32,
+    zIndex: 1,
+  },
+  matchHeartWrap: { marginBottom: 4 },
+  matchHeartGradient: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  matchTitle: {
+    fontSize: 52,
+    color: "#fff",
+    marginTop: 20,
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+  matchSubtitle: {
+    fontSize: 16,
+    color: "rgba(255,255,255,0.72)",
+    textAlign: "center",
+    lineHeight: 24,
+    marginTop: 12,
+  },
+  matchButtons: { flexDirection: "row", gap: 12, marginTop: 32 },
+  matchOpenChat: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 54,
+    paddingHorizontal: 22,
+    borderRadius: 27,
+    backgroundColor: Colors.primary,
+  },
+  matchOpenChatText: { fontSize: 16, fontWeight: "800", color: "#fff" },
+  matchKeepGoing: {
+    height: 54,
+    paddingHorizontal: 22,
+    borderRadius: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.32)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  matchKeepGoingText: { fontSize: 16, fontWeight: "700", color: "rgba(255,255,255,0.88)" },
+
+  // Loading state
+  loadingCard: {
+    width: 280,
+    borderRadius: 32,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  loadingGradient: { alignItems: "center", padding: 36 },
+  loadingIconWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 26,
+    backgroundColor: `${Colors.primaryLight}18`,
+    borderWidth: 1,
+    borderColor: `${Colors.primaryLight}40`,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingTitle: {
+    fontSize: 18,
+    fontWeight: "800",
     color: Colors.textPrimary,
+    marginTop: 18,
+    textAlign: "center",
   },
-  mutedText: {
+  loadingSubtitle: {
+    fontSize: 13,
     color: Colors.textSecondary,
+    marginTop: 8,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+
+  // Empty state
+  emptyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 4,
   },
   overlayIconButton: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-  },
-  emptyIconWrap: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
-  },
-  primaryButton: {
-    backgroundColor: Colors.primary,
-  },
-  primaryButtonText: {
-    color: Colors.textInverse,
-  },
-  floatingIconButton: {
-    backgroundColor: Colors.primary + "A6",
-    borderColor: Colors.textInverse + "22",
-  },
-  floatingButton: {
-    backgroundColor: Colors.primary + "B8",
-    borderColor: Colors.textInverse + "22",
-  },
-  progressDots: {
-    maxWidth: 168,
-  },
-  floatingButtonLight: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-  },
-  requestPanel: {
-    backgroundColor: Colors.primary + "D9",
-    borderColor: Colors.textInverse + "22",
-  },
-  actionBar: {
-    backgroundColor: Colors.primary + "EB",
-    borderColor: Colors.textInverse + "22",
-  },
-  actionIconCircle: {
-    backgroundColor: Colors.textInverse + "18",
-    borderColor: Colors.textInverse + "22",
-  },
-  disabledAction: {
-    opacity: 0.58,
-  },
-  badge: {
-    backgroundColor: Colors.primaryLight,
-  },
-  activeDot: {
-    backgroundColor: Colors.textInverse,
-  },
-  inactiveDot: {
-    backgroundColor: Colors.textInverse + "59",
-  },
-  incomingRow: {
-    backgroundColor: Colors.textInverse + "18",
-  },
-  avatarFallback: {
-    backgroundColor: Colors.textInverse + "24",
-  },
-  photoText: {
-    color: Colors.textInverse,
-  },
-  photoSecondaryText: {
-    color: Colors.textInverse + "BF",
-  },
-  photoMutedText: {
-    color: Colors.textInverse + "8C",
-  },
-  photoPrimaryPill: {
-    backgroundColor: Colors.primary,
-  },
-  photoPrimaryText: {
-    color: Colors.textInverse,
-  },
-  photoSoftPill: {
-    backgroundColor: Colors.textInverse + "24",
-  },
-  photoIconCircle: {
-    backgroundColor: Colors.primary + "8F",
-  },
-  profilePhotoThumb: {
-    borderColor: Colors.textInverse + "52",
+    width: 44,
+    height: 44,
     borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.bgCard,
     borderWidth: 1,
-    height: 54,
-    overflow: "hidden",
-    width: 42,
+    borderColor: Colors.border,
   },
-  profilePhotoThumbActive: {
-    borderColor: Colors.textInverse,
-    borderWidth: 2,
+  emptyBody: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 },
+  emptyCard: { width: "100%", borderRadius: 32, overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
+  emptyCardGradient: { alignItems: "center", padding: 36 },
+  emptyIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${Colors.primaryLight}18`,
+    borderWidth: 1.5,
+    borderColor: `${Colors.primaryLight}44`,
+    borderStyle: "dashed",
+    marginBottom: 4,
   },
-  profilePhotoThumbImage: {
-    height: "100%",
-    width: "100%",
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    marginTop: 20,
+    textAlign: "center",
   },
-  nextProfileImage: {
-    borderColor: Colors.textInverse + "CC",
+  emptySubtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 10,
+    textAlign: "center",
+    lineHeight: 22,
   },
-  matchOverlay: {
-    backgroundColor: Colors.primary + "EB",
+  emptyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 24,
+    height: 48,
+    paddingHorizontal: 22,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
   },
+  emptyButtonText: { fontSize: 14, fontWeight: "800", color: "#fff" },
+
+  // Modal
   modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
     backgroundColor: Colors.overlay,
   },
-  sheet: {
+  filterSheet: {
+    maxHeight: "88%",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     backgroundColor: Colors.bgCard,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    paddingTop: 8,
   },
   requestSheet: {
-    backgroundColor: Colors.primary,
-  },
-  resetButton: {
+    maxHeight: "80%",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    paddingTop: 8,
   },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  sheetTitle: { fontSize: 22, fontWeight: "800", color: Colors.textPrimary },
+  sheetSubtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+  sheetCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.bgElevated,
+  },
+
+  // Filter sections
+  filterSection: { marginBottom: 20 },
+  filterSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  filterSectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: Colors.textSecondary,
+    letterSpacing: 1.6,
+  },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   filterChip: {
-    backgroundColor: Colors.bgCard,
+    height: 38,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 19,
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
     borderColor: Colors.border,
   },
   filterChipSelected: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
-  bottomContentShade: {
-    bottom: 0,
-    height: 420,
-    left: 0,
-    position: "absolute",
-    right: 0,
-  },
-});
+  filterChipText: { fontSize: 13, fontWeight: "700", color: Colors.textPrimary },
+  filterChipTextSelected: { color: "#fff" },
 
+  // Toggles card
+  togglesCard: {
+    borderRadius: 20,
+    backgroundColor: Colors.bgElevated,
+    marginBottom: 20,
+    overflow: "hidden",
+  },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  switchRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  switchRowLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  switchRowIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.bgCard,
+  },
+  switchRowLabel: { fontSize: 14, fontWeight: "600", color: Colors.textPrimary },
+
+  // Filter actions
+  filterActions: { flexDirection: "row", gap: 12, marginTop: 16 },
+  resetBtn: {
+    flex: 1,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgCard,
+  },
+  resetBtnText: { fontSize: 14, fontWeight: "700", color: Colors.textPrimary },
+  applyBtn: {
+    flex: 2,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 26,
+    backgroundColor: Colors.primary,
+  },
+  applyBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
+});

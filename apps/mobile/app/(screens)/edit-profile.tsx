@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
   Image,
   Modal,
   Pressable,
@@ -12,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -25,6 +27,8 @@ import { Colors } from "@/constants/colors";
 import { useUpdateProfileMutation } from "@/hooks/queries";
 import { postService } from "@/services/post.service";
 import { useAuthStore } from "@/store/authStore";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const GENDER_OPTIONS = ["MALE", "FEMALE", "NON_BINARY", "OTHER"];
 const INTERESTED_IN_OPTIONS = ["Men", "Women", "Non-binary", "Everyone"];
@@ -106,6 +110,7 @@ const toggleValue = (values: string[], value: string) =>
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { refreshUser, user } = useAuthStore();
   const profile = user?.profile;
   const updateProfileMutation = useUpdateProfileMutation();
@@ -150,6 +155,7 @@ export default function EditProfileScreen() {
     message: string;
     type: "success" | "error" | "info";
   }>({ visible: false, message: "", type: "info" });
+
   const completion = useMemo(
     () =>
       getProfileCompletion({
@@ -371,20 +377,22 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1" style={styles.screen}>
+    <SafeAreaView className="flex-1" style={styles.screen} edges={["top", "left", "right"]}>
       <StatusBar style="dark" backgroundColor={Colors.bg} />
+
+      {/* Header Banner */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.headerIcon}
           onPress={() => router.back()}
           activeOpacity={0.78}
         >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle}>Edit profile</Text>
           <Text style={styles.headerSubtitle}>
-            Photos, story, and preferences
+            Photos, bio, and preferences
           </Text>
         </View>
         <TouchableOpacity
@@ -401,7 +409,7 @@ export default function EditProfileScreen() {
             <ActivityIndicator size="small" color={Colors.textInverse} />
           ) : (
             <>
-              <Ionicons name="checkmark" size={18} color={Colors.textInverse} />
+              <Ionicons name="checkmark" size={16} color={Colors.textInverse} />
               <Text style={styles.saveButtonText}>Save</Text>
             </>
           )}
@@ -413,6 +421,7 @@ export default function EditProfileScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Media banners layout */}
         <View style={styles.mediaPanel}>
           <TouchableOpacity
             style={styles.coverButton}
@@ -453,29 +462,32 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
 
           <View style={styles.profileStrip}>
+            {/* Double Border Avatar ring */}
             <TouchableOpacity
               style={styles.avatarButton}
               onPress={() => openPhotoActions("avatar")}
               activeOpacity={0.88}
             >
-              {avatarUri ? (
-                <Image
-                  source={{ uri: avatarUri }}
-                  style={styles.avatarImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <LinearGradient
-                  colors={Colors.gradientCard}
-                  style={styles.avatarPlaceholder}
-                >
-                  <Text style={styles.initialsText}>
-                    {getInitials(username || user?.username)}
-                  </Text>
-                </LinearGradient>
-              )}
+              <View style={styles.avatarInnerBorder}>
+                {avatarUri ? (
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <LinearGradient
+                    colors={Colors.gradientCard}
+                    style={styles.avatarPlaceholder}
+                  >
+                    <Text style={styles.initialsText}>
+                      {getInitials(username || user?.username)}
+                    </Text>
+                  </LinearGradient>
+                )}
+              </View>
               <View style={styles.avatarEditBadge}>
-                <Ionicons name="camera" size={17} color={Colors.textInverse} />
+                <Ionicons name="camera" size={15} color={Colors.textInverse} />
               </View>
             </TouchableOpacity>
 
@@ -491,6 +503,7 @@ export default function EditProfileScreen() {
           </View>
         </View>
 
+        {/* Quick horizontal stat cards */}
         <View style={styles.quickStats}>
           <QuickStat
             icon="sparkles-outline"
@@ -499,7 +512,7 @@ export default function EditProfileScreen() {
           />
           <QuickStat
             icon="navigate-outline"
-            value={maxDistance}
+            value={`${maxDistance} km`}
             label="Km range"
           />
           <QuickStat
@@ -509,12 +522,14 @@ export default function EditProfileScreen() {
           />
         </View>
 
+        {/* Profile Completion Indicator */}
         <CompletionPanel
           completion={completion}
           isUploading={isUploading}
           uploadProgress={uploadProgress}
         />
 
+        {/* Form fields sections */}
         <SectionTitle title="Profile details" />
         <View style={styles.sectionCard}>
           {profileItems.map((item, index) => (
@@ -539,6 +554,8 @@ export default function EditProfileScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* Premium Custom Animated Bottom Sheet */}
       <EditDrawer
         activeSheet={activeSheet}
         onClose={() => setActiveSheet(null)}
@@ -580,6 +597,8 @@ export default function EditProfileScreen() {
   );
 }
 
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
 const SectionTitle = ({ title }: { title: string }) => (
   <Text style={styles.sectionTitle}>{title}</Text>
 );
@@ -592,7 +611,7 @@ const MediaAction = ({
   label: string;
 }) => (
   <View style={styles.mediaAction}>
-    <Ionicons name={icon} size={18} color={Colors.textInverse} />
+    <Ionicons name={icon} size={16} color={Colors.textInverse} />
     <Text style={styles.mediaActionText}>{label}</Text>
   </View>
 );
@@ -608,7 +627,7 @@ const QuickStat = ({
 }) => (
   <View style={styles.quickStatCard}>
     <View style={styles.quickStatIcon}>
-      <Ionicons name={icon} size={18} color={Colors.primary} />
+      <Ionicons name={icon} size={18} color={Colors.primaryLight} />
     </View>
     <Text style={styles.quickStatValue} numberOfLines={1}>
       {value}
@@ -630,12 +649,12 @@ const CompletionPanel = ({
 }) => (
   <View style={styles.completionCard}>
     <View style={styles.completionIcon}>
-      <Ionicons name="heart" size={25} color={Colors.primaryLight} />
+      <Ionicons name="sparkles" size={24} color={Colors.primaryLight} />
     </View>
     <View style={styles.completionCopy}>
       <View style={styles.completionRow}>
-        <Text style={styles.completionTitle}>{completion}% complete</Text>
-        <Text style={styles.completionHint}>
+        <Text style={styles.completionTitle}>{completion}% completed</Text>
+        <Text style={styles.completionHint} numberOfLines={1}>
           {getCompletionHint(completion)}
         </Text>
       </View>
@@ -666,7 +685,7 @@ const SettingRow = ({
     activeOpacity={0.78}
   >
     <View style={styles.rowIconBox}>
-      <Ionicons name={item.icon} size={20} color={Colors.textPrimary} />
+      <Ionicons name={item.icon} size={18} color={Colors.textSecondary} />
     </View>
     <View style={styles.rowCopy}>
       <Text style={styles.rowTitle}>{item.title}</Text>
@@ -675,10 +694,13 @@ const SettingRow = ({
       </Text>
     </View>
     <View style={styles.rowChevron}>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+      <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
     </View>
   </TouchableOpacity>
 );
+
+// ─── Premium Custom Animated Edit Sheet Drawer ───────────────────────────────
+
 const EditDrawer = ({
   activeSheet,
   onClose,
@@ -713,147 +735,196 @@ const EditDrawer = ({
     setMaxDistance: (value: string) => void;
     setZodiac: (value: string) => void;
   };
-}) => (
-  <Modal
-    visible={!!activeSheet}
-    transparent
-    animationType="slide"
-    onRequestClose={onClose}
-  >
-    <Pressable
-      className="flex-1"
-      style={styles.drawerBackdrop}
-      onPress={onClose}
-    />
-    <View
-      className="absolute bottom-0 left-0 right-0 max-h-[74%] rounded-t-[32px] border pt-3 shadow-2xl"
-      style={styles.drawer}
-    >
-      <View
-        className="mb-3 h-1.5 w-12 self-center rounded-full"
-        style={styles.drawerHandle}
-      />
-      <View className="flex-row items-center justify-between px-5 pb-3">
-        <TouchableOpacity
-          className="h-10 w-10 items-center justify-center rounded-2xl border"
-          style={styles.iconButton}
-          onPress={onClose}
-        >
-          <Ionicons name="close" size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          className="flex-1 text-center text-lg font-extrabold"
-          style={styles.titleText}
-        >
-          {getSheetTitle(activeSheet)}
-        </Text>
-        <TouchableOpacity
-          className="h-10 min-w-[62px] items-center justify-center rounded-2xl px-4"
-          style={styles.primaryButton}
-          onPress={onClose}
-        >
-          <Text
-            className="text-sm font-extrabold"
-            style={styles.primaryButtonText}
-          >
-            Done
-          </Text>
-        </TouchableOpacity>
-      </View>
+}) => {
+  const [mounted, setMounted] = useState(false);
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = useRef(new Animated.Value(SCREEN_HEIGHT * 0.76)).current;
 
-      <ScrollView
-        contentContainerClassName="px-5 pb-9 pt-2"
-        showsVerticalScrollIndicator={false}
-      >
-        {activeSheet === "username" ? (
-          <ProfileInput
-            value={values.username}
-            onChangeText={setters.setUsername}
-            placeholder="username"
-            autoCapitalize="none"
-          />
-        ) : null}
-        {activeSheet === "bio" ? (
-          <ProfileInput
-            value={values.bio}
-            onChangeText={setters.setBio}
-            placeholder="Write something about yourself"
-            multiline
-          />
-        ) : null}
-        {activeSheet === "gender" ? (
-          <ListSelector
-            options={GENDER_OPTIONS}
-            selected={values.gender}
-            onSelect={setters.setGender}
-            formatLabel={formatOption}
-          />
-        ) : null}
-        {activeSheet === "interestedIn" ? (
-          <ChipGrid
-            options={INTERESTED_IN_OPTIONS}
-            selected={values.interestedIn}
-            onToggle={(value) =>
-              setters.setInterestedIn(toggleValue(values.interestedIn, value))
-            }
-          />
-        ) : null}
-        {activeSheet === "interests" ? (
-          <ChipGrid
-            options={INTEREST_OPTIONS}
-            selected={values.interests}
-            onToggle={(value) =>
-              setters.setInterests(toggleValue(values.interests, value))
-            }
-          />
-        ) : null}
-        {activeSheet === "lookingFor" ? (
-          <ListSelector
-            options={LOOKING_FOR_OPTIONS}
-            selected={values.lookingFor[0]}
-            onSelect={(value) => setters.setLookingFor([value])}
-          />
-        ) : null}
-        {activeSheet === "relationship" ? (
-          <ListSelector
-            options={RELATIONSHIP_OPTIONS}
-            selected={values.relationship}
-            onSelect={setters.setRelationship}
-          />
-        ) : null}
-        {activeSheet === "minAge" ? (
-          <ListSelector
-            options={MIN_AGE_OPTIONS}
-            selected={values.minAge}
-            onSelect={setters.setMinAge}
-          />
-        ) : null}
-        {activeSheet === "maxAge" ? (
-          <ListSelector
-            options={MAX_AGE_OPTIONS}
-            selected={values.maxAge}
-            onSelect={setters.setMaxAge}
-          />
-        ) : null}
-        {activeSheet === "maxDistance" ? (
-          <ListSelector
-            options={DISTANCE_OPTIONS}
-            selected={values.maxDistance}
-            onSelect={setters.setMaxDistance}
-            formatLabel={(value) => `${value} km`}
-          />
-        ) : null}
-        {activeSheet === "zodiac" ? (
-          <ChipGrid
-            options={ZODIAC_OPTIONS}
-            selected={[values.zodiac]}
-            onToggle={setters.setZodiac}
-          />
-        ) : null}
-      </ScrollView>
-    </View>
-  </Modal>
-);
+  // Sync animation triggers with activeSheet state changes
+  React.useEffect(() => {
+    if (activeSheet) {
+      setMounted(true);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+        Animated.spring(sheetTranslateY, {
+          toValue: 0,
+          tension: 65,
+          friction: 10,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetTranslateY, {
+          toValue: SCREEN_HEIGHT * 0.76,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setMounted(false);
+      });
+    }
+  }, [activeSheet, backdropOpacity, sheetTranslateY]);
+
+  if (!mounted) return null;
+
+  const handleDismiss = () => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: SCREEN_HEIGHT * 0.76,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setMounted(false);
+      onClose();
+    });
+  };
+
+  return (
+    <Modal visible transparent animationType="none" onRequestClose={handleDismiss}>
+      <View style={StyleSheet.absoluteFillObject}>
+        {/* Animated backdrop */}
+        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: backdropOpacity }]}>
+          <Pressable style={styles.drawerBackdrop} onPress={handleDismiss} />
+        </Animated.View>
+
+        {/* Animated content sheet drawer */}
+        <Animated.View
+          style={[
+            styles.drawer,
+            { transform: [{ translateY: sheetTranslateY }] },
+          ]}
+        >
+          <View style={styles.drawerHandle} />
+          
+          <View style={styles.drawerHeader}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={handleDismiss}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="close" size={20} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            
+            <Text style={styles.drawerTitleText}>
+              {getSheetTitle(activeSheet)}
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.doneButton}
+              onPress={handleDismiss}
+              activeOpacity={0.84}
+            >
+              <Text style={styles.doneButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.drawerScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {activeSheet === "username" && (
+              <ProfileInput
+                value={values.username}
+                onChangeText={setters.setUsername}
+                placeholder="username"
+                autoCapitalize="none"
+              />
+            )}
+            {activeSheet === "bio" && (
+              <ProfileInput
+                value={values.bio}
+                onChangeText={setters.setBio}
+                placeholder="Write something about yourself"
+                multiline
+              />
+            )}
+            {activeSheet === "gender" && (
+              <ListSelector
+                options={GENDER_OPTIONS}
+                selected={values.gender}
+                onSelect={setters.setGender}
+                formatLabel={formatOption}
+              />
+            )}
+            {activeSheet === "interestedIn" && (
+              <ChipGrid
+                options={INTERESTED_IN_OPTIONS}
+                selected={values.interestedIn}
+                onToggle={(val) => setters.setInterestedIn(toggleValue(values.interestedIn, val))}
+              />
+            )}
+            {activeSheet === "interests" && (
+              <ChipGrid
+                options={INTEREST_OPTIONS}
+                selected={values.interests}
+                onToggle={(val) => setters.setInterests(toggleValue(values.interests, val))}
+              />
+            )}
+            {activeSheet === "lookingFor" && (
+              <ListSelector
+                options={LOOKING_FOR_OPTIONS}
+                selected={values.lookingFor[0]}
+                onSelect={(val) => setters.setLookingFor([val])}
+              />
+            )}
+            {activeSheet === "relationship" && (
+              <ListSelector
+                options={RELATIONSHIP_OPTIONS}
+                selected={values.relationship}
+                onSelect={setters.setRelationship}
+              />
+            )}
+            {activeSheet === "minAge" && (
+              <ListSelector
+                options={MIN_AGE_OPTIONS}
+                selected={values.minAge}
+                onSelect={setters.setMinAge}
+              />
+            )}
+            {activeSheet === "maxAge" && (
+              <ListSelector
+                options={MAX_AGE_OPTIONS}
+                selected={values.maxAge}
+                onSelect={setters.setMaxAge}
+              />
+            )}
+            {activeSheet === "maxDistance" && (
+              <ListSelector
+                options={DISTANCE_OPTIONS}
+                selected={values.maxDistance}
+                onSelect={setters.setMaxDistance}
+                formatLabel={(val) => `${val} km`}
+              />
+            )}
+            {activeSheet === "zodiac" && (
+              <ChipGrid
+                options={ZODIAC_OPTIONS}
+                selected={[values.zodiac]}
+                onToggle={setters.setZodiac}
+              />
+            )}
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
 
 const ProfileInput = ({
   value,
@@ -1037,156 +1108,12 @@ const getInitials = (value?: string | null) => {
 
   return initials || fallback;
 };
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: Colors.bg,
-  },
-  avatarButton: {
-    backgroundColor: Colors.bg,
-    borderColor: Colors.bg,
-    borderRadius: 30,
-    borderWidth: 4,
-    height: 104,
-    marginTop: -38,
-    padding: 3,
-    width: 104,
-  },
-  avatarEditBadge: {
-    alignItems: "center",
-    backgroundColor: Colors.primary,
-    borderColor: Colors.bg,
-    borderRadius: 16,
-    borderWidth: 2,
-    bottom: -1,
-    height: 34,
-    justifyContent: "center",
-    position: "absolute",
-    right: -1,
-    width: 34,
-  },
-  avatarImage: {
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 25,
-    height: "100%",
-    width: "100%",
-  },
-  avatarPlaceholder: {
-    alignItems: "center",
-    borderRadius: 25,
-    height: "100%",
-    justifyContent: "center",
-    width: "100%",
-  },
-  chipButton: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 44,
-    paddingHorizontal: 16,
-  },
-  chipButtonActive: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-  },
-  chipGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  chipText: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  chipTextActive: {
-    color: Colors.textPrimary,
-  },
-  completionCard: {
-    alignItems: "center",
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: 24,
-    borderWidth: 1,
-    flexDirection: "row",
-    marginHorizontal: 20,
-    marginTop: 14,
-    padding: 16,
-  },
-  completionCopy: {
-    flex: 1,
-  },
-  completionFill: {
-    backgroundColor: Colors.primary,
-    borderRadius: 999,
-    height: "100%",
-  },
-  completionHint: {
-    color: Colors.textSecondary,
-    flex: 1,
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "right",
-  },
-  completionIcon: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 18,
-    height: 48,
-    justifyContent: "center",
-    marginRight: 14,
-    width: 48,
-  },
-  completionRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "space-between",
-  },
-  completionTitle: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  completionTrack: {
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 999,
-    height: 8,
-    marginTop: 10,
-    overflow: "hidden",
-  },
-  content: {
-    paddingBottom: 36,
-  },
-  coverButton: {
-    backgroundColor: Colors.bgElevated,
-    height: 238,
-    overflow: "hidden",
-  },
-  coverImage: {
-    height: "100%",
-    width: "100%",
-  },
-  coverPlaceholder: {
-    alignItems: "center",
-    height: "100%",
-    justifyContent: "center",
-    width: "100%",
-  },
-  drawer: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-  },
-  drawerBackdrop: {
-    backgroundColor: Colors.overlayDark,
-  },
-  drawerHandle: {
-    backgroundColor: Colors.border,
   },
   header: {
     alignItems: "center",
@@ -1199,32 +1126,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  headerCopy: {
-    flex: 1,
-  },
-  iconButton: {
-    alignItems: "center",
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    height: 42,
-    justifyContent: "center",
-    width: 42,
-  },
-  primaryButton: {
-    alignItems: "center",
-    backgroundColor: Colors.primary,
-    borderRadius: 16,
-    minHeight: 40,
-    justifyContent: "center",
-  },
-  primaryButtonText: {
-    color: Colors.textInverse,
-  },
-  titleText: {
-    color: Colors.textPrimary,
-  },
   headerIcon: {
     alignItems: "center",
     backgroundColor: Colors.bgCard,
@@ -1235,146 +1136,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 44,
   },
-  headerSubtitle: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 2,
+  headerCopy: {
+    flex: 1,
   },
   headerTitle: {
     color: Colors.textPrimary,
     fontSize: 20,
     fontWeight: "800",
   },
-  initialsText: {
-    color: Colors.textPrimary,
-    fontSize: 30,
-    fontWeight: "900",
-  },
-  mediaAction: {
-    alignItems: "center",
-    backgroundColor: Colors.overlayDark,
-    borderColor: Colors.overlayLightSoft,
-    borderRadius: 999,
-    borderWidth: 1,
-    bottom: 18,
-    flexDirection: "row",
-    gap: 8,
-    minHeight: 42,
-    paddingHorizontal: 15,
-    position: "absolute",
-    right: 18,
-  },
-  mediaActionText: {
-    color: Colors.textInverse,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  mediaPanel: {
-    backgroundColor: Colors.bgCard,
-    borderBottomColor: Colors.border,
-    borderBottomWidth: 1,
-    overflow: "hidden",
-  },
-  profileCopy: {
-    flex: 1,
-    paddingBottom: 14,
-    paddingLeft: 14,
-    paddingTop: 12,
-  },
-  profileMeta: {
+  headerSubtitle: {
     color: Colors.textSecondary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  profileName: {
-    color: Colors.textPrimary,
-    fontSize: 24,
-    fontWeight: "900",
-  },
-  profileStrip: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    paddingHorizontal: 20,
-  },
-  profileInput: {
-    backgroundColor: Colors.bgInput,
-    borderColor: Colors.border,
-    color: Colors.textPrimary,
-  },
-  quickStatCard: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: 22,
-    borderWidth: 1,
-    flex: 1,
-    minHeight: 106,
-    padding: 12,
-  },
-  quickStatIcon: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 14,
-    height: 34,
-    justifyContent: "center",
-    marginBottom: 10,
-    width: 34,
-  },
-  quickStatLabel: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontWeight: "700",
     marginTop: 2,
-    textTransform: "uppercase",
-  },
-  quickStats: {
-    flexDirection: "row",
-    gap: 10,
-    marginHorizontal: 20,
-    marginTop: 14,
-  },
-  quickStatValue: {
-    color: Colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  rowBorder: {
-    borderBottomColor: Colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  rowChevron: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 13,
-    height: 30,
-    justifyContent: "center",
-    width: 30,
-  },
-  rowCopy: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  rowIconBox: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 16,
-    height: 42,
-    justifyContent: "center",
-    marginRight: 14,
-    width: 42,
-  },
-  rowTitle: {
-    color: Colors.textPrimary,
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  rowValue: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
-    marginTop: 3,
   },
   saveButton: {
     alignItems: "center",
@@ -1395,13 +1169,215 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
   },
-  sectionCard: {
+  content: {
+    paddingBottom: 36,
+  },
+  mediaPanel: {
+    backgroundColor: Colors.bgCard,
+    borderBottomColor: Colors.border,
+    borderBottomWidth: 1,
+    overflow: "hidden",
+  },
+  coverButton: {
+    backgroundColor: Colors.bgElevated,
+    height: 238,
+    overflow: "hidden",
+  },
+  coverImage: {
+    height: "100%",
+    width: "100%",
+  },
+  coverPlaceholder: {
+    alignItems: "center",
+    height: "100%",
+    justifyContent: "center",
+    width: "100%",
+  },
+  mediaAction: {
+    alignItems: "center",
+    backgroundColor: Colors.overlayDark,
+    borderColor: Colors.overlayLightSoft,
+    borderRadius: 999,
+    borderWidth: 1,
+    bottom: 18,
+    flexDirection: "row",
+    gap: 8,
+    minHeight: 42,
+    paddingHorizontal: 15,
+    position: "absolute",
+    right: 18,
+    zIndex: 10,
+  },
+  mediaActionText: {
+    color: Colors.textInverse,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  profileStrip: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    paddingHorizontal: 20,
+  },
+  avatarButton: {
+    backgroundColor: Colors.bg,
+    borderColor: Colors.primaryLight,
+    borderRadius: 36,
+    borderWidth: 3,
+    height: 110,
+    marginTop: -44,
+    padding: 3,
+    width: 110,
+    position: "relative",
+    zIndex: 10,
+  },
+  avatarInnerBorder: {
+    flex: 1,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: Colors.bg,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    height: "100%",
+    width: "100%",
+  },
+  avatarPlaceholder: {
+    alignItems: "center",
+    height: "100%",
+    justifyContent: "center",
+    width: "100%",
+  },
+  initialsText: {
+    color: Colors.textPrimary,
+    fontSize: 30,
+    fontWeight: "900",
+  },
+  avatarEditBadge: {
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderColor: Colors.bg,
+    borderRadius: 15,
+    borderWidth: 2,
+    bottom: -2,
+    right: -2,
+    height: 30,
+    width: 30,
+    justifyContent: "center",
+    position: "absolute",
+    zIndex: 11,
+  },
+  profileCopy: {
+    flex: 1,
+    paddingBottom: 14,
+    paddingLeft: 14,
+    paddingTop: 12,
+  },
+  profileName: {
+    color: Colors.textPrimary,
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  profileMeta: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  quickStats: {
+    flexDirection: "row",
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 14,
+  },
+  quickStatCard: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 106,
+    padding: 12,
+  },
+  quickStatIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 14,
+    height: 34,
+    justifyContent: "center",
+    marginBottom: 10,
+    width: 34,
+  },
+  quickStatValue: {
+    color: Colors.textPrimary,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  quickStatLabel: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2,
+    textTransform: "uppercase",
+  },
+  completionCard: {
+    alignItems: "center",
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
     borderRadius: 24,
     borderWidth: 1,
+    flexDirection: "row",
     marginHorizontal: 20,
+    marginTop: 14,
+    padding: 16,
+  },
+  completionIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 18,
+    height: 48,
+    justifyContent: "center",
+    marginRight: 14,
+    width: 48,
+  },
+  completionCopy: {
+    flex: 1,
+  },
+  completionRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  completionTitle: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  completionHint: {
+    color: Colors.textSecondary,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  completionTrack: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 999,
+    height: 8,
+    marginTop: 10,
     overflow: "hidden",
+  },
+  completionFill: {
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 999,
+    height: "100%",
+  },
+  uploadText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 8,
   },
   sectionTitle: {
     color: Colors.textSecondary,
@@ -1412,6 +1388,165 @@ const styles = StyleSheet.create({
     marginHorizontal: 22,
     marginTop: 26,
     textTransform: "uppercase",
+  },
+  sectionCard: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginHorizontal: 20,
+    overflow: "hidden",
+  },
+  settingRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    minHeight: 74,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  rowBorder: {
+    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rowIconBox: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 16,
+    height: 42,
+    justifyContent: "center",
+    marginRight: 14,
+    width: 42,
+  },
+  rowCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  rowTitle: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  rowValue: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+  rowChevron: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 13,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  // Animated Sheet drawer styles
+  drawerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.56)",
+  },
+  drawer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: "76%",
+    backgroundColor: Colors.bgCard,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    elevation: 20,
+    paddingTop: 8,
+  },
+  drawerHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: Colors.border,
+    marginBottom: 16,
+  },
+  drawerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgElevated,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  drawerTitleText: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+  },
+  doneButton: {
+    minWidth: 62,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  doneButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Colors.textInverse,
+  },
+  drawerScrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    paddingTop: 4,
+  },
+  profileInput: {
+    backgroundColor: Colors.bgInput,
+    borderColor: Colors.border,
+    color: Colors.textPrimary,
+  },
+  chipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  chipButton: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 16,
+  },
+  chipButtonActive: {
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  chipTextActive: {
+    color: Colors.textPrimary,
+  },
+  selectorList: {
+    gap: 10,
   },
   selectorButton: {
     alignItems: "center",
@@ -1428,9 +1563,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgElevated,
     borderColor: Colors.primary,
   },
-  selectorList: {
-    gap: 10,
-  },
   selectorText: {
     color: Colors.textSecondary,
     fontSize: 15,
@@ -1438,18 +1570,5 @@ const styles = StyleSheet.create({
   },
   selectorTextActive: {
     color: Colors.textPrimary,
-  },
-  settingRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    minHeight: 74,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  uploadText: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 8,
   },
 });
