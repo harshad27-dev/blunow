@@ -5,6 +5,7 @@ const genderSchema = z.enum(["MALE", "FEMALE", "NON_BINARY", "OTHER"]);
 const sexualitySchema = z.enum(["STRAIGHT", "GAY", "LESBIAN", "BI", "ASEXUAL"]);
 
 const updateProfileSchema = z.object({
+  name: z.string().trim().min(2).max(50).optional(),
   username: z
     .string()
     .min(3)
@@ -20,7 +21,6 @@ const updateProfileSchema = z.object({
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   avatarUrl: z.string().url().nullable().optional(),
-  bannerUrl: z.string().url().nullable().optional(),
   profilePhotoUrls: z.array(z.string().url()).min(1).max(3).optional(),
   interests: z.array(z.string()).max(20).optional(),
   interestedIn: z.array(z.string()).max(10).optional(),

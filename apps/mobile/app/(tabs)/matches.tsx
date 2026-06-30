@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Easing,
   Image,
   Modal,
   PanResponder,
@@ -24,6 +25,7 @@ import {
 } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { FontFamily } from "@/constants/typography";
+import { RangeSlider } from "@/components/common/RangeSlider";
 import {
   useMatchRecommendationsQuery,
   useIncomingMatchRequestsQuery,
@@ -54,8 +56,6 @@ const INTEREST_OPTIONS = [
   "Photography",
   "Coffee",
 ];
-const AGE_OPTIONS = [18, 21, 24, 27, 30, 35, 40, 50];
-const DISTANCE_OPTIONS = [10, 25, 50, 100, 250, 500];
 const GENDER_OPTIONS: {
   label: string;
   value: NonNullable<MatchRecommendationFilters["gender"]>;
@@ -106,7 +106,10 @@ export default function MatchesScreen() {
 
   const fade = useRef(new Animated.Value(1)).current;
   const heartScale = useRef(new Animated.Value(1)).current;
-  const pan = useRef(new Animated.ValueXY()).current;
+  const pan = useMemo(() => new Animated.ValueXY(), []);
+  const viewedProfileIds = useRef(new Set<string>()).current;
+  const cancelledRemovalIds = useRef(new Set<string>()).current;
+  const swipeEnabledRef = useRef(true);
 
   // Derived interpolations for swipe tilt + overlays based on vertical swipe (pan.y)
   const cardRotation = pan.x.interpolate({
@@ -130,7 +133,13 @@ export default function MatchesScreen() {
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-        Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx),
+        swipeEnabledRef.current &&
+        Math.abs(dy) > 8 &&
+        Math.abs(dy) > Math.abs(dx),
+      onMoveShouldSetPanResponderCapture: (_, { dx, dy }) =>
+        swipeEnabledRef.current &&
+        Math.abs(dy) > 8 &&
+        Math.abs(dy) > Math.abs(dx),
       onPanResponderMove: Animated.event(
         [null, { dx: pan.x, dy: pan.y }],
         { useNativeDriver: false },
@@ -140,30 +149,40 @@ export default function MatchesScreen() {
           // Down is LIKE (Y goes positive)
           Animated.timing(pan, {
             toValue: { x: 0, y: SCREEN_HEIGHT * 1.5 },
-            duration: 280,
+            duration: 240,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: false,
           }).start(() => {
-            pan.setValue({ x: 0, y: 0 });
             handleLikeRef.current();
           });
         } else if (dy < -SWIPE_THRESHOLD) {
           // Up is PASS (Y goes negative)
           Animated.timing(pan, {
             toValue: { x: 0, y: -SCREEN_HEIGHT * 1.5 },
-            duration: 280,
+            duration: 240,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: false,
           }).start(() => {
-            pan.setValue({ x: 0, y: 0 });
             handleSkipRef.current();
           });
         } else {
           Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
             useNativeDriver: false,
-            friction: 6,
+            friction: 7,
+            tension: 70,
           }).start();
         }
       },
+      onPanResponderTerminate: () => {
+        Animated.spring(pan, {
+          toValue: { x: 0, y: 0 },
+          useNativeDriver: false,
+          friction: 7,
+          tension: 70,
+        }).start();
+      },
+      onPanResponderTerminationRequest: () => false,
     }),
   ).current;
 
@@ -198,8 +217,12 @@ export default function MatchesScreen() {
           : { filterKey, profiles: [] };
       }
 
-      const merged = [...existing];
-      recommendations.forEach((recommendation) => {
+      const merged = existing.filter(
+        (recommendation) => !viewedProfileIds.has(recommendation.id),
+      );
+      recommendations
+        .filter((recommendation) => !viewedProfileIds.has(recommendation.id))
+        .forEach((recommendation) => {
         const index = merged.findIndex((item) => item.id === recommendation.id);
         if (index === -1) merged.push(recommendation);
         else merged[index] = recommendation;
@@ -207,12 +230,19 @@ export default function MatchesScreen() {
 
       return { filterKey, profiles: merged };
     });
-  }, [fetchedProfiles, filterKey]);
+  }, [fetchedProfiles, filterKey, viewedProfileIds]);
 
   const profile = isSingleProfileComplete
     ? undefined
     : (profiles[activeIndex] as MatchRecommendation | undefined);
   const isDeckActionPending = pendingAction !== null;
+  swipeEnabledRef.current = Boolean(
+    profile &&
+      !isDeckActionPending &&
+      !matchBanner &&
+      !isFilterModalVisible &&
+      !isRequestsModalVisible,
+  );
   const nextProfiles = useMemo(
     () =>
       profiles
@@ -261,23 +291,62 @@ export default function MatchesScreen() {
     return () => loop.stop();
   }, [matchBanner, heartScale]);
 
-  const moveToNextCard = () => {
+  const removeProfileFromDeck = (profileId: string) => {
+    viewedProfileIds.add(profileId);
+    pan.setValue({ x: 0, y: 0 });
+    setDeck((current) => ({
+      ...current,
+      profiles: current.profiles.filter((item) => item.id !== profileId),
+    }));
+    setActiveIndex(0);
+  };
+
+  const restoreCurrentCard = () => {
+    Animated.spring(pan, {
+      toValue: { x: 0, y: 0 },
+      useNativeDriver: false,
+      friction: 7,
+      tension: 70,
+    }).start();
+  };
+
+  const restoreProfileToDeck = (profileToRestore: MatchRecommendation) => {
+    cancelledRemovalIds.add(profileToRestore.id);
+    viewedProfileIds.delete(profileToRestore.id);
+    pan.setValue({ x: 0, y: 0 });
+    fade.setValue(1);
+    setDeck((current) => {
+      if (current.profiles.some((item) => item.id === profileToRestore.id)) {
+        return current;
+      }
+      return {
+        ...current,
+        profiles: [profileToRestore, ...current.profiles],
+      };
+    });
+    setActiveIndex(0);
+  };
+
+  const moveToNextCard = (profileId: string) => {
     if (profiles.length === 0) return;
+    cancelledRemovalIds.delete(profileId);
+    viewedProfileIds.add(profileId);
     Animated.timing(fade, {
       toValue: 0,
       duration: 150,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     }).start(() => {
-      if (profiles.length === 1) {
-        setCompletedSingleDeckKey(filterKey);
+      if (cancelledRemovalIds.has(profileId)) {
+        cancelledRemovalIds.delete(profileId);
         fade.setValue(1);
         return;
       }
-
-      setActiveIndex((current) => (current + 1) % profiles.length);
+      removeProfileFromDeck(profileId);
       Animated.timing(fade, {
         toValue: 1,
         duration: 220,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
     });
@@ -308,12 +377,12 @@ export default function MatchesScreen() {
             const chatId = response?.data?.chat?.id;
             if (!chatId) {
               Alert.alert("Chat not ready", "Match created, but chat is not ready yet.");
-              moveToNextCard();
+              moveToNextCard(profile.id);
               return;
             }
             setMatchBanner({ name: `${profile.name} ${profile.lastName}`, chatId, profile });
           },
-          onError: moveToNextCard,
+          onError: restoreCurrentCard,
           onSettled: () => setPendingAction(null),
         },
       );
@@ -322,8 +391,8 @@ export default function MatchesScreen() {
     sendMatchRequest.mutate(
       { receiverId: profile.id },
       {
-        onSuccess: moveToNextCard,
-        onError: moveToNextCard,
+        onSuccess: () => moveToNextCard(profile.id),
+        onError: restoreCurrentCard,
         onSettled: () => setPendingAction(null),
       },
     );
@@ -337,11 +406,15 @@ export default function MatchesScreen() {
       {
         onSuccess: (response: any) => {
           const chatId = response?.data?.chat?.id;
-          if (chatId) { openChat(profile, chatId); return; }
+          if (chatId) {
+            removeProfileFromDeck(profile.id);
+            openChat(profile, chatId);
+            return;
+          }
           Alert.alert("Request sent", "They need to accept your request before chat opens.");
-          moveToNextCard();
+          moveToNextCard(profile.id);
         },
-        onError: moveToNextCard,
+        onError: restoreCurrentCard,
         onSettled: () => setPendingAction(null),
       },
     );
@@ -353,8 +426,8 @@ export default function MatchesScreen() {
     sendMatchRequest.mutate(
       { receiverId: profile.id, message: "I would like to connect with you." },
       {
-        onSuccess: moveToNextCard,
-        onError: moveToNextCard,
+        onSuccess: () => moveToNextCard(profile.id),
+        onError: restoreCurrentCard,
         onSettled: () => setPendingAction(null),
       },
     );
@@ -362,10 +435,12 @@ export default function MatchesScreen() {
 
   const handleSkip = () => {
     if (!profile || isDeckActionPending) return;
+    const passedProfile = profile;
     setPendingAction("pass");
-    dismissRecommendation.mutate(profile.id, {
-      onSuccess: moveToNextCard,
+    moveToNextCard(passedProfile.id);
+    dismissRecommendation.mutate(passedProfile.id, {
       onError: (error: any) => {
+        restoreProfileToDeck(passedProfile);
         Alert.alert("Pass failed", error?.response?.data?.message || "Unable to dismiss this profile.");
       },
       onSettled: () => setPendingAction(null),
@@ -578,24 +653,29 @@ export default function MatchesScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} {...panResponder.panHandlers}>
       <StatusBar style="light" translucent backgroundColor="transparent" />
 
       {/* Full-screen photo or gradient fallback */}
       <Animated.View
+        pointerEvents="box-none"
         style={[
           StyleSheet.absoluteFillObject,
-          {
-            opacity: fade,
+          { opacity: fade },
+        ]}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
             transform: [
               { translateX: pan.x },
               { translateY: pan.y },
               { rotate: cardRotation },
             ],
-          },
-        ]}
-        {...panResponder.panHandlers}
-      >
+            },
+          ]}
+        >
         {profileImage ? (
           <Image
             key={`${profile.id}-${activePhotoIndex}`}
@@ -635,7 +715,6 @@ export default function MatchesScreen() {
             <Text style={[styles.swipeLabelText, { color: Colors.error }]}>PASS</Text>
           </View>
         </Animated.View>
-      </Animated.View>
 
       {/* Top vignette */}
       <LinearGradient
@@ -882,6 +961,8 @@ export default function MatchesScreen() {
           />
         </View>
       </SafeAreaView>
+        </Animated.View>
+      </Animated.View>
 
       {/* ── Modals ── */}
       <FilterModal
@@ -933,6 +1014,7 @@ export default function MatchesScreen() {
                 onPress={() => {
                   const matched = matchBanner;
                   setMatchBanner(null);
+                  removeProfileFromDeck(matched.profile.id);
                   openChat(matched.profile, matched.chatId);
                 }}
                 activeOpacity={0.86}
@@ -942,7 +1024,11 @@ export default function MatchesScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.matchKeepGoing}
-                onPress={() => { setMatchBanner(null); moveToNextCard(); }}
+                onPress={() => {
+                  const matchedProfileId = matchBanner.profile.id;
+                  setMatchBanner(null);
+                  moveToNextCard(matchedProfileId);
+                }}
                 activeOpacity={0.86}
               >
                 <Text style={styles.matchKeepGoingText}>Keep Matching</Text>
@@ -1244,39 +1330,37 @@ const FilterModal = ({
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Age */}
             <FilterSection title="Age range" icon="calendar-outline">
-              <View style={styles.chipRow}>
-                {AGE_OPTIONS.map((age) => (
-                  <FilterChip
-                    key={`min-${age}`}
-                    label={`Min ${age}`}
-                    selected={filters.minAge === age}
-                    onPress={() => updateFilters({ minAge: age })}
-                  />
-                ))}
-              </View>
-              <View style={[styles.chipRow, { marginTop: 8 }]}>
-                {AGE_OPTIONS.map((age) => (
-                  <FilterChip
-                    key={`max-${age}`}
-                    label={`Max ${age}`}
-                    selected={filters.maxAge === age}
-                    onPress={() => updateFilters({ maxAge: age })}
-                  />
-                ))}
+              <View style={{ paddingVertical: 12, paddingHorizontal: 4 }}>
+                <RangeSlider
+                  mode={'range'}
+                  min={18}
+                  max={50}
+                  minValue={filters.minAge ?? 18}
+                  maxValue={filters.maxAge ?? 50}
+                  onValuesChange={(vals) =>
+                    updateFilters({ minAge: vals.min, maxAge: vals.max })
+                  }
+                />
               </View>
             </FilterSection>
 
             {/* Distance */}
             <FilterSection title="Max distance" icon="navigate-outline">
-              <View style={styles.chipRow}>
-                {DISTANCE_OPTIONS.map((distance) => (
-                  <FilterChip
-                    key={distance}
-                    label={`${distance} mi`}
-                    selected={filters.maxDistance === distance}
-                    onPress={() => updateFilters({ maxDistance: distance })}
-                  />
-                ))}
+              <View style={{ paddingVertical: 12, paddingHorizontal: 4 }}>
+                <RangeSlider
+                  mode={'single'}
+                  min={10}
+                  max={500}
+                  minValue={10}
+                  maxValue={filters.maxDistance ?? 50}
+                  step={10}
+                  minDifference={0}
+                  singleThumb="max"
+                  valueFormatter={(_, distance) => `Within ${distance} mi`}
+                  onValuesChange={({ max: distance }) =>
+                    updateFilters({ maxDistance: distance })
+                  }
+                />
               </View>
             </FilterSection>
 

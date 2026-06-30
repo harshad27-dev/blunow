@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -28,7 +28,7 @@ import { useUpdateProfileMutation } from "@/hooks/queries";
 import { postService } from "@/services/post.service";
 import { useAuthStore } from "@/store/authStore";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const GENDER_OPTIONS = ["MALE", "FEMALE", "NON_BINARY", "OTHER"];
 const INTERESTED_IN_OPTIONS = ["Men", "Women", "Non-binary", "Everyone"];
@@ -110,7 +110,6 @@ const toggleValue = (values: string[], value: string) =>
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { refreshUser, user } = useAuthStore();
   const profile = user?.profile;
   const updateProfileMutation = useUpdateProfileMutation();
@@ -119,10 +118,6 @@ export default function EditProfileScreen() {
     profile?.avatarUrl || null,
   );
   const [avatarMimeType, setAvatarMimeType] = useState<string | null>(null);
-  const [coverUri, setCoverUri] = useState<string | null>(
-    profile?.bannerUrl || null,
-  );
-  const [coverMimeType, setCoverMimeType] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [activeSheet, setActiveSheet] = useState<SheetField | null>(null);
@@ -160,13 +155,12 @@ export default function EditProfileScreen() {
     () =>
       getProfileCompletion({
         avatarUrl: avatarUri,
-        bannerUrl: coverUri,
         bio,
         interests,
         location: profile?.location,
         lookingFor,
       }),
-    [avatarUri, bio, coverUri, interests, lookingFor, profile?.location],
+    [avatarUri, bio, interests, lookingFor, profile?.location],
   );
 
   const profileItems: SettingItem[] = useMemo(
@@ -247,36 +241,28 @@ export default function EditProfileScreen() {
     [lookingFor, maxAge, maxDistance, minAge, relationship, zodiac],
   );
 
-  const pickPhoto = async (type: "avatar" | "cover") => {
+  const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,
-      aspect: type === "avatar" ? [1, 1] : [16, 9],
+      aspect: [1, 1],
       quality: 0.82,
     });
 
     if (result.canceled) return;
 
     const asset = result.assets[0];
-    const compressedUri = await compressImage(asset.uri, type);
-    if (type === "avatar") {
-      setAvatarUri(compressedUri);
-      setAvatarMimeType(asset.mimeType || "image/jpeg");
-      return;
-    }
-
-    setCoverUri(compressedUri);
-    setCoverMimeType(asset.mimeType || "image/jpeg");
+    const compressedUri = await compressImage(asset.uri);
+    setAvatarUri(compressedUri);
+    setAvatarMimeType(asset.mimeType || "image/jpeg");
   };
 
-  const openPhotoActions = (type: "avatar" | "cover") => {
-    const hasPhoto = type === "avatar" ? Boolean(avatarUri) : Boolean(coverUri);
-    const label = type === "avatar" ? "avatar" : "banner";
-
-    Alert.alert(`${formatOption(label)} photo`, undefined, [
+  const openPhotoActions = () => {
+    const hasPhoto = Boolean(avatarUri);
+    Alert.alert("Avatar photo", undefined, [
       {
         text: hasPhoto ? "Change photo" : "Add photo",
-        onPress: () => pickPhoto(type),
+        onPress: pickPhoto,
       },
       ...(hasPhoto
         ? [
@@ -284,8 +270,7 @@ export default function EditProfileScreen() {
               text: "Remove photo",
               style: "destructive" as const,
               onPress: () => {
-                if (type === "avatar") setAvatarUri(null);
-                else setCoverUri(null);
+                setAvatarUri(null);
               },
             },
           ]
@@ -301,12 +286,8 @@ export default function EditProfileScreen() {
       let finalAvatarUrl: string | null | undefined = avatarUri
         ? profile?.avatarUrl
         : null;
-      let finalCoverUrl: string | null | undefined = coverUri
-        ? profile?.bannerUrl
-        : null;
       const uploadTasks = [
         avatarUri && avatarUri !== profile?.avatarUrl ? "avatar" : null,
-        coverUri && coverUri !== profile?.bannerUrl ? "cover" : null,
       ].filter(Boolean);
       const progressStep = uploadTasks.length ? 100 / uploadTasks.length : 100;
       let completedUploads = 0;
@@ -315,21 +296,6 @@ export default function EditProfileScreen() {
         finalAvatarUrl = await postService.uploadMedia(
           avatarUri,
           avatarMimeType || "image/jpeg",
-          (progress) =>
-            setUploadProgress(
-              Math.round(
-                completedUploads * progressStep +
-                  progress * (progressStep / 100),
-              ),
-            ),
-        );
-        completedUploads += 1;
-      }
-
-      if (coverUri && coverUri !== profile?.bannerUrl) {
-        finalCoverUrl = await postService.uploadMedia(
-          coverUri,
-          coverMimeType || "image/jpeg",
           (progress) =>
             setUploadProgress(
               Math.round(
@@ -354,7 +320,6 @@ export default function EditProfileScreen() {
         maxDistance: Number(maxDistance),
         zodiac,
         avatarUrl: finalAvatarUrl ?? null,
-        bannerUrl: finalCoverUrl ?? null,
       });
       await refreshUser();
 
@@ -421,51 +386,13 @@ export default function EditProfileScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Media banners layout */}
+        {/* Profile photo */}
         <View style={styles.mediaPanel}>
-          <TouchableOpacity
-            style={styles.coverButton}
-            onPress={() => openPhotoActions("cover")}
-            activeOpacity={0.88}
-          >
-            {coverUri ? (
-              <Image
-                source={{ uri: coverUri }}
-                style={styles.coverImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <LinearGradient
-                colors={Colors.gradientPrimary}
-                style={styles.coverPlaceholder}
-              >
-                <Ionicons
-                  name="image-outline"
-                  size={34}
-                  color={Colors.onImageMuted}
-                />
-              </LinearGradient>
-            )}
-            <LinearGradient
-              colors={[
-                Colors.overlayDarkSoft,
-                Colors.transparent,
-                Colors.overlayDark,
-              ]}
-              locations={[0, 0.48, 1]}
-              style={StyleSheet.absoluteFillObject}
-            />
-            <MediaAction
-              icon={coverUri ? "sync-outline" : "camera-outline"}
-              label={coverUri ? "Change cover" : "Add cover"}
-            />
-          </TouchableOpacity>
-
           <View style={styles.profileStrip}>
             {/* Double Border Avatar ring */}
             <TouchableOpacity
               style={styles.avatarButton}
-              onPress={() => openPhotoActions("avatar")}
+              onPress={openPhotoActions}
               activeOpacity={0.88}
             >
               <View style={styles.avatarInnerBorder}>
@@ -601,19 +528,6 @@ export default function EditProfileScreen() {
 
 const SectionTitle = ({ title }: { title: string }) => (
   <Text style={styles.sectionTitle}>{title}</Text>
-);
-
-const MediaAction = ({
-  icon,
-  label,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-}) => (
-  <View style={styles.mediaAction}>
-    <Ionicons name={icon} size={16} color={Colors.textInverse} />
-    <Text style={styles.mediaActionText}>{label}</Text>
-  </View>
 );
 
 const QuickStat = ({
@@ -1050,10 +964,10 @@ const getSheetTitle = (field: SheetField | null) => {
   }
 };
 
-const compressImage = async (uri: string, type: "avatar" | "cover") => {
+const compressImage = async (uri: string, type: "avatar" | "other" = "avatar") => {
   const result = await ImageManipulator.manipulateAsync(
     uri,
-    [{ resize: type === "avatar" ? { width: 900 } : { width: 1600 } }],
+    [{ resize: { width: 900 } }],
     {
       compress: type === "avatar" ? 0.78 : 0.72,
       format: ImageManipulator.SaveFormat.JPEG,
@@ -1065,14 +979,12 @@ const compressImage = async (uri: string, type: "avatar" | "cover") => {
 
 const getProfileCompletion = ({
   avatarUrl,
-  bannerUrl,
   bio,
   interests,
   location,
   lookingFor,
 }: {
   avatarUrl?: string | null;
-  bannerUrl?: string | null;
   bio?: string | null;
   interests?: string[];
   location?: string | null;
@@ -1080,7 +992,6 @@ const getProfileCompletion = ({
 }) => {
   const checks = [
     avatarUrl,
-    bannerUrl,
     bio?.trim(),
     interests?.length ? "interests" : null,
     location,
@@ -1178,45 +1089,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     overflow: "hidden",
   },
-  coverButton: {
-    backgroundColor: Colors.bgElevated,
-    height: 238,
-    overflow: "hidden",
-  },
-  coverImage: {
-    height: "100%",
-    width: "100%",
-  },
-  coverPlaceholder: {
-    alignItems: "center",
-    height: "100%",
-    justifyContent: "center",
-    width: "100%",
-  },
-  mediaAction: {
-    alignItems: "center",
-    backgroundColor: Colors.overlayDark,
-    borderColor: Colors.overlayLightSoft,
-    borderRadius: 999,
-    borderWidth: 1,
-    bottom: 18,
-    flexDirection: "row",
-    gap: 8,
-    minHeight: 42,
-    paddingHorizontal: 15,
-    position: "absolute",
-    right: 18,
-    zIndex: 10,
-  },
-  mediaActionText: {
-    color: Colors.textInverse,
-    fontSize: 13,
-    fontWeight: "800",
-  },
   profileStrip: {
     alignItems: "flex-start",
     flexDirection: "row",
     paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   avatarButton: {
     backgroundColor: Colors.bg,
@@ -1224,7 +1101,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     borderWidth: 3,
     height: 110,
-    marginTop: -44,
+    marginTop: 0,
     padding: 3,
     width: 110,
     position: "relative",

@@ -8,8 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { Colors } from "@/constants/colors";
 
 export type ProfileTab = "posts" | "stories" | "saved" | "matches";
@@ -23,7 +22,6 @@ export type JourneyMetric = {
 };
 
 type ProfileHeroProps = {
-  coverUrl: string;
   avatarUrl?: string | null;
   displayName: string;
   handle: string;
@@ -34,8 +32,13 @@ type ProfileHeroProps = {
   sexuality: string;
   interests: string[];
   onEditProfile: () => void;
-  onEditCover: () => void;
   onSettings: () => void;
+  followersCount: number;
+  followingCount: number;
+  requestsCount: number;
+  onFollowersPress: () => void;
+  onFollowingPress: () => void;
+  onRequestsPress: () => void;
 };
 
 const interestIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -65,7 +68,6 @@ const interestColors = [
 // ─── Profile Hero ────────────────────────────────────────────────────────────
 
 export const ProfileHero = ({
-  coverUrl,
   avatarUrl,
   displayName,
   handle,
@@ -76,78 +78,47 @@ export const ProfileHero = ({
   sexuality,
   interests,
   onEditProfile,
-  onEditCover,
   onSettings,
+  followersCount,
+  followingCount,
+  requestsCount,
+  onFollowersPress,
+  onFollowingPress,
+  onRequestsPress,
 }: ProfileHeroProps) => {
-  const insets = useSafeAreaInsets();
-
   return (
-    <View className="pb-2">
-      {/* ── Cover ── */}
-      <View className="h-[340px] overflow-hidden bg-bg-elevated">
-        <Image
-          source={{ uri: coverUrl }}
-          className="h-full w-full"
-          resizeMode="cover"
-        />
-        {/* Top vignette */}
-        <LinearGradient
-          colors={["rgba(0,0,0,0.28)", "transparent"]}
-          locations={[0, 0.38]}
-          className="absolute inset-x-0 top-0 h-36"
-        />
-        {/* Bottom fade to bg */}
-        <LinearGradient
-          colors={["transparent", "rgba(28,28,28,0.12)", Colors.bg]}
-          locations={[0.3, 0.68, 1]}
-          className="absolute inset-x-0 bottom-0 h-48"
-        />
-
-        {/* Top controls */}
-        <View
-          className="absolute flex-row items-center gap-2.5"
-          style={{ top: Math.max(insets.top + 10, 14), right: 18 }}
-        >
-          <GlassIconButton icon="settings-outline" onPress={onSettings} />
-        </View>
-
-        {/* Cover edit button — bottom-right of cover */}
+    <View className="px-5 pt-4 pb-2">
+      {/* Top Header bar */}
+      <View className="flex-row items-center justify-between py-2 mb-4">
+        <Text className="text-xl font-extrabold" style={{ color: Colors.textPrimary }}>
+          Profile
+        </Text>
         <TouchableOpacity
-          className="absolute flex-row items-center gap-1.5 rounded-full px-4 py-2"
+          className="h-10 w-10 items-center justify-center rounded-xl border"
           style={{
-            bottom: 72,
-            right: 18,
-            backgroundColor: "rgba(28,28,28,0.62)",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.18)",
+            borderColor: Colors.border,
+            backgroundColor: Colors.bgCard,
           }}
-          onPress={onEditCover}
-          activeOpacity={0.82}
+          onPress={onSettings}
+          activeOpacity={0.8}
         >
-          <Ionicons name="camera-outline" size={16} color="#fff" />
-          <Text
-            className="text-xs font-semibold"
-            style={{ color: "rgba(255,255,255,0.92)" }}
-          >
-            Change cover
-          </Text>
+          <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
-      {/* ── Content lifted above cover ── */}
-      <View className="-mt-[100px] px-5">
-        {/* Avatar row */}
-        <View className="flex-row items-end justify-between">
-          {/* Avatar with ring */}
+      {/* Row with Avatar on the Left, and Stats on the Right */}
+      <View className="flex-row items-center justify-between">
+        {/* Avatar with circle ring and online status indicator */}
+        <View className="relative">
           <View
-            className="rounded-[42px] p-[3px]"
+            className="rounded-full p-[2.5px]"
             style={{ backgroundColor: Colors.primaryLight }}
           >
             <View
-              className="rounded-[40px] p-[2px]"
+              className="rounded-full p-[2px]"
               style={{ backgroundColor: Colors.bg }}
             >
-              <View className="h-[134px] w-[134px] overflow-hidden rounded-[38px] bg-bg-elevated">
+              <View className="h-[86px] w-[86px] overflow-hidden rounded-full bg-bg-elevated">
                 {avatarUrl ? (
                   <Image
                     source={{ uri: avatarUrl }}
@@ -158,156 +129,169 @@ export const ProfileHero = ({
                   <View className="h-full w-full items-center justify-center">
                     <Ionicons
                       name="person"
-                      size={52}
+                      size={40}
                       color={Colors.textSecondary}
                     />
                   </View>
                 )}
               </View>
             </View>
-            {/* Edit badge */}
-            <TouchableOpacity
-              className="absolute -bottom-1.5 -right-1.5 h-10 w-10 items-center justify-center rounded-[14px] border-[2px]"
-              style={{
-                backgroundColor: Colors.primary,
-                borderColor: Colors.bg,
-              }}
-              onPress={onEditProfile}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="pencil" size={17} color={Colors.white} />
-            </TouchableOpacity>
           </View>
+          {/* Active Status Ring Badge */}
+          <View
+            className="absolute bottom-0 right-0 h-4.5 w-4.5 rounded-full border-[2.5px] bg-success"
+            style={{ borderColor: Colors.bg }}
+          />
+        </View>
 
-          {/* Edit Profile button */}
+        {/* Stats section (Followers, Following, Requests) */}
+        <View className="flex-1 flex-row items-center justify-around ml-6 bg-bg-card py-3.5 px-2 rounded-2xl border border-border/60">
           <TouchableOpacity
-            className="mb-3 flex-row items-center gap-2 rounded-2xl px-5 py-3.5"
-            style={{ backgroundColor: Colors.primary }}
-            onPress={onEditProfile}
-            activeOpacity={0.86}
+            className="items-center flex-1"
+            onPress={onFollowersPress}
+            activeOpacity={0.8}
           >
-            <Ionicons name="create-outline" size={18} color={Colors.white} />
             <Text
-              className="text-sm font-bold"
-              style={{ color: Colors.white }}
+              className="text-[17px] font-extrabold"
+              style={{ color: Colors.textPrimary }}
             >
-              Edit Profile
+              {followersCount}
+            </Text>
+            <Text
+              className="text-[10px] font-bold uppercase tracking-wider text-text-muted mt-0.5"
+            >
+              Followers
+            </Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View className="h-6 w-[1px] bg-border" />
+
+          <TouchableOpacity
+            className="items-center flex-1"
+            onPress={onFollowingPress}
+            activeOpacity={0.8}
+          >
+            <Text
+              className="text-[17px] font-extrabold"
+              style={{ color: Colors.textPrimary }}
+            >
+              {followingCount}
+            </Text>
+            <Text
+              className="text-[10px] font-bold uppercase tracking-wider text-text-muted mt-0.5"
+            >
+              Following
+            </Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View className="h-6 w-[1px] bg-border" />
+
+          <TouchableOpacity
+            className="items-center flex-1"
+            onPress={onRequestsPress}
+            activeOpacity={0.8}
+          >
+            <Text
+              className="text-[17px] font-extrabold"
+              style={{ color: Colors.textPrimary }}
+            >
+              {requestsCount}
+            </Text>
+            <Text
+              className="text-[10px] font-bold uppercase tracking-wider text-text-muted mt-0.5"
+            >
+              Requests
             </Text>
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* ── Identity ── */}
-        <View className="mt-5">
-          {/* Name + verified */}
-          <View className="flex-row items-center gap-2.5">
-            <Text
-              className="flex-shrink text-[34px] font-bold leading-[40px]"
-              style={{ color: Colors.textPrimary }}
-              numberOfLines={1}
-            >
-              {displayName}
-            </Text>
-            <View
-              className="h-6 w-6 items-center justify-center rounded-full"
-              style={{ backgroundColor: Colors.primaryLight }}
-            >
-              <Ionicons name="checkmark" size={14} color={Colors.white} />
-            </View>
+      {/* ── Identity (Display Name, handle) ── */}
+      <View className="mt-4">
+        {/* Name + verification */}
+        <View className="flex-row items-center gap-1.5">
+          <Text
+            className="flex-shrink text-xl font-bold"
+            style={{ color: Colors.textPrimary }}
+            numberOfLines={1}
+          >
+            {displayName}
+          </Text>
+          <View
+            className="h-5 w-5 items-center justify-center rounded-full"
+            style={{ backgroundColor: Colors.primaryLight }}
+          >
+            <Ionicons name="checkmark" size={11} color={Colors.white} />
           </View>
+        </View>
 
-          {/* Handle */}
-          <View className="mt-1 flex-row items-center gap-2">
-            <Text
-              className="text-sm font-medium"
-              style={{ color: Colors.textSecondary }}
-            >
-              @{handle}
-            </Text>
-            <View
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: Colors.success }}
-            />
-            <Text
-              className="text-xs font-medium"
-              style={{ color: Colors.success }}
-            >
-              Online
-            </Text>
-          </View>
+        {/* Handle */}
+        <Text
+          className="text-sm font-medium mt-0.5"
+          style={{ color: Colors.textSecondary }}
+        >
+          @{handle}
+        </Text>
 
-          {/* Meta pills */}
+        {/* Bio */}
+        <Text
+          className="mt-3 text-sm leading-5"
+          style={{ color: Colors.textPrimary }}
+        >
+          {bio}
+        </Text>
+
+        {/* Meta pills scroll */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="mt-4"
+          contentContainerClassName="gap-2 pr-2"
+        >
+          <MetaPill icon="calendar-outline" label={ageLabel} />
+          <MetaPill icon="location-outline" label={city} />
+          <MetaPill icon="male-female-outline" label={gender} />
+          <MetaPill icon="heart-outline" label={sexuality} />
+        </ScrollView>
+
+        {/* Interests scroll */}
+        {interests.length > 0 && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             className="mt-4"
-            contentContainerClassName="gap-2 pr-2"
+            contentContainerClassName="gap-2 pr-4"
           >
-            <MetaPill icon="calendar-outline" label={ageLabel} />
-            <MetaPill icon="location-outline" label={city} />
-            <MetaPill icon="male-female-outline" label={gender} />
-            <MetaPill icon="heart-outline" label={sexuality} />
-          </ScrollView>
-
-          {/* Bio */}
-          <Text
-            className="mt-4 text-[15px] leading-[24px]"
-            style={{ color: Colors.textPrimary }}
-            numberOfLines={4}
-          >
-            {bio}
-          </Text>
-        </View>
-
-        {/* ── Interests ── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mt-5"
-          contentContainerClassName="gap-2.5 pr-4"
-        >
-          {interests.length ? (
-            interests.map((interest, index) => (
+            {interests.map((interest, index) => (
               <InterestChip
                 key={`${interest}-${index}`}
                 label={interest}
                 color={interestColors[index % interestColors.length]}
               />
-            ))
-          ) : (
-            <TouchableOpacity
-              className="flex-row items-center gap-2 rounded-2xl border px-4 py-3"
-              style={{
-                borderColor: Colors.border,
-                backgroundColor: Colors.bgCard,
-              }}
-              onPress={onEditProfile}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="sparkles-outline"
-                size={18}
-                color={Colors.textSecondary}
-              />
-              <Text
-                className="text-sm font-semibold"
-                style={{ color: Colors.textSecondary }}
-              >
-                Add interests
-              </Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            className="h-11 w-11 items-center justify-center rounded-2xl border"
-            style={{
-              borderColor: Colors.border,
-              backgroundColor: Colors.bgCard,
-            }}
-            onPress={onEditProfile}
-            activeOpacity={0.85}
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Full Width Edit Profile Button */}
+        <TouchableOpacity
+          className="mt-5 flex-row items-center justify-center gap-2 rounded-2xl py-3.5 border"
+          style={{
+            borderColor: Colors.border,
+            backgroundColor: Colors.bgCard,
+          }}
+          onPress={onEditProfile}
+          activeOpacity={0.86}
+        >
+          <Ionicons name="create-outline" size={18} color={Colors.textPrimary} />
+          <Text
+            className="text-sm font-bold"
+            style={{ color: Colors.textPrimary }}
           >
-            <Ionicons name="add" size={22} color={Colors.textPrimary} />
-          </TouchableOpacity>
-        </ScrollView>
+            Edit Profile
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -325,66 +309,105 @@ export const ProfileJourneyCard = ({
   updatedAt?: string | null;
 }) => (
   <View
-    className="mx-5 mt-7 overflow-hidden rounded-[28px]"
+    className="mx-5 mt-7 rounded-[28px] border p-4"
     style={{
       backgroundColor: Colors.bgCard,
-      borderWidth: 1,
       borderColor: Colors.border,
+      shadowColor: Colors.black,
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.07,
+      shadowRadius: 24,
+      elevation: 4,
     }}
   >
-    {/* Header */}
-    <View className="flex-row items-center justify-between px-5 pb-4 pt-5">
-      <View>
-        <Text
-          className="text-[11px] font-bold uppercase tracking-widest"
-          style={{ color: Colors.textMuted, letterSpacing: 1.8 }}
-        >
-          Dating Journey
-        </Text>
-        <Text
-          className="mt-0.5 text-xl font-bold"
-          style={{ color: Colors.textPrimary }}
-        >
-          Your Stats
-        </Text>
-      </View>
-      {/* Pulse indicator */}
-      <View className="flex-row items-center gap-2">
-        {!loading && (
-          <View
-            className="h-2 w-2 rounded-full"
-            style={{ backgroundColor: Colors.success }}
-          />
-        )}
+    <View className="mb-4 flex-row items-center justify-between">
+      <View className="mr-2 flex-1 flex-row items-center gap-3">
         <View
-          className="rounded-full px-3 py-1"
-          style={{ backgroundColor: Colors.bgElevated }}
+          className="h-11 w-11 items-center justify-center rounded-2xl"
+          style={{ backgroundColor: `${Colors.primaryLight}18` }}
         >
-          <Text
-            className="text-xs font-semibold"
-            style={{ color: Colors.textSecondary }}
-          >
-            {loading ? "Syncing…" : getSyncLabel(updatedAt)}
-          </Text>
+          <Ionicons name="pulse-outline" size={21} color={Colors.primaryLight} />
         </View>
+        <View className="flex-1">
+        <Text
+          className="text-[10px] font-extrabold uppercase"
+          style={{ color: Colors.primaryLight, letterSpacing: 1.5 }}
+        >
+          Your journey
+        </Text>
+        <Text
+          className="mt-0.5 text-base font-extrabold"
+          style={{ color: Colors.textPrimary }}
+          numberOfLines={1}
+        >
+          Activity at a glance
+        </Text>
+        </View>
+      </View>
+      <View
+        className="flex-row items-center gap-1.5 rounded-full border px-2.5 py-1.5"
+        style={{ borderColor: Colors.border, backgroundColor: Colors.bgElevated }}
+      >
+        {!loading ? <View className="h-1.5 w-1.5 rounded-full bg-success" /> : null}
+        <Text className="text-[9px] font-bold" style={{ color: Colors.textSecondary }}>
+          {loading ? "Syncing…" : getSyncLabel(updatedAt)}
+        </Text>
       </View>
     </View>
 
-    {/* Divider */}
-    <View
-      className="mx-5"
-      style={{ height: 1, backgroundColor: Colors.border }}
-    />
-
-    {/* Stats */}
+    {/* Grid of Stat Items */}
     {loading ? (
-      <View className="items-center py-10">
+      <View
+        className="items-center rounded-[22px] border py-10"
+        style={{ borderColor: Colors.border, backgroundColor: Colors.bgElevated }}
+      >
         <ActivityIndicator color={Colors.primary} size="small" />
+        <Text className="mt-3 text-xs font-semibold" style={{ color: Colors.textSecondary }}>
+          Updating your activity
+        </Text>
       </View>
     ) : (
-      <View className="flex-row flex-wrap gap-3 p-4">
+      <View className="flex-row flex-wrap gap-3">
         {metrics.map((metric) => (
-          <JourneyStat key={metric.label} {...metric} />
+            <View
+              key={metric.label}
+              className="min-h-[132px] flex-grow overflow-hidden rounded-[22px] border p-4"
+              style={{
+                flexBasis: "46%",
+                borderColor: Colors.border,
+                backgroundColor: Colors.bgElevated,
+              }}
+            >
+              <View
+                className="absolute left-0 top-0 h-1 w-full"
+                style={{ backgroundColor: metric.color }}
+              />
+              <View className="flex-row items-start justify-between">
+                <View
+                  className="h-10 w-10 items-center justify-center rounded-2xl"
+                  style={{ backgroundColor: `${metric.color}18` }}
+                >
+                  <Ionicons name={metric.icon} size={19} color={metric.color} />
+                </View>
+                <Text className="text-2xl font-black" style={{ color: Colors.textPrimary }}>
+                  {metric.value}
+                </Text>
+              </View>
+              <Text
+                className="mt-4 text-[11px] font-extrabold uppercase"
+                style={{ color: Colors.textPrimary, letterSpacing: 0.7 }}
+                numberOfLines={1}
+              >
+                {metric.label}
+              </Text>
+              <Text
+                className="mt-1 text-[11px] font-medium"
+                style={{ color: Colors.textMuted }}
+                numberOfLines={1}
+              >
+                {metric.caption}
+              </Text>
+            </View>
         ))}
       </View>
     )}
@@ -404,56 +427,34 @@ export const ProfileCompletionCard = ({
 
   return (
     <TouchableOpacity
-      className="mx-5 mt-4 overflow-hidden rounded-[28px]"
+      className="mx-5 mt-5 overflow-hidden rounded-[24px]"
       style={{
         borderWidth: 1,
         borderColor: Colors.border,
+        backgroundColor: Colors.bgCard,
       }}
       onPress={onPress}
       activeOpacity={0.88}
     >
-      <LinearGradient
-        colors={[Colors.bgCard, Colors.bgElevated]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="p-5"
-      >
-        <View className="flex-row items-center">
-          {/* Icon */}
-          <View
-            className="mr-4 h-14 w-14 items-center justify-center rounded-2xl"
-            style={{ backgroundColor: `${Colors.primaryLight}22` }}
-          >
-            <Ionicons name="sparkles" size={28} color={Colors.primaryLight} />
-          </View>
-
-          {/* Text + bar */}
-          <View className="flex-1">
-            <View className="flex-row items-center justify-between">
-              <Text
-                className="text-base font-bold"
-                style={{ color: Colors.textPrimary }}
-              >
-                Increase Your Chances
-              </Text>
-              <Text
-                className="text-base font-bold"
-                style={{ color: Colors.primaryLight }}
-              >
-                {pct}%
-              </Text>
-            </View>
-            <Text
-              className="mt-0.5 text-xs leading-4"
-              style={{ color: Colors.textSecondary }}
-            >
-              Complete your profile to get better matches.
+      <View className="p-5 flex-row items-center justify-between">
+        {/* Left Content */}
+        <View className="flex-1 mr-4">
+          <View className="flex-row items-center gap-1.5">
+            <Ionicons name="sparkles" size={16} color={Colors.primaryLight} />
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+              Profile Setup
             </Text>
-            {/* Progress bar */}
-            <View
-              className="mt-3 h-1.5 w-full overflow-hidden rounded-full"
-              style={{ backgroundColor: Colors.bgElevated }}
-            >
+          </View>
+          <Text className="mt-1 text-[15px] font-bold text-text-primary">
+            Complete Your Profile
+          </Text>
+          <Text className="text-xs text-text-secondary mt-0.5 leading-4">
+            Add details to boost compatibility matching by up to 80%.
+          </Text>
+
+          {/* Progress bar */}
+          <View className="mt-4 flex-row items-center gap-3">
+            <View className="flex-1 h-1.5 rounded-full bg-bg-elevated overflow-hidden">
               <View
                 className="h-full rounded-full"
                 style={{
@@ -462,18 +463,21 @@ export const ProfileCompletionCard = ({
                 }}
               />
             </View>
-          </View>
-
-          {/* Arrow */}
-          <View className="ml-4">
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={Colors.textMuted}
-            />
+            <Text className="text-xs font-bold text-text-primary">
+              {pct}%
+            </Text>
           </View>
         </View>
-      </LinearGradient>
+
+        {/* Right Arrow wrapper */}
+        <View className="h-10 w-10 items-center justify-center rounded-xl bg-bg-elevated border border-border/20">
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={Colors.textSecondary}
+          />
+        </View>
+      </View>
     </TouchableOpacity>
   );
 };
@@ -504,11 +508,11 @@ export const ProfileAccountActions = ({
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-const TABS: { id: ProfileTab; label: string }[] = [
-  { id: "posts", label: "Posts" },
-  { id: "stories", label: "Stories" },
-  { id: "saved", label: "Saved" },
-  { id: "matches", label: "Matches" },
+const TABS: { id: ProfileTab; label: string; icon: keyof typeof Ionicons.glyphMap; activeIcon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: "posts", label: "Posts", icon: "grid-outline", activeIcon: "grid" },
+  { id: "stories", label: "Stories", icon: "play-circle-outline", activeIcon: "play-circle" },
+  { id: "saved", label: "Saved", icon: "bookmark-outline", activeIcon: "bookmark" },
+  { id: "matches", label: "Matches", icon: "heart-outline", activeIcon: "heart" },
 ];
 
 export const ProfileTabs = ({
@@ -520,46 +524,40 @@ export const ProfileTabs = ({
   onTabChange: (tab: ProfileTab) => void;
   counts?: Partial<Record<ProfileTab, number>>;
 }) => (
-  <View className="mt-6">
-    {/* Pill segmented control */}
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      className="px-5"
-      contentContainerClassName="gap-2 pr-2"
-    >
+  <View className="mt-6 border-b border-border bg-bg-card">
+    <View className="flex-row px-2">
       {TABS.map((tab) => {
         const active = activeTab === tab.id;
-        const count = counts?.[tab.id];
+        const count = counts?.[tab.id] ?? 0;
         return (
           <TouchableOpacity
             key={tab.id}
             onPress={() => onTabChange(tab.id)}
-            activeOpacity={0.82}
-            className="flex-row items-center gap-2 rounded-full px-4 py-2.5"
-            style={{
-              backgroundColor: active ? Colors.primary : Colors.bgCard,
-              borderWidth: 1,
-              borderColor: active ? Colors.primary : Colors.border,
-            }}
+            activeOpacity={0.8}
+            className="flex-1 items-center py-3.5 relative flex-row justify-center gap-1.5"
           >
+            <Ionicons
+              name={active ? tab.activeIcon : tab.icon}
+              size={17}
+              color={active ? Colors.primary : Colors.textSecondary}
+            />
             <Text
-              className="text-sm font-bold"
-              style={{ color: active ? Colors.white : Colors.textSecondary }}
+              className="text-xs font-bold"
+              style={{ color: active ? Colors.primary : Colors.textSecondary }}
             >
               {tab.label}
             </Text>
-            {count !== undefined ? (
+            {count > 0 && (
               <View
-                className="min-w-[20px] items-center rounded-full px-1.5 py-0.5"
+                className="min-w-[18px] items-center justify-center rounded-full px-1 py-0.5"
                 style={{
                   backgroundColor: active
-                    ? "rgba(255,255,255,0.22)"
+                    ? Colors.primary
                     : Colors.bgElevated,
                 }}
               >
                 <Text
-                  className="text-[10px] font-bold"
+                  className="text-[9px] font-bold"
                   style={{
                     color: active ? Colors.white : Colors.textSecondary,
                   }}
@@ -567,17 +565,19 @@ export const ProfileTabs = ({
                   {count}
                 </Text>
               </View>
-            ) : null}
+            )}
+
+            {/* Indicator bottom line */}
+            {active && (
+              <View
+                className="absolute bottom-0 left-4 right-4 h-[3px] rounded-t-full"
+                style={{ backgroundColor: Colors.primary }}
+              />
+            )}
           </TouchableOpacity>
         );
       })}
-    </ScrollView>
-
-    {/* Thin separator */}
-    <View
-      className="mt-4 mx-5"
-      style={{ height: 1, backgroundColor: Colors.border }}
-    />
+    </View>
   </View>
 );
 
@@ -592,26 +592,26 @@ export const ProfileEmptyState = ({
   title: string;
   subtitle: string;
 }) => (
-  <View className="items-center px-6 py-14">
+  <View className="items-center px-8 py-16">
     <View
-      className="mb-5 h-20 w-20 items-center justify-center rounded-3xl"
+      className="mb-4 h-16 w-16 items-center justify-center rounded-2xl"
       style={{
-        backgroundColor: `${Colors.primaryLight}14`,
+        backgroundColor: `${Colors.primaryLight}10`,
         borderWidth: 1.5,
-        borderColor: `${Colors.primaryLight}40`,
+        borderColor: `${Colors.primaryLight}30`,
         borderStyle: "dashed",
       }}
     >
-      <Ionicons name={icon} size={36} color={Colors.primaryLight} />
+      <Ionicons name={icon} size={28} color={Colors.primaryLight} />
     </View>
     <Text
-      className="text-lg font-bold"
+      className="text-base font-bold"
       style={{ color: Colors.textPrimary }}
     >
       {title}
     </Text>
     <Text
-      className="mt-2 text-center text-sm leading-5"
+      className="mt-1.5 text-center text-xs leading-4"
       style={{ color: Colors.textSecondary }}
     >
       {subtitle}
@@ -621,27 +621,6 @@ export const ProfileEmptyState = ({
 
 // ─── Private sub-components ───────────────────────────────────────────────────
 
-const GlassIconButton = ({
-  icon,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-}) => (
-  <TouchableOpacity
-    className="h-11 w-11 items-center justify-center rounded-2xl"
-    style={{
-      backgroundColor: "rgba(28,28,28,0.56)",
-      borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.16)",
-    }}
-    onPress={onPress}
-    activeOpacity={0.82}
-  >
-    <Ionicons name={icon} size={21} color="rgba(255,255,255,0.92)" />
-  </TouchableOpacity>
-);
-
 const MetaPill = ({
   icon,
   label,
@@ -650,14 +629,9 @@ const MetaPill = ({
   label: string;
 }) => (
   <View
-    className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
-    style={{
-      backgroundColor: Colors.bgCard,
-      borderWidth: 1,
-      borderColor: Colors.border,
-    }}
+    className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5 bg-bg-elevated border border-border/20"
   >
-    <Ionicons name={icon} size={14} color={Colors.textSecondary} />
+    <Ionicons name={icon} size={13} color={Colors.textSecondary} />
     <Text
       className="text-xs font-semibold"
       style={{ color: Colors.textSecondary }}
@@ -671,63 +645,21 @@ const InterestChip = ({ label, color }: { label: string; color: string }) => {
   const icon = interestIcons[label.toLowerCase()] ?? "sparkles-outline";
   return (
     <View
-      className="flex-row items-center gap-2 rounded-2xl border px-4 py-3"
+      className="flex-row items-center gap-1.5 rounded-full border px-3 py-2"
       style={{
-        borderColor: `${color}70`,
-        backgroundColor: `${color}16`,
+        borderColor: `${color}40`,
+        backgroundColor: `${color}0D`,
       }}
     >
-      <Ionicons name={icon} size={17} color={color} />
-      <Text className="text-sm font-semibold" style={{ color }}>
+      <Ionicons name={icon} size={15} color={color} />
+      <Text className="text-xs font-semibold" style={{ color }}>
         {label}
       </Text>
     </View>
   );
 };
 
-const JourneyStat = ({ icon, color, label, value, caption }: JourneyMetric) => (
-  <View
-    className="flex-1 basis-[47%] overflow-hidden rounded-2xl"
-    style={{
-      backgroundColor: Colors.bgElevated,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      minHeight: 136,
-    }}
-  >
-    {/* Top accent strip */}
-    <View style={{ height: 3, backgroundColor: color }} />
 
-    <View className="p-4">
-      {/* Icon in circle */}
-      <View
-        className="mb-3 h-11 w-11 items-center justify-center rounded-full"
-        style={{ backgroundColor: `${color}1E` }}
-      >
-        <Ionicons name={icon} size={22} color={color} />
-      </View>
-
-      <Text
-        className="text-xs font-bold uppercase tracking-widest"
-        style={{ color: Colors.textMuted, letterSpacing: 1.2 }}
-      >
-        {label}
-      </Text>
-      <Text
-        className="mt-1 text-[36px] font-bold leading-[42px]"
-        style={{ color: Colors.textPrimary }}
-      >
-        {value}
-      </Text>
-      <Text
-        className="mt-1 text-[10px] font-semibold uppercase tracking-wider"
-        style={{ color: Colors.textMuted, letterSpacing: 1 }}
-      >
-        {caption}
-      </Text>
-    </View>
-  </View>
-);
 
 const AccountAction = ({
   icon,

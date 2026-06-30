@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Image,
   RefreshControl,
   ScrollView,
@@ -14,7 +13,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { ProfilePostGrid } from "@/components/profile/ProfilePostGrid";
 import {
   useUserProfileQuery,
@@ -27,11 +25,7 @@ import { matchService } from "@/services/match.service";
 import { userService } from "@/services/user.service";
 import { moderationService } from "@/services/moderation.service";
 import { Colors } from "@/constants/colors";
-import { FontFamily, FontSize } from "@/constants/typography";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const DEFAULT_COVER =
-  "https://images.unsplash.com/photo-1518391846015-55a9cc003b25?q=80&w=1600&auto=format&fit=crop";
+import { FontFamily } from "@/constants/typography";
 
 const interestIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
   fitness: "barbell-outline",
@@ -326,7 +320,6 @@ export default function UserDetailScreen() {
   const profile = userProfile.profile;
   const displayName = profile?.username || userProfile.username || "User Detail";
   const handle = userProfile.username || profile?.username || "username";
-  const coverUrl = profile?.bannerUrl || DEFAULT_COVER;
   const avatarUrl = profile?.avatarUrl;
   const age = calculateAge(profile?.birthDate);
   const city = profile?.location || "Not specified";
@@ -356,21 +349,8 @@ export default function UserDetailScreen() {
           />
         }
       >
-        {/* Cinematic Cover Banner */}
+        {/* Profile navigation */}
         <View style={styles.bannerContainer}>
-          <Image source={{ uri: coverUrl }} style={styles.bannerImage} resizeMode="cover" />
-          
-          {/* Top dark vignette */}
-          <LinearGradient
-            colors={["rgba(0,0,0,0.4)", "transparent"]}
-            style={styles.topVignette}
-          />
-          {/* Bottom fade transitions banner to screen background */}
-          <LinearGradient
-            colors={["transparent", Colors.bg]}
-            style={styles.bottomFade}
-          />
-
           {/* Floating nav controls */}
           <View style={[styles.headerControls, { top: Math.max(insets.top + 8, 14) }]}>
             <TouchableOpacity
@@ -649,28 +629,10 @@ const styles = StyleSheet.create({
   },
   // Banner Cover photo
   bannerContainer: {
-    height: 320,
+    height: 112,
     width: "100%",
     position: "relative",
     backgroundColor: Colors.bgElevated,
-  },
-  bannerImage: {
-    width: "100%",
-    height: "100%",
-  },
-  topVignette: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
-  },
-  bottomFade: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 160,
   },
   headerControls: {
     position: "absolute",
@@ -694,7 +656,7 @@ const styles = StyleSheet.create({
 
   // Main lifted content
   mainContentLift: {
-    marginTop: -80,
+    marginTop: 12,
     paddingHorizontal: 18,
     zIndex: 5,
   },

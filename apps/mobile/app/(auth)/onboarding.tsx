@@ -135,6 +135,7 @@ type PermissionState = { location: boolean; notifications: boolean };
 type ProfilePhoto = { uri: string; mimeType: string };
 type StepIndex = 0 | 1 | 2 | 3 | 4 | 5;
 type OnboardingProgress = {
+  name: string;
   username: string;
   birthDate: string;
   gender: Gender;
@@ -162,6 +163,7 @@ export default function OnboardingScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<StepIndex>(0);
   const [previousStep, setPreviousStep] = useState<StepIndex>(0);
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<Gender>("OTHER");
@@ -176,10 +178,13 @@ export default function OnboardingScreen() {
   });
   const [serverError, setServerError] = useState("");
   const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
+  const [showCompletionAnimation, setShowCompletionAnimation] = useState(false);
   const stepProgress = useSharedValue(1);
   const contentProgress = useSharedValue(1);
   const ambientProgress = useSharedValue(0);
   const animatedDirection = useSharedValue<1 | -1>(1);
+  const completionProgress = useSharedValue(0);
+  const completionPulse = useSharedValue(0);
   const activeTheme = STEP_THEMES[currentStep];
   const previousTheme = STEP_THEMES[previousStep];
   const headerHeight = Math.max(250, Math.min(330, height * 0.36));
@@ -208,6 +213,10 @@ export default function OnboardingScreen() {
       }
       try {
         const progress = JSON.parse(raw) as Partial<OnboardingProgress>;
+        if (progress.name !== undefined) setName(progress.name);
+        if (progress.username !== undefined) setUsername(progress.username);
+        if (progress.birthDate !== undefined) setBirthDate(progress.birthDate);
+        if (progress.gender !== undefined) setGender(progress.gender);
         if (progress.bio !== undefined) setBio(progress.bio);
         if (progress.permissions) setPermissions(progress.permissions);
         if (Array.isArray(progress.profilePhotos))
@@ -238,6 +247,7 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (!hasRestoredProgress) return;
     const progress: OnboardingProgress = {
+      name,
       username,
       birthDate,
       gender,
@@ -255,6 +265,7 @@ export default function OnboardingScreen() {
     currentStep,
     gender,
     hasRestoredProgress,
+    name,
     permissions,
     profilePhotos,
     selectedInterests,
@@ -333,9 +344,10 @@ export default function OnboardingScreen() {
         const locationPayload = permissions.location
           ? await getLocationPayload()
           : {};
-        const profileBasicsPayload = validateProfileBasics(username, birthDate)
+        const profileBasicsPayload = validateProfileBasics(name, username, birthDate)
           ? {}
           : {
+              name: name.trim(),
               username: username.trim().toLowerCase(),
               birthDate: toBackendBirthDate(birthDate),
               gender,
@@ -344,7 +356,6 @@ export default function OnboardingScreen() {
         const profileMediaPayload = profilePhotoUrls.length
           ? {
               avatarUrl: profilePhotoUrls[0],
-              bannerUrl: profilePhotoUrls[1] || profilePhotoUrls[0],
               profilePhotoUrls,
             }
           : {};
@@ -362,6 +373,22 @@ export default function OnboardingScreen() {
         });
         await refreshUser();
         await storage.delete(Config.ONBOARDING_PROGRESS_KEY);
+        setShowCompletionAnimation(true);
+        completionProgress.value = 0;
+        completionPulse.value = 0;
+        completionProgress.value = withTiming(1, {
+          duration: 1050,
+          easing: STEP_EASING,
+        });
+        completionPulse.value = withRepeat(
+          withTiming(1, {
+            duration: 680,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          2,
+          true,
+        );
+        await wait(1800);
         router.replace("/(tabs)/discover");
       } catch (error: any) {
         setServerError(getOnboardingErrorMessage(error));
@@ -372,7 +399,10 @@ export default function OnboardingScreen() {
     [
       bio,
       birthDate,
+      completionProgress,
+      completionPulse,
       gender,
+      name,
       permissions.location,
       profilePhotos,
       refreshUser,
@@ -391,6 +421,7 @@ export default function OnboardingScreen() {
       birthDate,
       bio,
       currentStep,
+      name,
       profilePhotos,
       selectedInterests,
       username,
@@ -404,6 +435,7 @@ export default function OnboardingScreen() {
       setIsLoading(true);
       try {
         await updateProfileMutation.mutateAsync({
+          name: name.trim(),
           username: username.trim().toLowerCase(),
           birthDate: toBackendBirthDate(birthDate),
           gender,
@@ -429,6 +461,7 @@ export default function OnboardingScreen() {
     completeOnboarding,
     currentStep,
     gender,
+    name,
     profilePhotos,
     refreshUser,
     selectedInterests,
@@ -500,6 +533,26 @@ export default function OnboardingScreen() {
   const bottomBarAnimatedStyle = useAnimatedStyle(() => ({
     opacity: contentProgress.value,
     transform: [{ translateY: (1 - contentProgress.value) * 16 }],
+  }));
+  const completionCardAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: completionProgress.value,
+    transform: [
+      { translateY: (1 - completionProgress.value) * 28 },
+      { scale: 0.86 + completionProgress.value * 0.14 },
+    ],
+  }));
+  const completionHaloAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: 0.18 + completionPulse.value * 0.2,
+    transform: [{ scale: 0.86 + completionPulse.value * 0.28 }],
+  }));
+  const completionCheckAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { rotate: `${(1 - completionProgress.value) * -18}deg` },
+      { scale: 0.5 + completionProgress.value * 0.5 },
+    ],
+  }));
+  const completionFillAnimatedStyle = useAnimatedStyle(() => ({
+    width: `${completionProgress.value * 100}%`,
   }));
 
   return (
@@ -640,8 +693,10 @@ export default function OnboardingScreen() {
                           accent={step.accent}
                           birthDate={birthDate}
                           gender={gender}
+                          name={name}
                           onChangeBirthDate={setBirthDate}
                           onChangeGender={setGender}
+                          onChangeName={setName}
                           onChangeUsername={(value) =>
                             setUsername(value.toLowerCase())
                           }
@@ -744,6 +799,52 @@ export default function OnboardingScreen() {
           </Animated.View>
         </View>
       </KeyboardAvoidingView>
+      {showCompletionAnimation ? (
+        <View style={styles.completionOverlay}>
+          <LinearGradient
+            colors={["#EEF2FF", "#DDE6FF", "#FFFFFF"]}
+            locations={[0, 0.58, 1]}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.completionHalo, completionHaloAnimatedStyle]}
+          />
+          <Animated.View
+            style={[styles.completionCard, completionCardAnimatedStyle]}
+          >
+            <Animated.View
+              style={[
+                styles.completionCheck,
+                { backgroundColor: activeTheme.accent },
+                completionCheckAnimatedStyle,
+              ]}
+            >
+              <Ionicons name="checkmark" size={44} color={Colors.white} />
+            </Animated.View>
+            <Text style={styles.completionEyebrow}>PROFILE COMPLETE</Text>
+            <Text style={styles.completionTitle}>Setting up your account</Text>
+            <Text style={styles.completionDescription}>
+              Saving your profile, preferences, and discovery settings.
+            </Text>
+            <View style={styles.completionProgressTrack}>
+              <Animated.View
+                style={[
+                  styles.completionProgressFill,
+                  { backgroundColor: activeTheme.accent },
+                  completionFillAnimatedStyle,
+                ]}
+              />
+            </View>
+            <View style={styles.completionStatusRow}>
+              <ActivityIndicator size="small" color={activeTheme.accent} />
+              <Text style={styles.completionStatusText}>
+                Preparing your matches…
+              </Text>
+            </View>
+          </Animated.View>
+        </View>
+      ) : null}
     </Animated.View>
   );
 }
@@ -869,21 +970,37 @@ function ProfileBasicsStep({
   accent,
   birthDate,
   gender,
+  name,
   onChangeBirthDate,
   onChangeGender,
+  onChangeName,
   onChangeUsername,
   username,
 }: {
   accent: string;
   birthDate: string;
   gender: Gender;
+  name: string;
   onChangeBirthDate: (value: string) => void;
   onChangeGender: (value: Gender) => void;
+  onChangeName: (value: string) => void;
   onChangeUsername: (value: string) => void;
   username: string;
 }) {
+  const usernameSuggestions = getUsernameSuggestions(name);
+
   return (
     <View style={styles.formStack}>
+      <SoftInput
+        autoCapitalize="words"
+        autoCorrect={false}
+        icon="person-outline"
+        label="Name"
+        maxLength={50}
+        onChangeText={onChangeName}
+        placeholder="Your name"
+        value={name}
+      />
       <SoftInput
         autoCapitalize="none"
         autoCorrect={false}
@@ -893,6 +1010,22 @@ function ProfileBasicsStep({
         placeholder="yourname"
         value={username}
       />
+      {usernameSuggestions.length ? (
+        <View style={styles.usernameSuggestions}>
+          <Text style={styles.suggestionLabel}>Suggested usernames</Text>
+          <View style={styles.chipGroup}>
+            {usernameSuggestions.map((suggestion) => (
+              <Chip
+                key={suggestion}
+                accent={accent}
+                active={username === suggestion}
+                label={`@${suggestion}`}
+                onPress={() => onChangeUsername(suggestion)}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
       <BirthDateCalendar
         accent={accent}
         onChangeDate={onChangeBirthDate}
@@ -1451,6 +1584,17 @@ const styles = StyleSheet.create({
     minHeight: 34,
     padding: 0,
   },
+  usernameSuggestions: {
+    gap: Spacing.sm,
+    marginTop: -Spacing.xs,
+  },
+  suggestionLabel: {
+    color: Colors.textMuted,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
   textAreaWrap: {
     backgroundColor: "rgba(255,255,255,0.94)",
     borderRadius: Radius.lg,
@@ -1604,6 +1748,94 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: FontSize.base,
   },
+  completionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+    zIndex: 100,
+  },
+  completionHalo: {
+    position: "absolute",
+    width: 290,
+    height: 290,
+    borderRadius: 145,
+    backgroundColor: "#84A0FF",
+  },
+  completionCard: {
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: 34,
+    borderRadius: Radius.xl,
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderWidth: 1,
+    borderColor: "rgba(24,57,194,0.12)",
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 22 },
+    shadowOpacity: 0.14,
+    shadowRadius: 36,
+    elevation: 12,
+  },
+  completionCheck: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+    shadowColor: "#1839C2",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  completionEyebrow: {
+    color: "#1839C2",
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
+    letterSpacing: 1.5,
+  },
+  completionTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xl,
+    lineHeight: 30,
+    marginTop: Spacing.sm,
+    textAlign: "center",
+  },
+  completionDescription: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    marginTop: Spacing.sm,
+    textAlign: "center",
+  },
+  completionProgressTrack: {
+    width: "100%",
+    height: 7,
+    marginTop: Spacing.xl,
+    overflow: "hidden",
+    borderRadius: Radius.full,
+    backgroundColor: "rgba(24,57,194,0.1)",
+  },
+  completionProgressFill: {
+    height: "100%",
+    borderRadius: Radius.full,
+  },
+  completionStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  completionStatusText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.sm,
+  },
 });
 const compressProfilePhoto = async (uri: string) => {
   const result = await ImageManipulator.manipulateAsync(
@@ -1657,6 +1889,7 @@ const validateStep = ({
   birthDate,
   bio,
   currentStep,
+  name,
   profilePhotos,
   selectedInterests,
   username,
@@ -1664,11 +1897,12 @@ const validateStep = ({
   birthDate: string;
   bio: string;
   currentStep: StepIndex;
+  name: string;
   profilePhotos: ProfilePhoto[];
   selectedInterests: string[];
   username: string;
 }) => {
-  if (currentStep === 0) return validateProfileBasics(username, birthDate);
+  if (currentStep === 0) return validateProfileBasics(name, username, birthDate);
   if (currentStep === 1 && profilePhotos.length < 1)
     return "Add at least one profile photo.";
   if (currentStep === 2 && bio.trim().length < 12)
@@ -1678,8 +1912,15 @@ const validateStep = ({
   return "";
 };
 
-const validateProfileBasics = (username: string, birthDate: string) => {
+const validateProfileBasics = (
+  name: string,
+  username: string,
+  birthDate: string,
+) => {
+  if (name.trim().length < 2) return "Enter your name.";
   const normalizedUsername = username.trim().toLowerCase();
+  if (normalizedUsername.length < 3 || normalizedUsername.length > 20)
+    return "Username must be between 3 and 20 characters.";
   if (!/^[a-z0-9]+([._]?[a-z0-9]+)*$/.test(normalizedUsername))
     return "Username can use lowercase letters, numbers, dots, and underscores.";
   const birthday = parseBirthDate(birthDate);
@@ -1694,6 +1935,37 @@ const validateProfileBasics = (username: string, birthDate: string) => {
     age -= 1;
   if (age < 18) return "You must be at least 18 years old.";
   return "";
+};
+
+const getUsernameSuggestions = (name: string) => {
+  const parts = name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .match(/[a-z0-9]+/g);
+  if (!parts?.length || name.trim().length < 2) return [];
+
+  const first = parts[0];
+  const last = parts.at(-1) ?? "";
+  const joined = parts.join("");
+  const seed = Array.from(joined).reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0,
+  );
+  const suffix = String((seed % 90) + 10);
+  const candidates = [
+    joined,
+    parts.join("."),
+    parts.join("_"),
+    `${first}${last.charAt(0)}${suffix}`,
+  ];
+
+  return Array.from(new Set(candidates))
+    .map((candidate) =>
+      candidate.length < 3 ? `${candidate}${suffix}` : candidate,
+    )
+    .filter((candidate) => candidate.length <= 20)
+    .slice(0, 4);
 };
 
 const parseBirthDate = (birthDate: string) => {
@@ -1725,12 +1997,5 @@ const parseBirthDate = (birthDate: string) => {
 const toBackendBirthDate = (birthDate: string) =>
   (parseBirthDate(birthDate) ?? new Date()).toISOString();
 
-
-
-
-
-
-
-
-
-
+const wait = (duration: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, duration));

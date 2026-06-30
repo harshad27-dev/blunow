@@ -221,7 +221,7 @@ export class MatchRepository {
 
       return {
         id: user.id,
-        name: user.profile?.username ?? user.email.split('@')[0],
+        name: user.profile?.name ?? user.profile?.username ?? user.email.split('@')[0],
         lastName: '',
         age,
         city: user.profile?.location ?? 'Location not set',
@@ -233,7 +233,7 @@ export class MatchRepository {
         online,
         verified: user.verification?.status === 'VERIFIED' || user.isVerified,
         quote: user.profile?.bio ?? 'No bio provided yet.',
-        imageUrl: profilePhotoUrls[0] || user.profile?.bannerUrl || user.profile?.avatarUrl || '',
+        imageUrl: profilePhotoUrls[0] || user.profile?.avatarUrl || '',
         avatarUrl: user.profile?.avatarUrl,
         profilePhotoUrls,
         interests,

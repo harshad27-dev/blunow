@@ -3,7 +3,6 @@ export type MatchRequestStatus = "PENDING" | "ACCEPTED" | "REJECTED";
 export type MatchUserProfile = {
   username?: string | null;
   avatarUrl?: string | null;
-  bannerUrl?: string | null;
   bio?: string | null;
   birthDate?: string | null;
   location?: string | null;

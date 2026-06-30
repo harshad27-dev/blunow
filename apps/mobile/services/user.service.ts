@@ -1,6 +1,7 @@
 import { api } from "./api";
 
 export interface UpdateProfilePayload {
+  name?: string;
   username?: string;
   bio?: string;
   age?: number;
@@ -11,7 +12,6 @@ export interface UpdateProfilePayload {
   gender?: string;
   sexuality?: string;
   avatarUrl?: string | null;
-  bannerUrl?: string | null;
   profilePhotoUrls?: string[];
   interests?: string[];
   interestedIn?: string[];

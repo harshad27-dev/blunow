@@ -2,18 +2,17 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/colors";
 import { CustomDialog } from "@/components/common/Modal";
 import { ProfilePostGrid } from "@/components/profile/ProfilePostGrid";
@@ -28,7 +27,7 @@ import type {
   JourneyMetric,
   ProfileTab,
 } from "@/components/ui/ProfileScreenUi";
-import type { Match } from "@/types/match.types";
+import type { Match, MatchRequest } from "@/types/match.types";
 import { useAuthStore } from "@/store/authStore";
 import {
   useMatchesQuery,
@@ -37,19 +36,23 @@ import {
   useUserProfileQuery,
   useUserStatsQuery,
   useUserStoriesQuery,
+  useIncomingMatchRequestsQuery,
+  useRespondMatchRequestMutation,
 } from "@/hooks/queries";
-
-const DEFAULT_COVER =
-  "https://images.unsplash.com/photo-1518391846015-55a9cc003b25?q=80&w=1600&auto=format&fit=crop";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const insets = useSafeAreaInsets();
+
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+  const [isRequestsModalVisible, setIsRequestsModalVisible] = useState(false);
+  const [pendingRequestAction, setPendingRequestAction] = useState<{
+    requestId: string;
+    status: "ACCEPTED" | "REJECTED";
+  } | null>(null);
 
   const { data: liveUser } = useUserProfileQuery(user?.id);
   const { data: stats, isLoading: statsLoading } = useUserStatsQuery(user?.id);
@@ -64,10 +67,32 @@ export default function ProfileScreen() {
   const { data: matches, isLoading: matchesLoading } = useMatchesQuery(
     activeTab === "matches",
   );
+  const { data: incomingRequests = [] } = useIncomingMatchRequestsQuery();
+  const respondToIncomingRequest = useRespondMatchRequestMutation();
+
+  const handleAcceptRequest = (request: MatchRequest) => {
+    setPendingRequestAction({ requestId: request.id, status: "ACCEPTED" });
+    respondToIncomingRequest.mutate(
+      { requestId: request.id, status: "ACCEPTED" },
+      {
+        onSettled: () => setPendingRequestAction(null),
+      }
+    );
+  };
+
+  const handleRejectRequest = (request: MatchRequest) => {
+    setPendingRequestAction({ requestId: request.id, status: "REJECTED" });
+    respondToIncomingRequest.mutate(
+      { requestId: request.id, status: "REJECTED" },
+      {
+        onSettled: () => setPendingRequestAction(null),
+      }
+    );
+  };
 
   const currentUser = liveUser || user;
   const profile = currentUser?.profile;
-  const displayName = profile?.username || currentUser?.username || "Your Name";
+  const displayName = profile?.name || profile?.username || currentUser?.username || "Your Name";
   const handle = currentUser?.username || profile?.username || "username";
   const city = profile?.location || "Add your city";
   const age = calculateAge(profile?.birthDate);
@@ -81,7 +106,6 @@ export default function ProfileScreen() {
     "Based in your city. Add a short bio to help people know your vibe.";
   const completion = getProfileCompletion({
     avatarUrl: profile?.avatarUrl,
-    bannerUrl: profile?.bannerUrl,
     city: profile?.location,
     bio: profile?.bio,
     interests: profile?.interests,
@@ -174,17 +198,13 @@ export default function ProfileScreen() {
       queryClient.invalidateQueries({ queryKey: ["matches"] }),
       queryClient.invalidateQueries({ queryKey: ["user-profile", user?.id] }),
       queryClient.invalidateQueries({ queryKey: ["me"] }),
+      queryClient.invalidateQueries({ queryKey: ["match-requests-incoming"] }),
     ]);
     setRefreshing(false);
   }, [queryClient, user?.id]);
 
   return (
-    <SafeAreaView edges={["left", "right"]} className="flex-1 bg-bg">
-      <View
-        pointerEvents="none"
-        className="absolute left-0 right-0 top-0 z-30 bg-bg"
-        style={{ height: insets.top }}
-      />
+    <SafeAreaView edges={["top", "left", "right"]} className="flex-1 bg-bg">
       <ScrollView
         className="flex-1"
         contentContainerClassName="pb-10"
@@ -198,7 +218,6 @@ export default function ProfileScreen() {
         }
       >
         <ProfileHero
-          coverUrl={profile?.bannerUrl || DEFAULT_COVER}
           avatarUrl={profile?.avatarUrl}
           displayName={displayName}
           handle={handle}
@@ -209,8 +228,23 @@ export default function ProfileScreen() {
           sexuality={sexuality}
           interests={interests}
           onEditProfile={editProfile}
-          onEditCover={editProfile}
           onSettings={openSettings}
+          followersCount={stats?.followers || 0}
+          followingCount={stats?.following || 0}
+          requestsCount={incomingRequests.length}
+          onFollowersPress={() =>
+            router.push({
+              pathname: "/(screens)/social-list",
+              params: { userId: user?.id, mode: "followers" },
+            })
+          }
+          onFollowingPress={() =>
+            router.push({
+              pathname: "/(screens)/social-list",
+              params: { userId: user?.id, mode: "following" },
+            })
+          }
+          onRequestsPress={() => setIsRequestsModalVisible(true)}
         />
 
         <ProfileJourneyCard
@@ -295,9 +329,143 @@ export default function ProfileScreen() {
         ]}
         onClose={closeCompletionDialog}
       />
+
+      <RequestsModal
+        visible={isRequestsModalVisible}
+        requests={incomingRequests}
+        pendingAction={pendingRequestAction}
+        onAccept={handleAcceptRequest}
+        onReject={handleRejectRequest}
+        onClose={() => setIsRequestsModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
+
+const RequestsModal = ({
+  visible,
+  requests,
+  pendingAction,
+  onAccept,
+  onReject,
+  onClose,
+}: {
+  visible: boolean;
+  requests: MatchRequest[];
+  pendingAction: { requestId: string; status: "ACCEPTED" | "REJECTED" } | null;
+  onAccept: (request: MatchRequest) => void;
+  onReject: (request: MatchRequest) => void;
+  onClose: () => void;
+}) => (
+  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <View className="flex-1 justify-end bg-[#00000080]">
+      <View className="max-h-[80%] rounded-t-[32px] bg-bg-card px-5 pb-8 pt-2 border-t border-border">
+        {/* Handle */}
+        <View className="self-center w-10 h-1 rounded-full bg-border mb-4 mt-1" />
+
+        <View className="flex-row items-start justify-between mb-5">
+          <View>
+            <Text className="text-xl font-extrabold text-text-primary">Incoming requests</Text>
+            <Text className="text-xs text-text-secondary mt-0.5">{requests.length} people want to connect</Text>
+          </View>
+          <TouchableOpacity
+            className="w-10 h-10 items-center justify-center rounded-xl bg-bg-elevated"
+            onPress={onClose}
+            activeOpacity={0.84}
+          >
+            <Ionicons name="close" size={20} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} className="max-h-[72%]">
+          {requests.map((request) => (
+            <IncomingRequestRow
+              key={request.id}
+              request={request}
+              disabled={Boolean(pendingAction)}
+              pendingStatus={pendingAction?.requestId === request.id ? pendingAction.status : null}
+              onAccept={() => onAccept(request)}
+              onReject={() => onReject(request)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>
+);
+
+const IncomingRequestRow = ({
+  request,
+  disabled,
+  pendingStatus,
+  onAccept,
+  onReject,
+}: {
+  request: MatchRequest;
+  disabled: boolean;
+  pendingStatus?: "ACCEPTED" | "REJECTED" | null;
+  onAccept: () => void;
+  onReject: () => void;
+}) => {
+  const name =
+    request.sender?.profile?.username ||
+    request.sender?.username ||
+    request.sender?.email ||
+    "Someone";
+  const avatarUrl = request.sender?.profile?.avatarUrl;
+
+  return (
+    <View className="flex-row items-center justify-between p-4 mb-3 rounded-2xl border border-border bg-bg-card">
+      {/* Avatar */}
+      {avatarUrl ? (
+        <View className="rounded-xl border border-border p-[1px]">
+          <Image source={{ uri: avatarUrl }} className="h-12 w-12 rounded-xl bg-bg-elevated" />
+        </View>
+      ) : (
+        <View className="h-12 w-12 items-center justify-center rounded-xl bg-bg-elevated border border-border">
+          <Text className="text-sm font-extrabold text-text-secondary">{name.charAt(0).toUpperCase()}</Text>
+        </View>
+      )}
+
+      {/* Info */}
+      <View className="flex-1 ml-4 mr-2">
+        <Text className="text-sm font-bold text-text-primary" numberOfLines={1}>{name}</Text>
+        <Text className="text-xs text-text-secondary mt-0.5" numberOfLines={1}>
+          {request.message || "Wants to connect with you"}
+        </Text>
+      </View>
+
+      {/* Reject */}
+      <TouchableOpacity
+        className="w-9 h-9 items-center justify-center rounded-xl bg-bg-elevated mr-2"
+        onPress={onReject}
+        disabled={disabled}
+        activeOpacity={0.84}
+      >
+        {pendingStatus === "REJECTED" ? (
+          <ActivityIndicator color={Colors.textSecondary} size="small" />
+        ) : (
+          <Ionicons name="close" size={16} color={Colors.textSecondary} />
+        )}
+      </TouchableOpacity>
+
+      {/* Accept */}
+      <TouchableOpacity
+        className="w-9 h-9 items-center justify-center rounded-xl"
+        style={{ backgroundColor: Colors.primary }}
+        onPress={onAccept}
+        disabled={disabled}
+        activeOpacity={0.84}
+      >
+        {pendingStatus === "ACCEPTED" ? (
+          <ActivityIndicator color={Colors.white} size="small" />
+        ) : (
+          <Ionicons name="checkmark" size={16} color={Colors.white} />
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+};
 
 const isTabLoading = (
   activeTab: ProfileTab,
@@ -383,14 +551,12 @@ const formatLabel = (value: string) =>
 
 const getProfileCompletion = ({
   avatarUrl,
-  bannerUrl,
   city,
   bio,
   interests,
   lookingFor,
 }: {
   avatarUrl?: string | null;
-  bannerUrl?: string | null;
   city?: string | null;
   bio?: string | null;
   interests?: string[];
@@ -398,7 +564,6 @@ const getProfileCompletion = ({
 }) => {
   const checks = [
     avatarUrl,
-    bannerUrl,
     city,
     bio,
     interests?.length ? "interests" : null,

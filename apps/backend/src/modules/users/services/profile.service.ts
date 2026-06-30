@@ -9,6 +9,7 @@ export class ProfileService {
   async updateProfile(
     userId: string,
     data: {
+      name?: string;
       username?: string;
       bio?: string;
       age?: number;
@@ -19,7 +20,6 @@ export class ProfileService {
       latitude?: number;
       longitude?: number;
       avatarUrl?: string;
-      bannerUrl?: string;
       profilePhotoUrls?: string[];
       interests?: string[];
       interestedIn?: string[];

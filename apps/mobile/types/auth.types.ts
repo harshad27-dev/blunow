@@ -55,7 +55,6 @@ export interface AuthUser {
     username?: string | null;
     bio: string | null;
     avatarUrl: string | null;
-    bannerUrl?: string | null;
     profilePhotoUrls?: string[];
     location?: string | null;
     latitude?: number | null;

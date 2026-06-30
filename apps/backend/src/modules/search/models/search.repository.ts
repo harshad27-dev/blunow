@@ -108,7 +108,7 @@ export class SearchRepository {
           city: user.profile?.location ?? "Location not set",
           distance,
           avatarUrl: user.profile?.avatarUrl,
-          imageUrl: user.profile?.bannerUrl || user.profile?.avatarUrl || "",
+          imageUrl: user.profile?.avatarUrl || "",
           bio: user.profile?.bio ?? "No bio provided yet.",
           quote: user.profile?.bio ?? "No bio provided yet.",
           interests,

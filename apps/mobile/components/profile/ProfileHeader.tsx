@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
@@ -9,7 +8,6 @@ interface ProfileHeaderProps {
   username: string;
   bio?: string | null;
   avatarUrl?: string | null;
-  bannerUrl?: string | null;
   isOwnProfile?: boolean;
   onEditPress?: () => void;
   onSettingsPress?: () => void;
@@ -23,7 +21,6 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   username,
   bio,
   avatarUrl,
-  bannerUrl,
   isOwnProfile = true,
   onEditPress,
   onSettingsPress,
@@ -34,19 +31,8 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 }) => {
   return (
     <View style={styles.container}>
-      {/* Banner */}
+      {/* Profile controls */}
       <View style={styles.bannerContainer}>
-        {bannerUrl ? (
-          <Image source={{ uri: bannerUrl }} style={styles.banner} />
-        ) : (
-          <LinearGradient
-            colors={['#1A1A1A', '#050505']}
-            style={styles.banner}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-        )}
-        
         {/* Back Button */}
         {onBackPress && (
           <TouchableOpacity 
@@ -136,13 +122,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
   bannerContainer: {
-    height: 160,
+    height: 112,
     width: '100%',
     position: 'relative',
-  },
-  banner: {
-    width: '100%',
-    height: '100%',
+    backgroundColor: Colors.bgElevated,
   },
   backButton: {
     position: 'absolute',
