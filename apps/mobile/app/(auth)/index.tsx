@@ -7,10 +7,14 @@ import {
   Dimensions,
   Easing,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -285,112 +289,119 @@ export default function AuthWelcomeScreen() {
           style={styles.bottomGradient}
         />
 
-        <View style={styles.content}>
-          <Animated.View
-            style={[
-              styles.topBrand,
-              {
-                opacity: brandOpacity,
-                transform: [
+        <KeyboardAvoidingView
+          style={styles.keyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={styles.content}>
+              <Animated.View
+                style={[
+                  styles.topBrand,
                   {
-                    translateY: brandTranslate.interpolate({
-                      inputRange: [0, 180],
-                      outputRange: [0, -20],
-                    }),
+                    opacity: brandOpacity,
+                    transform: [
+                      {
+                        translateY: brandTranslate.interpolate({
+                          inputRange: [0, 180],
+                          outputRange: [0, -20],
+                        }),
+                      },
+                    ],
                   },
-                ],
-              },
-            ]}
-          >
-            <Image
-              source={require("@/assets/images/logo.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </Animated.View>
-
-          <View style={styles.bottomContent}>
-            <Animated.View
-              style={[
-                styles.copyBlock,
-                {
-                  opacity: brandOpacity,
-                  transform: [{ translateY: brandTranslate }],
-                },
-              ]}
-            >
-              <Text style={styles.eyebrow}>Dating that feels natural</Text>
-              <Text style={styles.title}>
-                Meet people who match your energy.
-              </Text>
-              <Text style={styles.caption}>
-                Enter your email and we will sign you in or create your account.
-              </Text>
-            </Animated.View>
-
-            <Animated.View
-              style={[
-                styles.actions,
-                {
-                  opacity: actionsOpacity,
-                  transform: [{ translateY: actionsTranslate }],
-                },
-              ]}
-            >
-              <GoogleAuthButton
-                label="Continue with Google"
-                onStart={clearMessages}
-                onToken={handleGoogleToken}
-                onError={setServerError}
-              />
-
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <View style={styles.inputWithAction}>
-                <TextInput
-                  style={styles.inlineInput}
-                  value={email}
-                  onChangeText={(value) => {
-                    setEmail(value);
-                    clearMessages();
-                  }}
-                  placeholder="Email address"
-                  placeholderTextColor={Colors.black}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  editable={!isSubmitting}
+                ]}
+              >
+                <Image
+                  source={require("@/assets/images/logo.png")}
+                  style={styles.logo}
+                  resizeMode="contain"
                 />
-                <TouchableOpacity
-                  style={styles.arrowButton}
-                  onPress={handleStartAuth}
-                  disabled={isSubmitting}
-                  activeOpacity={0.86}
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator color={Colors.textInverse} />
-                  ) : (
-                    <Ionicons
-                      name="arrow-forward"
-                      size={22}
-                      color={Colors.textInverse}
-                    />
-                  )}
-                </TouchableOpacity>
-              </View>
+              </Animated.View>
 
-              {serverError ? (
-                <View style={styles.errorBanner}>
-                  <Text style={styles.errorBannerText}>{serverError}</Text>
-                </View>
-              ) : null}
-            </Animated.View>
-          </View>
-        </View>
+              <View style={styles.bottomContent}>
+                <Animated.View
+                  style={[
+                    styles.copyBlock,
+                    {
+                      opacity: brandOpacity,
+                      transform: [{ translateY: brandTranslate }],
+                    },
+                  ]}
+                >
+                  <Text style={styles.eyebrow}>Dating that feels natural</Text>
+                  <Text style={styles.title}>
+                    Meet people who match your energy.
+                  </Text>
+                  <Text style={styles.caption}>
+                    Enter your email and we will sign you in or create your account.
+                  </Text>
+                </Animated.View>
+
+                <Animated.View
+                  style={[
+                    styles.actions,
+                    {
+                      opacity: actionsOpacity,
+                      transform: [{ translateY: actionsTranslate }],
+                    },
+                  ]}
+                >
+                  <GoogleAuthButton
+                    label="Continue with Google"
+                    onStart={clearMessages}
+                    onToken={handleGoogleToken}
+                    onError={setServerError}
+                  />
+
+                  <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>or</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  <View style={styles.inputWithAction}>
+                    <TextInput
+                      style={styles.inlineInput}
+                      value={email}
+                      onChangeText={(value) => {
+                        setEmail(value);
+                        clearMessages();
+                      }}
+                      placeholder="Email address"
+                      placeholderTextColor={Colors.black}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      editable={!isSubmitting}
+                    />
+                    <TouchableOpacity
+                      style={styles.arrowButton}
+                      onPress={handleStartAuth}
+                      disabled={isSubmitting}
+                      activeOpacity={0.86}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator color={Colors.textInverse} />
+                      ) : (
+                        <Ionicons
+                          name="arrow-forward"
+                          size={22}
+                          color={Colors.textInverse}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  {serverError ? (
+                    <View style={styles.errorBanner}>
+                      <Text style={styles.errorBannerText}>{serverError}</Text>
+                    </View>
+                  ) : null}
+                </Animated.View>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
   );
@@ -405,6 +416,10 @@ const styles = StyleSheet.create({
   background: {
     flex: 1,
     overflow: "hidden",
+  },
+
+  keyboardView: {
+    flex: 1,
   },
 
   backgroundFrame: {
