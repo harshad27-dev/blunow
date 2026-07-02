@@ -1,9 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
-  Dimensions,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -14,23 +12,23 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useColorScheme } from "nativewind";
 
 import { Toast } from "@/components/common/Toast";
 import { Colors } from "@/constants/colors";
 import { useUpdateProfileMutation } from "@/hooks/queries";
 import { postService } from "@/services/post.service";
 import { useAuthStore } from "@/store/authStore";
-
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const GENDER_OPTIONS = ["MALE", "FEMALE", "NON_BINARY", "OTHER"];
 const INTERESTED_IN_OPTIONS = ["Men", "Women", "Non-binary", "Everyone"];
@@ -112,6 +110,8 @@ const toggleValue = (values: string[], value: string) =>
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
   const { refreshUser, user } = useAuthStore();
   const profile = user?.profile;
   const updateProfileMutation = useUpdateProfileMutation();
@@ -123,6 +123,7 @@ export default function EditProfileScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [activeSheet, setActiveSheet] = useState<SheetField | null>(null);
+  const [isPhotoActionsVisible, setIsPhotoActionsVisible] = useState(false);
 
   const [username, setUsername] = useState(
     profile?.username || user?.username || "",
@@ -260,25 +261,18 @@ export default function EditProfileScreen() {
   };
 
   const openPhotoActions = () => {
-    const hasPhoto = Boolean(avatarUri);
-    Alert.alert("Avatar photo", undefined, [
-      {
-        text: hasPhoto ? "Change photo" : "Add photo",
-        onPress: pickPhoto,
-      },
-      ...(hasPhoto
-        ? [
-            {
-              text: "Remove photo",
-              style: "destructive" as const,
-              onPress: () => {
-                setAvatarUri(null);
-              },
-            },
-          ]
-        : []),
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setIsPhotoActionsVisible(true);
+  };
+
+  const handlePickPhoto = async () => {
+    setIsPhotoActionsVisible(false);
+    await pickPhoto();
+  };
+
+  const handleRemovePhoto = () => {
+    setAvatarUri(null);
+    setAvatarMimeType(null);
+    setIsPhotoActionsVisible(false);
   };
 
   const saveProfile = async () => {
@@ -349,7 +343,7 @@ export default function EditProfileScreen() {
       style={styles.screen}
       edges={["top", "left", "right"]}
     >
-      <StatusBar style="dark" backgroundColor={Colors.bg} />
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} backgroundColor={Colors.bg} />
       {/* Header Banner */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -368,7 +362,10 @@ export default function EditProfileScreen() {
       </View>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom + 104, 132) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile photo */}
@@ -418,7 +415,7 @@ export default function EditProfileScreen() {
             </View>
           </View>
         </LinearGradient>
-        `r`n`r`n {/* Profile Completion Indicator */}
+        {/* Profile Completion Indicator */}
         <CompletionPanel
           completion={completion}
           isUploading={isUploading}
@@ -448,7 +445,12 @@ export default function EditProfileScreen() {
           ))}
         </View>
       </ScrollView>
-      <View style={styles.bottomBar}>
+      <View
+        style={[
+          styles.bottomBar,
+          { paddingBottom: Math.max(insets.bottom, 12) },
+        ]}
+      >
         <TouchableOpacity
           style={[
             styles.saveButton,
@@ -468,7 +470,15 @@ export default function EditProfileScreen() {
           )}
         </TouchableOpacity>
       </View>
-      `r`n {/* Premium Custom Animated Bottom Sheet */}
+
+      <AvatarPhotoSheet
+        visible={isPhotoActionsVisible}
+        hasPhoto={Boolean(avatarUri)}
+        onAddOrChange={handlePickPhoto}
+        onRemove={handleRemovePhoto}
+        onClose={() => setIsPhotoActionsVisible(false)}
+      />
+      {/* Premium Custom Animated Bottom Sheet */}
       <EditDrawer
         activeSheet={activeSheet}
         onClose={() => setActiveSheet(null)}
@@ -509,7 +519,7 @@ export default function EditProfileScreen() {
   );
 }
 
-// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Sub-components
 
 const SectionTitle = ({ title }: { title: string }) => (
   <Text style={styles.sectionTitle}>{title}</Text>
@@ -560,6 +570,8 @@ const SettingRow = ({
     style={[styles.settingRow, !isLast && styles.rowBorder]}
     onPress={onPress}
     activeOpacity={0.78}
+    accessibilityRole="button"
+    accessibilityLabel={`Edit ${item.title}`}
   >
     <View style={styles.rowIconBox}>
       <Ionicons name={item.icon} size={18} color={Colors.textSecondary} />
@@ -576,7 +588,97 @@ const SettingRow = ({
   </TouchableOpacity>
 );
 
-// â”€â”€â”€ Premium Custom Animated Edit Sheet Drawer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const AvatarPhotoSheet = ({
+  visible,
+  hasPhoto,
+  onAddOrChange,
+  onRemove,
+  onClose,
+}: {
+  visible: boolean;
+  hasPhoto: boolean;
+  onAddOrChange: () => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) => {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      accessibilityViewIsModal
+      onRequestClose={onClose}
+    >
+      <View style={styles.photoSheetBackdrop}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close photo options"
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+        />
+        <View
+          style={[
+            styles.photoSheet,
+            { paddingBottom: Math.max(insets.bottom + 16, 28) },
+          ]}
+        >
+          <View style={styles.drawerHandle} />
+          <View style={styles.photoSheetHeader}>
+            <View style={styles.photoSheetIcon}>
+              <Ionicons name="camera-outline" size={22} color={Colors.primary} />
+            </View>
+            <View style={styles.photoSheetCopy}>
+              <Text style={styles.photoSheetTitle}>Avatar photo</Text>
+              <Text style={styles.photoSheetSubtitle}>
+                Choose the first impression people see on your profile.
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.photoSheetAction}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            onPress={onAddOrChange}
+          >
+            <Ionicons name="image-outline" size={20} color={Colors.textPrimary} />
+            <Text style={styles.photoSheetActionText}>
+              {hasPhoto ? "Change photo" : "Add photo"}
+            </Text>
+          </TouchableOpacity>
+
+          {hasPhoto ? (
+            <TouchableOpacity
+              style={[styles.photoSheetAction, styles.photoSheetDangerAction]}
+              activeOpacity={0.82}
+              accessibilityRole="button"
+              onPress={onRemove}
+            >
+              <Ionicons name="trash-outline" size={20} color={Colors.error} />
+              <Text style={[styles.photoSheetActionText, styles.photoSheetDangerText]}>
+                Remove photo
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity
+            style={styles.photoSheetCancel}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            onPress={onClose}
+          >
+            <Text style={styles.photoSheetCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// Animated edit sheet drawer
 
 const EditDrawer = ({
   activeSheet,
@@ -614,10 +716,11 @@ const EditDrawer = ({
   };
 }) => {
   const [mounted, setMounted] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const closedY = height * 0.82;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = useRef(
-    new Animated.Value(SCREEN_HEIGHT * 0.76),
-  ).current;
+  const sheetTranslateY = useRef(new Animated.Value(closedY)).current;
 
   // Sync animation triggers with activeSheet state changes
   React.useEffect(() => {
@@ -644,7 +747,7 @@ const EditDrawer = ({
           useNativeDriver: true,
         }),
         Animated.timing(sheetTranslateY, {
-          toValue: SCREEN_HEIGHT * 0.76,
+          toValue: closedY,
           duration: 220,
           useNativeDriver: true,
         }),
@@ -652,7 +755,7 @@ const EditDrawer = ({
         setMounted(false);
       });
     }
-  }, [activeSheet, backdropOpacity, sheetTranslateY]);
+  }, [activeSheet, backdropOpacity, closedY, sheetTranslateY]);
 
   if (!mounted) return null;
 
@@ -664,7 +767,7 @@ const EditDrawer = ({
         useNativeDriver: true,
       }),
       Animated.timing(sheetTranslateY, {
-        toValue: SCREEN_HEIGHT * 0.76,
+        toValue: closedY,
         duration: 220,
         useNativeDriver: true,
       }),
@@ -696,7 +799,11 @@ const EditDrawer = ({
         <Animated.View
           style={[
             styles.drawer,
-            { transform: [{ translateY: sheetTranslateY }] },
+            {
+              maxHeight: height * 0.84,
+              paddingBottom: Math.max(insets.bottom, 8),
+              transform: [{ translateY: sheetTranslateY }],
+            },
           ]}
         >
           <View style={styles.drawerHandle} />
@@ -815,7 +922,6 @@ const EditDrawer = ({
           </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
-      `r`n{" "}
     </Modal>
   );
 };
@@ -1003,7 +1109,7 @@ const getInitials = (value?: string | null) => {
   return initials || fallback;
 };
 
-// â”€â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Styles
 
 const styles = StyleSheet.create({
   headerProgressPill: {
@@ -1099,7 +1205,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   content: {
-    paddingBottom: 32,
+    paddingTop: 2,
   },
   mediaPanel: {
     backgroundColor: Colors.bgCard,
@@ -1186,7 +1292,7 @@ const styles = StyleSheet.create({
   quickStats: {
     flexDirection: "row",
     gap: 10,
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginTop: 14,
   },
   quickStatCard: {
@@ -1293,7 +1399,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: 24,
     borderWidth: 1,
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     overflow: "hidden",
   },
   settingRow: {
@@ -1338,6 +1444,86 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: "center",
     width: 30,
+  },
+
+  photoSheetBackdrop: {
+    backgroundColor: "rgba(0,0,0,0.56)",
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  photoSheet: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderTopWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  photoSheetHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  photoSheetIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 18,
+    height: 48,
+    justifyContent: "center",
+    width: 48,
+  },
+  photoSheetCopy: {
+    flex: 1,
+  },
+  photoSheetTitle: {
+    color: Colors.textPrimary,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  photoSheetSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  photoSheetAction: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 16,
+  },
+  photoSheetDangerAction: {
+    backgroundColor: `${Colors.error}0D`,
+    borderColor: `${Colors.error}2E`,
+    marginTop: 10,
+  },
+  photoSheetActionText: {
+    color: Colors.textPrimary,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  photoSheetDangerText: {
+    color: Colors.error,
+  },
+  photoSheetCancel: {
+    alignItems: "center",
+    minHeight: 52,
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  photoSheetCancelText: {
+    color: Colors.textSecondary,
+    fontSize: 15,
+    fontWeight: "800",
   },
   // Animated Sheet drawer styles
   drawerBackdrop: {

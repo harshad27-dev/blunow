@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useColorScheme } from "nativewind";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 import { FontFamily, FontSize } from "@/constants/typography";
@@ -26,6 +27,8 @@ const fallbackProfileImage =
 
 export default function MatchDetailScreen() {
   const router = useRouter();
+  const { colorScheme } = useColorScheme();
+  const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
   const { profileId } = useLocalSearchParams<{ profileId: string }>();
   const { data: profiles = [], isLoading } = useMatchRecommendationsQuery();
   const sendMatchRequest = useSendMatchRequestMutation();
@@ -86,7 +89,7 @@ export default function MatchDetailScreen() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style={statusBarStyle} translucent backgroundColor="transparent" />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.hero}>

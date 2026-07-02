@@ -46,6 +46,7 @@ export class SearchRepository {
           },
           include: {
             profile: true,
+            stats: { select: { followerCount: true } },
             verification: { select: { status: true } },
           },
           orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -103,7 +104,8 @@ export class SearchRepository {
         return {
           id: user.id,
           username: user.profile?.username ?? user.email.split("@")[0],
-          name: user.profile?.username ?? user.email.split("@")[0],
+          name: user.profile?.name ?? user.profile?.username ?? user.email.split("@")[0],
+          followersCount: user.stats?.followerCount ?? 0,
           age: getAge(user.profile?.birthDate),
           city: user.profile?.location ?? "Location not set",
           distance,
@@ -155,13 +157,15 @@ export class SearchRepository {
     if (type === "all" || type === "users") {
       const u = await prisma.$queryRawUnsafe(
         `
-        SELECT u.id, prof.username, prof."avatarUrl", prof.bio, prof."birthDate", prof.interests, prof.location
+        SELECT u.id, prof.username, prof.name, prof."avatarUrl", prof.bio, prof."birthDate", prof.interests, prof.location, COALESCE(stats."followerCount", 0) AS "followersCount"
         FROM "users" u
         JOIN "profiles" prof ON u.id = prof."userId"
+        LEFT JOIN "user_stats" stats ON stats."userId" = u.id
         LEFT JOIN "user_privacy_preferences" privacy ON privacy."userId" = u.id
         WHERE (
-          to_tsvector('english', prof.username || ' ' || COALESCE(prof.bio, '')) @@ plainto_tsquery('english', $1)
+          to_tsvector('english', prof.username || ' ' || COALESCE(prof.name, '') || ' ' || COALESCE(prof.bio, '')) @@ plainto_tsquery('english', $1)
           OR prof.username ILIKE '%' || $1 || '%'
+          OR prof.name ILIKE '%' || $1 || '%'
         )
         AND u.id <> $4
         AND u."isActive" = true

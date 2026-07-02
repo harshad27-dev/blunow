@@ -11,6 +11,7 @@ import {
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { ScreenStyles } from "@/constants/screen";
+import { useColorScheme } from "nativewind";
 
 type ScreenProps = {
   children: React.ReactNode;
@@ -30,9 +31,11 @@ export function Screen({
   padded = false,
   style,
 }: ScreenProps) {
+  const { colorScheme } = useColorScheme();
+
   return (
     <SafeAreaView edges={edges} style={[ScreenStyles.root, style]}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={colorScheme === "dark" ? "light-content" : "dark-content"} />
       <View style={[ScreenStyles.fill, padded && ScreenStyles.padded]}>
         {children}
       </View>
@@ -48,9 +51,11 @@ export function ScreenScroll({
   contentContainerStyle,
   showsVerticalScrollIndicator = false,
 }: ScreenScrollProps) {
+  const { colorScheme } = useColorScheme();
+
   return (
     <SafeAreaView edges={edges} style={[ScreenStyles.root, style]}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={colorScheme === "dark" ? "light-content" : "dark-content"} />
       <ScrollView
         style={ScreenStyles.fill}
         contentContainerStyle={[

@@ -24,9 +24,10 @@ import { useAuthStore } from "@/store/authStore";
 import { matchService } from "@/services/match.service";
 import { userService } from "@/services/user.service";
 import { moderationService } from "@/services/moderation.service";
-import { Colors } from "@/constants/colors";
+import { Colors, getThemeColors } from "@/constants/colors";
 import { FontFamily } from "@/constants/typography";
 import { showToast } from "@/utils/toast";
+import { useColorScheme } from "nativewind";
 
 const interestIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
   fitness: "barbell-outline",
@@ -74,6 +75,9 @@ export default function UserDetailScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
+  const theme = getThemeColors(colorScheme === "light" ? "light" : "dark");
+  const isDark = colorScheme === "dark";
   const { user: currentUser } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<
@@ -292,15 +296,15 @@ export default function UserDetailScreen() {
 
   if (profileLoading && !refreshing) {
     return (
-      <View style={[styles.screen, styles.centerContent]}>
+      <SafeAreaView edges={["top", "right", "bottom", "left"]} style={[styles.screen, styles.centerContent]}>
         <ActivityIndicator color={Colors.primary} size="large" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!userProfile) {
     return (
-      <SafeAreaView style={styles.emptyState}>
+      <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.emptyState}>
         <View style={styles.emptyIcon}>
           <Ionicons name="person-circle-outline" size={42} color={Colors.textMuted} />
         </View>
@@ -332,7 +336,7 @@ export default function UserDetailScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView edges={["left", "right"]} style={styles.screen}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{
@@ -352,12 +356,29 @@ export default function UserDetailScreen() {
           {/* Floating nav controls */}
           <View style={[styles.headerControls, { top: Math.max(insets.top + 8, 14) }]}>
             <TouchableOpacity
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
               style={styles.glassHeaderBtn}
               onPress={() => router.back()}
               activeOpacity={0.82}
             >
               <Ionicons name="chevron-back" size={22} color="#fff" />
             </TouchableOpacity>
+
+            <View
+              pointerEvents="none"
+              style={[
+                styles.headerUsernameWrap,
+                {
+                  backgroundColor: isDark ? "rgba(15,14,13,0.58)" : "rgba(28,28,28,0.34)",
+                  borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.18)",
+                },
+              ]}
+            >
+              <Text numberOfLines={1} style={styles.headerUsernameText}>
+                {displayName}
+              </Text>
+            </View>
 
             {!isOwnProfile && (
               <TouchableOpacity
@@ -533,60 +554,100 @@ export default function UserDetailScreen() {
         <View
           style={[
             styles.floatingActionBar,
-            { bottom: Math.max(insets.bottom + 12, 20) },
+            {
+              backgroundColor: isDark ? "rgba(23,20,18,0.94)" : "rgba(255,255,255,0.94)",
+              borderColor: isDark ? "rgba(255,255,255,0.10)" : theme.border,
+              bottom: Math.max(insets.bottom + 12, 20),
+              shadowColor: isDark ? "#000" : "rgba(28,28,28,0.28)",
+            },
           ]}
         >
-          {/* Follow Button */}
           <TouchableOpacity
-            style={[styles.actionRoundBtn, styles.actionRoundBtnMuted]}
+            accessibilityLabel={userProfile.isFollowing ? "Unfollow user" : "Follow user"}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: actionLoading !== null }}
+            hitSlop={8}
+            style={[
+              styles.actionRoundBtn,
+              {
+                backgroundColor: userProfile.isFollowing
+                  ? isDark
+                    ? "rgba(200,184,170,0.18)"
+                    : "rgba(177,159,145,0.18)"
+                  : isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(28,28,28,0.04)",
+                borderColor: userProfile.isFollowing ? `${theme.accent}66` : theme.border,
+              },
+              actionLoading !== null && styles.actionDisabled,
+            ]}
             onPress={handleFollow}
             disabled={actionLoading !== null}
-            activeOpacity={0.84}
+            activeOpacity={0.78}
           >
             {actionLoading === "follow" ? (
-              <ActivityIndicator color={Colors.textPrimary} size="small" />
+              <ActivityIndicator color={theme.textPrimary} size="small" />
             ) : (
               <Ionicons
                 name={userProfile.isFollowing ? "person-remove" : "person-add"}
                 size={20}
-                color={userProfile.isFollowing ? Colors.primaryLight : Colors.textPrimary}
+                color={userProfile.isFollowing ? theme.accent : theme.textPrimary}
               />
             )}
           </TouchableOpacity>
 
-          {/* Connect (Like/Heart) Button */}
           <TouchableOpacity
-            style={[styles.actionConnectBtn, actionLoading !== null && styles.actionDisabled]}
+            accessibilityLabel="Send connection request"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: actionLoading !== null }}
+            style={[
+              styles.actionConnectBtn,
+              {
+                backgroundColor: theme.primary,
+                shadowColor: isDark ? "#000" : theme.primary,
+              },
+              actionLoading !== null && styles.actionDisabled,
+            ]}
             onPress={handleConnect}
             disabled={actionLoading !== null}
             activeOpacity={0.84}
           >
             {actionLoading === "connect" ? (
-              <ActivityIndicator color={Colors.textInverse} size="small" />
+              <ActivityIndicator color={theme.textInverse} size="small" />
             ) : (
               <>
-                <Ionicons name="heart" size={18} color={Colors.textInverse} />
-                <Text style={styles.actionConnectText}>Connect</Text>
+                <Ionicons name="heart" size={18} color={theme.textInverse} />
+                <Text style={[styles.actionConnectText, { color: theme.textInverse }]}>Connect</Text>
               </>
             )}
           </TouchableOpacity>
 
-          {/* Chat/Message Button */}
           <TouchableOpacity
-            style={[styles.actionRoundBtn, styles.actionRoundBtnChat]}
+            accessibilityLabel="Message user"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: actionLoading !== null }}
+            hitSlop={8}
+            style={[
+              styles.actionRoundBtn,
+              {
+                backgroundColor: isDark ? "rgba(200,184,170,0.14)" : "rgba(177,159,145,0.16)",
+                borderColor: `${theme.accent}55`,
+              },
+              actionLoading !== null && styles.actionDisabled,
+            ]}
             onPress={handleMessage}
             disabled={actionLoading !== null}
-            activeOpacity={0.84}
+            activeOpacity={0.78}
           >
             {actionLoading === "message" ? (
-              <ActivityIndicator color={Colors.primaryLight} size="small" />
+              <ActivityIndicator color={theme.accent} size="small" />
             ) : (
-              <Ionicons name="chatbubble-ellipses" size={20} color={Colors.primaryLight} />
+              <Ionicons name="chatbubble-ellipses" size={20} color={theme.accent} />
             )}
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -650,6 +711,23 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  headerUsernameWrap: {
+    flex: 1,
+    height: 42,
+    marginHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  headerUsernameText: {
+    color: Colors.white,
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    lineHeight: 19,
+    maxWidth: "100%",
   },
 
   // Main lifted content
@@ -947,27 +1025,25 @@ const styles = StyleSheet.create({
   // Floating Actions bar overlay
   floatingActionBar: {
     position: "absolute",
-    left: 20,
-    right: 20,
-    height: 76,
+    left: 16,
+    right: 16,
+    minHeight: 72,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
-    borderRadius: 28,
+    gap: 10,
+    padding: 10,
+    borderRadius: 26,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: "rgba(255,255,255,0.92)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 10,
   },
   actionRoundBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -982,21 +1058,25 @@ const styles = StyleSheet.create({
   },
   actionConnectBtn: {
     flex: 1,
-    height: 50,
-    marginHorizontal: 12,
-    borderRadius: 25,
-    backgroundColor: Colors.primary,
+    minWidth: 0,
+    height: 52,
+    borderRadius: 26,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    paddingHorizontal: 16,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 3,
   },
   actionConnectText: {
-    color: Colors.textInverse,
-    fontWeight: "800",
+    fontFamily: FontFamily.bold,
     fontSize: 14,
+    lineHeight: 18,
   },
   actionDisabled: {
-    opacity: 0.5,
+    opacity: 0.48,
   },
 });

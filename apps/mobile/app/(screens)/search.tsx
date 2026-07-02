@@ -69,10 +69,21 @@ export default function SearchScreen() {
   const users = data?.users?.map((user: any) => ({
     id: user.id,
     username: user.username,
+    name:
+      user.name ||
+      user.profile?.name ||
+      [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+      '',
     avatarUrl: user.avatarUrl || user.profile?.avatarUrl,
     bio: user.bio || '',
     age: calculateAge(user.birthDate),
     distance: user.location || 'Nearby',
+    followersCount:
+      user.followersCount ??
+      user.followerCount ??
+      user.followers ??
+      user.stats?.followers ??
+      user._count?.followers,
     interests: user.interests || [],
     isActive: Boolean(user.isActive || user.online),
     isVerified: Boolean(user.isVerified || user.verified),
@@ -460,8 +471,8 @@ const styles = StyleSheet.create({
   },
   resultCardWrap: {
     alignItems: 'center',
-    marginBottom: Spacing.md + 4,
-    marginHorizontal: -(Spacing.md + 4),
+    marginBottom: 2,
+    // marginHorizontal: -(Spacing.md + 4),
   },
   resultSection: {
     marginBottom: Spacing.lg,

@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useColorScheme } from "nativewind";
 import { Radius, Spacing } from "@/constants/spacing";
 import { FontFamily, FontSize } from "@/constants/typography";
 
@@ -40,6 +41,8 @@ export function BirthDateCalendar({
   onChangeDate,
   value,
 }: BirthDateCalendarProps) {
+  const { colorScheme } = useColorScheme();
+  const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
   const selectedDate = parseBirthDate(value);
   const maxDate = getMaxBirthDate();
   const initialMonth = selectedDate ?? maxDate;
@@ -122,7 +125,7 @@ export function BirthDateCalendar({
         transparent
         visible={isOpen}
       >
-        <StatusBar style="light" backgroundColor="#1C1C1C" />
+        <StatusBar style={statusBarStyle} backgroundColor={Colors.black} />
         <View style={styles.calendarDialogBackdrop}>
           <Pressable
             accessibilityRole="button"

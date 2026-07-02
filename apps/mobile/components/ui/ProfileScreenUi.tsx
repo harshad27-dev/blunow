@@ -1,10 +1,11 @@
-﻿import React from "react";
+import React from "react";
 import {
   ActivityIndicator,
   Image,
   ScrollView,
   Text,
   Pressable,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -86,6 +87,9 @@ export const ProfileHero = ({
   onFollowingPress,
   onRequestsPress,
 }: ProfileHeroProps) => {
+  const { width, fontScale } = useWindowDimensions();
+  const compact = width < 380 || fontScale > 1.15;
+
   return (
     <View className="px-5 pb-2 pt-4">
       {/* Top Header bar */}
@@ -110,7 +114,7 @@ export const ProfileHero = ({
       </View>
 
       {/* Row with Avatar on the Left, and Stats on the Right */}
-      <View className="flex-row items-center justify-between rounded-[28px] border border-border bg-bg-card p-4">
+      <View className={`${compact ? "" : "flex-row items-center justify-between"} rounded-[28px] border border-border bg-bg-card p-4`}>
         {/* Avatar with circle ring and online status indicator */}
         <View className="relative">
           <View
@@ -148,7 +152,7 @@ export const ProfileHero = ({
         </View>
 
         {/* Stats section (Followers, Following, Requests) */}
-        <View className="ml-4 flex-1 flex-row items-center justify-around rounded-2xl px-1 py-3.5">
+        <View className={`${compact ? "mt-4" : "ml-4"} flex-1 flex-row items-center justify-around rounded-2xl px-1 py-3.5`}>
           <Pressable
             accessibilityRole="button"
             className="min-h-12 flex-1 items-center justify-center"
@@ -541,7 +545,7 @@ export const ProfileTabs = ({
 
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            className="relative min-h-12 flex-1 flex-row items-center justify-center gap-1 rounded-xl py-3"
+            className="relative min-h-12 flex-1 flex-row flex-wrap items-center justify-center gap-1 rounded-xl px-1 py-3"
             style={{ backgroundColor: active ? Colors.bgCard : Colors.transparent }}
           >
             <Ionicons
@@ -550,7 +554,7 @@ export const ProfileTabs = ({
               color={active ? Colors.primary : Colors.textSecondary}
             />
             <Text
-              className="text-xs font-bold"
+              className="text-xs font-bold" numberOfLines={1}
               style={{ color: active ? Colors.primary : Colors.textSecondary }}
             >
               {tab.label}

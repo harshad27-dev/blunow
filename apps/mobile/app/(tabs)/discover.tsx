@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useColorScheme } from "nativewind";
 
 import { CuratedMatchCard } from "@/components/discover/CuratedMatchCard";
 import { DailyPromptBanner } from "@/components/discover/DailyPromptBanner";
@@ -78,6 +79,8 @@ const getNextDropLabel = () => {
 };
 export default function DiscoverScreen() {
   const router = useRouter();
+  const { colorScheme } = useColorScheme();
+  const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
 
   const [selectedFilter, setSelectedFilter] = useState(
     EXPLORE_FILTERS[0].label,
@@ -253,7 +256,7 @@ export default function DiscoverScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+        <StatusBar style={statusBarStyle} />
         <View style={styles.centerState}>
           <ActivityIndicator color={Colors.textPrimary} size="large" />
           <Text style={styles.centerStateText}>Building your explore feed...</Text>
@@ -264,7 +267,7 @@ export default function DiscoverScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={statusBarStyle} />
 
       <ScrollView
         style={styles.container}

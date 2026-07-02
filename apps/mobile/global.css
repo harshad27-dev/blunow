@@ -26,24 +26,24 @@
   }
 
   .dark:root {
-    --color-primary: 28 28 28;
-    --color-primary-light: 177 159 145;
-    --color-primary-dark: 17 17 17;
-    --color-secondary: 111 98 89;
-    --color-secondary-light: 169 155 145;
+    --color-primary: 248 244 240;
+    --color-primary-light: 200 184 170;
+    --color-primary-dark: 11 10 9;
+    --color-secondary: 214 200 190;
+    --color-secondary-light: 232 221 212;
     --color-accent: 177 159 145;
-    --color-bg: 248 244 240;
-    --color-bg-card: 255 255 255;
-    --color-bg-elevated: 228 221 215;
-    --color-bg-input: 255 255 255;
-    --color-text-primary: 28 28 28;
-    --color-text-secondary: 111 98 89;
-    --color-text-muted: 169 155 145;
-    --color-inverse: 248 244 240;
-    --color-border: 228 221 215;
-    --color-border-focus: 177 159 145;
-    --color-success: 92 184 121;
-    --color-error: 180 35 69;
-    --color-warning: 154 103 0;
+    --color-bg: 15 14 13;
+    --color-bg-card: 23 20 18;
+    --color-bg-elevated: 36 31 27;
+    --color-bg-input: 29 25 22;
+    --color-text-primary: 248 244 240;
+    --color-text-secondary: 215 202 191;
+    --color-text-muted: 159 145 134;
+    --color-inverse: 17 17 17;
+    --color-border: 51 43 38;
+    --color-border-focus: 200 184 170;
+    --color-success: 109 213 140;
+    --color-error: 255 111 143;
+    --color-warning: 241 184 75;
   }
 }

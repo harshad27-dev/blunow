@@ -3,7 +3,6 @@ import {
   Animated,
   ActivityIndicator,
   AccessibilityInfo,
-  Dimensions,
   Easing,
   Image,
   Modal,
@@ -13,17 +12,19 @@ import {
   Switch,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useColorScheme } from "nativewind";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { Colors } from "@/constants/colors";
+import { Colors, getThemeColors, type ThemeColors } from "@/constants/colors";
 import { FontFamily } from "@/constants/typography";
 import { RangeSlider } from "@/components/common/RangeSlider";
 import {
@@ -40,7 +41,6 @@ import type {
 import { showToast } from "@/utils/toast";
 
 const bottomActionHeight = 100;
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 90;
 const INTEREST_OPTIONS = [
   "Music",
@@ -84,6 +84,9 @@ type PendingAction = "pass" | "chat" | "like" | "boost" | null;
 
 export default function MatchesScreen() {
   const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
+  const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const [matchBanner, setMatchBanner] = useState<{
@@ -117,7 +120,7 @@ export default function MatchesScreen() {
 
   // Derived interpolations for swipe tilt + overlays based on vertical swipe (pan.y)
   const cardRotation = pan.x.interpolate({
-    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+    inputRange: [-screenWidth / 2, 0, screenWidth / 2],
     outputRange: ["-10deg", "0deg", "10deg"],
     extrapolate: "clamp",
   });
@@ -152,7 +155,7 @@ export default function MatchesScreen() {
         if (dy > SWIPE_THRESHOLD) {
           // Down is LIKE (Y goes positive)
           Animated.timing(pan, {
-            toValue: { x: 0, y: SCREEN_HEIGHT * 1.5 },
+            toValue: { x: 0, y: screenHeight * 1.5 },
             duration: 240,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: false,
@@ -162,7 +165,7 @@ export default function MatchesScreen() {
         } else if (dy < -SWIPE_THRESHOLD) {
           // Up is PASS (Y goes negative)
           Animated.timing(pan, {
-            toValue: { x: 0, y: -SCREEN_HEIGHT * 1.5 },
+            toValue: { x: 0, y: -screenHeight * 1.5 },
             duration: 240,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: false,
@@ -799,7 +802,7 @@ export default function MatchesScreen() {
 
   return (
     <View style={styles.screen} {...panResponder.panHandlers}>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style={statusBarStyle} translucent backgroundColor="transparent" />
 
       {/* Full-screen photo or gradient fallback */}
       <Animated.View
@@ -836,7 +839,7 @@ export default function MatchesScreen() {
           <TouchableOpacity
             style={styles.photoTapZone}
             activeOpacity={1}
-            onPress={(e) => handlePhotoTap(e.nativeEvent.locationX, SCREEN_WIDTH)}
+            onPress={(e) => handlePhotoTap(e.nativeEvent.locationX, screenWidth)}
             accessibilityRole="button"
             accessibilityLabel="Profile photo. Tap left or right to change photo, or center to open profile."
           />
@@ -1371,7 +1374,7 @@ const IncomingRequestRow = ({
   );
 };
 
-// ─── Requests modal ───────────────────────────────────────────────────────────
+// Requests modal
 
 const RequestsModal = ({
   visible,
@@ -1387,10 +1390,13 @@ const RequestsModal = ({
   onAccept: (request: MatchRequest) => void;
   onReject: (request: MatchRequest) => void;
   onClose: () => void;
-}) => (
-  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+}) => {
+  const insets = useSafeAreaInsets();
+
+  return (
+  <Modal visible={visible} transparent animationType="slide" statusBarTranslucent accessibilityViewIsModal onRequestClose={onClose}>
     <View style={styles.modalBackdrop}>
-      <View style={styles.requestSheet}>
+      <View style={[styles.requestSheet, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
         {/* Handle */}
         <View style={styles.sheetHandle} />
 
@@ -1419,9 +1425,10 @@ const RequestsModal = ({
       </View>
     </View>
   </Modal>
-);
+  );
+};
 
-// ─── Filter modal ─────────────────────────────────────────────────────────────
+// Filter modal
 
 const FilterModal = ({
   visible,
@@ -1440,6 +1447,10 @@ const FilterModal = ({
   onReset: () => void;
   onClose: () => void;
 }) => {
+  const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
+  const theme = getThemeColors(colorScheme === "light" ? "light" : "dark");
+  const isDark = colorScheme === "dark";
   const selectedInterests = filters.interests ?? [];
   const updateFilters = (patch: Partial<MatchRecommendationFilters>) =>
     onChange({ ...filters, ...patch });
@@ -1451,25 +1462,25 @@ const FilterModal = ({
     });
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.filterSheet}>
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent accessibilityViewIsModal onRequestClose={onClose}>
+      <View style={[styles.modalBackdrop, { backgroundColor: isDark ? "rgba(0,0,0,0.72)" : "rgba(28,28,28,0.28)" }]}>
+        <View style={[styles.filterSheet, { backgroundColor: theme.bgCard, borderColor: theme.border, paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
           {/* Handle */}
-          <View style={styles.sheetHandle} />
+          <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
 
           <View style={styles.sheetHeader}>
             <View>
-              <Text style={styles.sheetTitle}>Filters</Text>
-              <Text style={styles.sheetSubtitle}>Refine who you see</Text>
+              <Text style={[styles.sheetTitle, { color: theme.textPrimary }]}>Filters</Text>
+              <Text style={[styles.sheetSubtitle, { color: theme.textSecondary }]}>Refine who you see</Text>
             </View>
-            <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose} activeOpacity={0.84} accessibilityRole="button" accessibilityLabel="Close dialog">
-              <Ionicons name="close" size={20} color={Colors.textPrimary} />
+            <TouchableOpacity style={[styles.sheetCloseBtn, { backgroundColor: theme.bgElevated }]} onPress={onClose} activeOpacity={0.84} accessibilityRole="button" accessibilityLabel="Close dialog">
+              <Ionicons name="close" size={20} color={theme.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Age */}
-            <FilterSection title="Age range" icon="calendar-outline">
+            <FilterSection title="Age range" icon="calendar-outline" theme={theme}>
               <View style={{ paddingVertical: 12, paddingHorizontal: 4 }}>
                 <RangeSlider
                   mode={'range'}
@@ -1485,7 +1496,7 @@ const FilterModal = ({
             </FilterSection>
 
             {/* Distance */}
-            <FilterSection title="Max distance" icon="navigate-outline">
+            <FilterSection title="Max distance" icon="navigate-outline" theme={theme}>
               <View style={{ paddingVertical: 12, paddingHorizontal: 4 }}>
                 <RangeSlider
                   mode={'single'}
@@ -1505,7 +1516,7 @@ const FilterModal = ({
             </FilterSection>
 
             {/* Gender */}
-            <FilterSection title="Show me" icon="people-outline">
+            <FilterSection title="Show me" icon="people-outline" theme={theme}>
               <View style={styles.chipRow}>
                 {GENDER_OPTIONS.map((option) => (
                   <FilterChip
@@ -1513,19 +1524,22 @@ const FilterModal = ({
                     label={option.label}
                     selected={filters.gender === option.value}
                     onPress={() => updateFilters({ gender: option.value })}
+                    theme={theme}
                   />
                 ))}
               </View>
             </FilterSection>
 
             {/* Toggles */}
-            <View style={styles.togglesCard}>
+            <View style={[styles.togglesCard, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
               <SwitchRow
                 label="Use my preference"
                 icon="heart-outline"
                 value={Boolean(filters.useMyPreference)}
                 onValueChange={(value) => updateFilters({ useMyPreference: value })}
                 last={false}
+                theme={theme}
+                isDark={isDark}
               />
               <SwitchRow
                 label="Verified profiles only"
@@ -1533,6 +1547,8 @@ const FilterModal = ({
                 value={Boolean(filters.verifiedOnly)}
                 onValueChange={(value) => updateFilters({ verifiedOnly: value })}
                 last={false}
+                theme={theme}
+                isDark={isDark}
               />
               <SwitchRow
                 label="Online now only"
@@ -1540,11 +1556,13 @@ const FilterModal = ({
                 value={Boolean(filters.onlineOnly)}
                 onValueChange={(value) => updateFilters({ onlineOnly: value })}
                 last
+                theme={theme}
+                isDark={isDark}
               />
             </View>
 
             {/* Interests */}
-            <FilterSection title="Interests" icon="sparkles-outline">
+            <FilterSection title="Interests" icon="sparkles-outline" theme={theme}>
               <View style={styles.chipRow}>
                 {interests.map((interest) => (
                   <FilterChip
@@ -1552,6 +1570,7 @@ const FilterModal = ({
                     label={interest}
                     selected={selectedInterests.includes(interest)}
                     onPress={() => toggleInterest(interest)}
+                    theme={theme}
                   />
                 ))}
               </View>
@@ -1560,11 +1579,11 @@ const FilterModal = ({
 
           {/* Actions */}
           <View style={styles.filterActions}>
-            <TouchableOpacity style={styles.resetBtn} onPress={onReset} activeOpacity={0.84}>
-              <Text style={styles.resetBtnText}>Reset</Text>
+            <TouchableOpacity style={[styles.resetBtn, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={onReset} activeOpacity={0.84}>
+              <Text style={[styles.resetBtnText, { color: theme.textPrimary }]}>Reset</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.applyBtn} onPress={onApply} activeOpacity={0.84}>
-              <Text style={styles.applyBtnText}>Apply filters</Text>
+            <TouchableOpacity style={[styles.applyBtn, { backgroundColor: theme.primary }]} onPress={onApply} activeOpacity={0.84}>
+              <Text style={[styles.applyBtnText, { color: theme.textInverse }]}>Apply filters</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1573,21 +1592,25 @@ const FilterModal = ({
   );
 };
 
-// ─── Filter sub-components ────────────────────────────────────────────────────
+// Filter sub-components
 
 const FilterSection = ({
   title,
   icon,
   children,
+  theme,
 }: {
   title: string;
   icon: keyof typeof Ionicons.glyphMap;
   children: React.ReactNode;
+  theme: ThemeColors;
 }) => (
   <View style={styles.filterSection}>
     <View style={styles.filterSectionHeader}>
-      <Ionicons name={icon} size={14} color={Colors.textSecondary} />
-      <Text style={styles.filterSectionTitle}>{title.toUpperCase()}</Text>
+      <Ionicons name={icon} size={14} color={theme.textSecondary} />
+      <Text style={[styles.filterSectionTitle, { color: theme.textSecondary }]}>
+        {title.toUpperCase()}
+      </Text>
     </View>
     {children}
   </View>
@@ -1597,20 +1620,33 @@ const FilterChip = ({
   label,
   selected,
   onPress,
+  theme,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  theme: ThemeColors;
 }) => (
   <TouchableOpacity
-    style={[styles.filterChip, selected && styles.filterChipSelected]}
+    style={[
+      styles.filterChip,
+      {
+        backgroundColor: selected ? theme.primary : theme.bgElevated,
+        borderColor: selected ? theme.primary : theme.border,
+      },
+    ]}
     onPress={onPress}
     activeOpacity={0.84}
     accessibilityRole="button"
     accessibilityState={{ selected }}
     accessibilityLabel={label}
   >
-    <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
+    <Text
+      style={[
+        styles.filterChipText,
+        { color: selected ? theme.textInverse : theme.textPrimary },
+      ]}
+    >
       {label}
     </Text>
   </TouchableOpacity>
@@ -1622,29 +1658,42 @@ const SwitchRow = ({
   value,
   onValueChange,
   last,
+  theme,
+  isDark,
 }: {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   value: boolean;
   onValueChange: (value: boolean) => void;
   last: boolean;
+  theme: ThemeColors;
+  isDark: boolean;
 }) => (
-  <View style={[styles.switchRow, !last && styles.switchRowBorder]}>
+  <View
+    style={[
+      styles.switchRow,
+      !last && styles.switchRowBorder,
+      !last && { borderBottomColor: theme.border },
+    ]}
+  >
     <View style={styles.switchRowLeft}>
-      <View style={styles.switchRowIcon}>
-        <Ionicons name={icon} size={16} color={Colors.textSecondary} />
+      <View style={[styles.switchRowIcon, { backgroundColor: theme.bgCard }]}>
+        <Ionicons name={icon} size={16} color={theme.textSecondary} />
       </View>
-      <Text style={styles.switchRowLabel}>{label}</Text>
+      <Text style={[styles.switchRowLabel, { color: theme.textPrimary }]}>{label}</Text>
     </View>
     <Switch
       value={value}
       onValueChange={onValueChange}
-      trackColor={{ false: Colors.border, true: Colors.primaryLight }}
-      thumbColor={value ? Colors.primary : Colors.bgCard}
+      trackColor={{
+        false: isDark ? "rgba(255,255,255,0.18)" : theme.border,
+        true: theme.primaryLight,
+      }}
+      thumbColor={value ? theme.primary : theme.bgCard}
+      ios_backgroundColor={isDark ? "rgba(255,255,255,0.18)" : theme.border}
     />
   </View>
 );
-
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
 // ─── Profile image fallback ───────────────────────────────────────────────────
@@ -2424,7 +2473,6 @@ emptySecondaryButtonText: {
     borderTopRightRadius: 32,
     backgroundColor: Colors.bgCard,
     paddingHorizontal: 20,
-    paddingBottom: 32,
     paddingTop: 8,
   },
   requestSheet: {
@@ -2433,7 +2481,6 @@ emptySecondaryButtonText: {
     borderTopRightRadius: 32,
     backgroundColor: Colors.bgCard,
     paddingHorizontal: 20,
-    paddingBottom: 32,
     paddingTop: 8,
   },
   sheetHandle: {
@@ -2451,7 +2498,7 @@ emptySecondaryButtonText: {
     justifyContent: "space-between",
     marginBottom: 20,
   },
-  sheetTitle: { fontSize: 22, fontWeight: "800", color: Colors.textPrimary },
+  sheetTitle: { flexShrink: 1, fontSize: 22, fontWeight: "800", color: Colors.textPrimary },
   sheetSubtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
   sheetCloseBtn: {
     width: 40,

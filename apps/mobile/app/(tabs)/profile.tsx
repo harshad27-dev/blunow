@@ -9,7 +9,7 @@ import {
   Pressable,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,13 +20,9 @@ import {
   ProfileCompletionCard,
   ProfileEmptyState,
   ProfileHero,
-  ProfileJourneyCard,
   ProfileTabs,
 } from "@/components/ui/ProfileScreenUi";
-import type {
-  JourneyMetric,
-  ProfileTab,
-} from "@/components/ui/ProfileScreenUi";
+import type { ProfileTab } from "@/components/ui/ProfileScreenUi";
 import type { Match, MatchRequest } from "@/types/match.types";
 import { useAuthStore } from "@/store/authStore";
 import {
@@ -43,6 +39,7 @@ import {
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
 
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -55,7 +52,7 @@ export default function ProfileScreen() {
   } | null>(null);
 
   const { data: liveUser } = useUserProfileQuery(user?.id);
-  const { data: stats, isLoading: statsLoading } = useUserStatsQuery(user?.id);
+  const { data: stats } = useUserStatsQuery(user?.id);
   const { data: posts, isLoading: postsLoading } = useUserPostsQuery(user?.id);
   const { data: stories, isLoading: storiesLoading } = useUserStoriesQuery(
     user?.id,
@@ -157,37 +154,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const journeyMetrics: JourneyMetric[] = [
-    {
-      icon: "eye-outline",
-      color: Colors.primaryLight,
-      label: "Profile Views",
-      value: stats?.profileViews || 0,
-      caption: "People viewed you",
-    },
-    {
-      icon: "heart-half",
-      color: Colors.secondary,
-      label: "Likes Received",
-      value: stats?.likesReceived || 0,
-      caption: "You're liked by",
-    },
-    {
-      icon: "heart-circle",
-      color: Colors.success,
-      label: "Matches",
-      value: stats?.matchCount || 0,
-      caption: "It's a match!",
-    },
-    {
-      icon: "chatbubble-ellipses-outline",
-      color: Colors.primary,
-      label: "Conversations",
-      value: stats?.conversationsCount || 0,
-      caption: "Active chats",
-    },
-  ];
-
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
@@ -207,7 +173,8 @@ export default function ProfileScreen() {
     <SafeAreaView edges={["top", "left", "right"]} className="flex-1 bg-bg">
       <ScrollView
         className="flex-1"
-        contentContainerClassName="pb-16" keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 72, 96) }}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -247,11 +214,6 @@ export default function ProfileScreen() {
           onRequestsPress={() => setIsRequestsModalVisible(true)}
         />
 
-        {/* <ProfileJourneyCard
-          loading={statsLoading}
-          metrics={journeyMetrics}
-          updatedAt={stats?.lastUpdated}
-        /> */}
         <ProfileCompletionCard completion={completion} onPress={openCompletionDialog} />
         <ProfileTabs
           activeTab={activeTab}
@@ -356,7 +318,10 @@ const RequestsModal = ({
   onAccept: (request: MatchRequest) => void;
   onReject: (request: MatchRequest) => void;
   onClose: () => void;
-}) => (
+}) => {
+  const insets = useSafeAreaInsets();
+
+  return (
   <Modal
     visible={visible}
     transparent
@@ -366,7 +331,10 @@ const RequestsModal = ({
     onRequestClose={onClose}
   >
     <View className="flex-1 justify-end" style={{ backgroundColor: Colors.overlayDark }}>
-      <View className="max-h-[84%] rounded-t-[32px] border-t border-border bg-bg-card px-5 pb-8 pt-2">
+      <View
+        className="max-h-[84%] rounded-t-[32px] border-t border-border bg-bg-card px-5 pt-2"
+        style={{ paddingBottom: Math.max(insets.bottom + 16, 32) }}
+      >
         {/* Handle */}
         <View className="mb-5 mt-1 h-1 w-10 self-center rounded-full bg-border" />
 
@@ -418,7 +386,8 @@ const RequestsModal = ({
       </View>
     </View>
   </Modal>
-);
+  );
+};
 
 const IncomingRequestRow = ({
   request,

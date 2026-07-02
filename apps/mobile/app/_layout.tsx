@@ -15,9 +15,10 @@ import {
 } from "@expo-google-fonts/outfit";
 import * as SplashScreen from "expo-splash-screen";
 import { useAuthStore } from "@/store/authStore";
-import { Colors } from "@/constants/colors";
+import { getThemeColors } from "@/constants/colors";
 import { AnimatedAppSplash } from "@/components/AnimatedAppSplash";
 import { StartupLocationPrompt } from "@/components/location/StartupLocationPrompt";
+import { useColorScheme } from "nativewind";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -48,6 +49,9 @@ function AuthGuard() {
 
 export default function RootLayout() {
   const { isLoading, rehydrate } = useAuthStore();
+  const { colorScheme } = useColorScheme();
+  const themeName = colorScheme === "light" ? "light" : "dark";
+  const colors = getThemeColors(themeName);
   const [splashDelayDone, setSplashDelayDone] = useState(false);
   const [fontTimeoutDone, setFontTimeoutDone] = useState(false);
 
@@ -95,17 +99,17 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>
           <AuthGuard />
           <StatusBar
-            style="dark"
-            backgroundColor={Colors.bg}
+            style={themeName === "dark" ? "light" : "dark"}
+            backgroundColor={colors.bg}
             translucent={false}
           />
           <Stack
             screenOptions={{
               headerShown: false,
-              contentStyle: { backgroundColor: Colors.bg },
+              contentStyle: { backgroundColor: colors.bg },
               animation: "none",
             }}
           >

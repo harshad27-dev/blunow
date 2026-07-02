@@ -41,6 +41,7 @@ import { useAuthStore } from "@/store/authStore";
 import { postService } from "@/services/post.service";
 import { storage } from "@/utils/storage";
 import { BirthDateCalendar } from "@/components/onboarding/BirthDateCalendar";
+import { useColorScheme } from "nativewind";
 
 const INTEREST_OPTIONS = [
   "Music",
@@ -157,6 +158,8 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
+  const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
   const { height } = useWindowDimensions();
   const updateProfileMutation = useUpdateProfileMutation();
   const refreshUser = useAuthStore((state) => state.refreshUser);
@@ -563,7 +566,7 @@ export default function OnboardingScreen() {
         screenAnimatedStyle,
       ]}
     >
-      <StatusBar style="dark" backgroundColor={activeTheme.colors[0]} />
+      <StatusBar style={statusBarStyle} backgroundColor={activeTheme.colors[0]} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.keyboardView}
@@ -1362,6 +1365,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
+  ambientBand: {
+    borderRadius: Radius.full,
+    opacity: 0.18,
+    position: "absolute",
+  },
+  ambientBandOne: {
+    height: 180,
+    right: -58,
+    top: 76,
+    width: 180,
+  },
+  ambientBandTwo: {
+    height: 132,
+    left: -42,
+    top: 148,
+    width: 132,
+  },
+  topCopy: {
+    flex: 1,
+    paddingRight: Spacing.md,
+  },
   topLabel: {
     color: Colors.textPrimary,
     fontFamily: FontFamily.bold,
@@ -1382,6 +1406,20 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: "center",
     width: 44,
+  },
+  progressTrack: {
+    backgroundColor: "rgba(28,28,28,0.12)",
+    borderRadius: Radius.full,
+    height: 5,
+    marginTop: Spacing.sm,
+    overflow: "hidden",
+    width: "100%",
+  },
+  progressFill: {
+    backgroundColor: Colors.textPrimary,
+    borderRadius: Radius.full,
+    height: "100%",
+    width: "100%",
   },
   scrollContent: { flexGrow: 1, paddingHorizontal: Spacing.lg },
   scrollView: { alignSelf: "stretch" },

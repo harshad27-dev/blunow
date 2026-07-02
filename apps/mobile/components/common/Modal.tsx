@@ -12,6 +12,7 @@ import {
 import { Colors } from "@/constants/colors";
 import { Radius, Spacing } from "@/constants/spacing";
 import { FontFamily, FontSize } from "@/constants/typography";
+import { useColorScheme } from "nativewind";
 
 type DialogAction = {
   label: string;
@@ -43,6 +44,9 @@ export function CustomDialog({
   dismissOnBackdropPress = true,
   onClose,
 }: CustomDialogProps) {
+  const { colorScheme } = useColorScheme();
+  const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
+
   const handleBackdropPress = () => {
     if (dismissOnBackdropPress) onClose?.();
   };
@@ -55,7 +59,7 @@ export function CustomDialog({
       transparent
       visible={visible}
     >
-      <StatusBar style="light" backgroundColor="#1C1C1C" />
+      <StatusBar style={statusBarStyle} backgroundColor={Colors.black} />
       <View style={styles.backdrop}>
         <Pressable
           accessibilityRole="button"
@@ -84,9 +88,9 @@ export function CustomDialog({
                   ? accent
                   : isDanger
                     ? Colors.error
-                    : Colors.white;
+                    : Colors.bgElevated;
                 const textColor = isPrimary || isDanger
-                  ? Colors.white
+                  ? Colors.textInverse
                   : Colors.textPrimary;
 
                 return (
@@ -122,7 +126,7 @@ export default CustomDialog;
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: "center",
-    backgroundColor: "rgba(28,28,28,0.42)",
+    backgroundColor: Colors.overlay,
     flex: 1,
     justifyContent: "center",
     padding: Spacing.lg,
@@ -136,8 +140,10 @@ const styles = StyleSheet.create({
   },
   card: {
     alignItems: "center",
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
     borderRadius: Radius.xl,
+    borderWidth: 1,
     maxWidth: 420,
     padding: Spacing.lg,
     shadowColor: Colors.black,
@@ -187,7 +193,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
   secondaryAction: {
-    borderColor: "rgba(28,28,28,0.1)",
+    borderColor: Colors.border,
     borderWidth: 1,
   },
   actionDisabled: { opacity: 0.45 },

@@ -140,7 +140,7 @@ export function StartupLocationPrompt() {
           ]}
         >
           <LinearGradient
-            colors={["#FFFFFF", "#F8F4F0"]}
+            colors={Colors.gradientCard}
             style={styles.card}
           >
             <View style={styles.visualWrap} accessible accessibilityLabel="Nearby match preview">

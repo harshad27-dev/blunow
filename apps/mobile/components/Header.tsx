@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useChatConversationsQuery } from '@/hooks/useChat';
 import { Colors } from '@/constants/colors';
+import { useColorScheme } from 'nativewind';
+import { StatusBar } from 'expo-status-bar';
 
 const HEADER_SHADOW = {
   shadowColor: Colors.black,
@@ -18,6 +20,10 @@ const ACTION_BUTTON_CLASS =
 
 export default function Header() {
   const router = useRouter();
+  const { colorScheme } = useColorScheme();
+  const logoSource = colorScheme === 'dark'
+    ? require('@/assets/images/logo.png')
+    : require('@/assets/images/logoBlack.png');
   const { data: conversations = [] } = useChatConversationsQuery();
 
   const unreadChats = conversations.reduce(
@@ -27,10 +33,11 @@ export default function Header() {
 
   return (
     <SafeAreaView edges={['top']} className="border-b border-border bg-bg">
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <View className="flex-row items-center justify-between px-5 pb-3 pt-2">
         <View className="flex-row items-center">
           <Image
-            source={require('@/assets/images/logoBlack.png')}
+            source={logoSource}
             className="h-10 w-32"
             resizeMode="contain"
           />

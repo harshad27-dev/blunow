@@ -7,8 +7,9 @@ import {
   LayoutChangeEvent,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import { Colors } from "@/constants/colors";
+import { Colors, getThemeColors } from "@/constants/colors";
 import { FontFamily } from "@/constants/typography";
+import { useColorScheme } from "nativewind";
 
 interface RangeSliderProps {
   min: number;
@@ -39,6 +40,8 @@ export const RangeSlider: React.FC<RangeSliderProps> = ({
   singleThumb,
   valueFormatter,
 }) => {
+  const { colorScheme } = useColorScheme();
+  const theme = getThemeColors(colorScheme === "light" ? "light" : "dark");
   const [containerWidth, setContainerWidth] = useState(0);
   const [activeThumb, setActiveThumb] = useState<"min" | "max" | null>(null);
 
@@ -192,15 +195,15 @@ export const RangeSlider: React.FC<RangeSliderProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
       {/* Label and display values */}
       <View style={styles.rangeLabelRow}>
-        <Text style={styles.rangeText}>
+        <Text style={[styles.rangeText, { color: theme.textPrimary }]}>
           {valueFormatter
             ? valueFormatter(localMin, localMax)
             : `${localMin}–${localMax} years old`}
         </Text>
-        <Text style={styles.modeText}>
+        <Text style={[styles.modeText, { backgroundColor: theme.bgCard, color: theme.textSecondary }]}>
           {resolvedMode === "single" ? "MAXIMUM" : "RANGE"}
         </Text>
       </View>
@@ -212,7 +215,7 @@ export const RangeSlider: React.FC<RangeSliderProps> = ({
         {...panResponderInstance.panHandlers}
       >
         {/* Gray Background Track */}
-        <View style={styles.trackBackground} pointerEvents="none" />
+        <View style={[styles.trackBackground, { backgroundColor: theme.border }]} pointerEvents="none" />
 
         {/* Active Highlighted Track */}
         <View
@@ -238,10 +241,10 @@ export const RangeSlider: React.FC<RangeSliderProps> = ({
           ]}
           pointerEvents="none"
         >
-          <View style={styles.bubble}>
-            <Text style={styles.bubbleText}>{localMin}</Text>
+          <View style={[styles.bubble, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.bubbleText, { color: theme.textInverse }]}>{localMin}</Text>
           </View>
-          <View style={styles.bubbleArrow} />
+          <View style={[styles.bubbleArrow, { backgroundColor: theme.primary }]} />
         </View> : null}
 
         {/* Right Tooltip */}
@@ -256,34 +259,34 @@ export const RangeSlider: React.FC<RangeSliderProps> = ({
           ]}
           pointerEvents="none"
         >
-          <View style={styles.bubble}>
-            <Text style={styles.bubbleText}>{localMax}</Text>
+          <View style={[styles.bubble, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.bubbleText, { color: theme.textInverse }]}>{localMax}</Text>
           </View>
-          <View style={styles.bubbleArrow} />
+          <View style={[styles.bubbleArrow, { backgroundColor: theme.primary }]} />
         </View> : null}
 
         {/* Left Thumb (Min) */}
         {showMinThumb ? <View
           style={[
             styles.thumb,
-            { left: minX },
-            activeThumb === "min" && styles.thumbActive,
+            { backgroundColor: theme.bgCard, borderColor: theme.primary, left: minX },
+            activeThumb === "min" && [styles.thumbActive, { borderColor: theme.accent }],
           ]}
           pointerEvents="none"
         >
-          <View style={styles.thumbDot} />
+          <View style={[styles.thumbDot, { backgroundColor: theme.primary }]} />
         </View> : null}
 
         {/* Right Thumb (Max) */}
         {showMaxThumb ? <View
           style={[
             styles.thumb,
-            { left: maxX },
-            activeThumb === "max" && styles.thumbActive,
+            { backgroundColor: theme.bgCard, borderColor: theme.primary, left: maxX },
+            activeThumb === "max" && [styles.thumbActive, { borderColor: theme.accent }],
           ]}
           pointerEvents="none"
         >
-          <View style={styles.thumbDot} />
+          <View style={[styles.thumbDot, { backgroundColor: theme.primary }]} />
         </View> : null}
       </View>
     </View>
