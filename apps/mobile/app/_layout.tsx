@@ -17,6 +17,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useAuthStore } from "@/store/authStore";
 import { Colors } from "@/constants/colors";
 import { AnimatedAppSplash } from "@/components/AnimatedAppSplash";
+import { StartupLocationPrompt } from "@/components/location/StartupLocationPrompt";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -112,6 +113,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="(screens)" />
           </Stack>
+          <StartupLocationPrompt />
         </View>
       </QueryClientProvider>
     </SafeAreaProvider>

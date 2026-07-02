@@ -1,4 +1,4 @@
-const DEFAULT_DEV_API_URL = "http://192.168.1.59:3001";
+const DEFAULT_DEV_API_URL = "http://192.168.0.135:3001";
 const DEFAULT_PROD_API_URL = "https://api.blunow.app";
 
 const API_URL = (

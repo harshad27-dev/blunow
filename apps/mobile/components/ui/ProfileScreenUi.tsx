@@ -1,10 +1,10 @@
-import React from "react";
+﻿import React from "react";
 import {
   ActivityIndicator,
   Image,
   ScrollView,
   Text,
-  TouchableOpacity,
+  Pressable,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -65,7 +65,7 @@ const interestColors = [
   "#9A7B6A",
 ];
 
-// ─── Profile Hero ────────────────────────────────────────────────────────────
+// Section
 
 export const ProfileHero = ({
   avatarUrl,
@@ -87,27 +87,30 @@ export const ProfileHero = ({
   onRequestsPress,
 }: ProfileHeroProps) => {
   return (
-    <View className="px-5 pt-4 pb-2">
+    <View className="px-5 pb-2 pt-4">
       {/* Top Header bar */}
-      <View className="flex-row items-center justify-between py-2 mb-4">
-        <Text className="text-xl font-extrabold" style={{ color: Colors.textPrimary }}>
+      <View className="mb-6 flex-row items-center justify-between py-2">
+        <Text className="text-[28px] font-black" style={{ color: Colors.textPrimary }}>
           Profile
         </Text>
-        <TouchableOpacity
-          className="h-10 w-10 items-center justify-center rounded-xl border"
+        <Pressable
+          accessibilityLabel="Open settings"
+          accessibilityRole="button"
+          hitSlop={8}
+          className="h-12 w-12 items-center justify-center rounded-2xl border"
           style={{
             borderColor: Colors.border,
             backgroundColor: Colors.bgCard,
           }}
           onPress={onSettings}
-          activeOpacity={0.8}
+
         >
           <Ionicons name="settings-outline" size={20} color={Colors.textPrimary} />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* Row with Avatar on the Left, and Stats on the Right */}
-      <View className="flex-row items-center justify-between">
+      <View className="flex-row items-center justify-between rounded-[28px] border border-border bg-bg-card p-4">
         {/* Avatar with circle ring and online status indicator */}
         <View className="relative">
           <View
@@ -145,11 +148,12 @@ export const ProfileHero = ({
         </View>
 
         {/* Stats section (Followers, Following, Requests) */}
-        <View className="flex-1 flex-row items-center justify-around ml-6 bg-bg-card py-3.5 px-2 rounded-2xl border border-border/60">
-          <TouchableOpacity
-            className="items-center flex-1"
+        <View className="ml-4 flex-1 flex-row items-center justify-around rounded-2xl px-1 py-3.5">
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-12 flex-1 items-center justify-center"
             onPress={onFollowersPress}
-            activeOpacity={0.8}
+
           >
             <Text
               className="text-[17px] font-extrabold"
@@ -158,19 +162,20 @@ export const ProfileHero = ({
               {followersCount}
             </Text>
             <Text
-              className="text-[10px] font-bold uppercase tracking-wider text-text-muted mt-0.5"
+              className="text-[10px] font-bold  tracking-wider text-text-muted mt-0.5"
             >
               Followers
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Divider */}
           <View className="h-6 w-[1px] bg-border" />
 
-          <TouchableOpacity
-            className="items-center flex-1"
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-12 flex-1 items-center justify-center"
             onPress={onFollowingPress}
-            activeOpacity={0.8}
+
           >
             <Text
               className="text-[17px] font-extrabold"
@@ -179,19 +184,20 @@ export const ProfileHero = ({
               {followingCount}
             </Text>
             <Text
-              className="text-[10px] font-bold uppercase tracking-wider text-text-muted mt-0.5"
+              className="text-[10px] font-bold tracking-wider text-text-muted mt-0.5"
             >
               Following
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Divider */}
           <View className="h-6 w-[1px] bg-border" />
 
-          <TouchableOpacity
-            className="items-center flex-1"
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-12 flex-1 items-center justify-center"
             onPress={onRequestsPress}
-            activeOpacity={0.8}
+
           >
             <Text
               className="text-[17px] font-extrabold"
@@ -200,16 +206,14 @@ export const ProfileHero = ({
               {requestsCount}
             </Text>
             <Text
-              className="text-[10px] font-bold uppercase tracking-wider text-text-muted mt-0.5"
+              className="text-[10px] font-bold tracking-wider text-text-muted mt-0.5"
             >
               Requests
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
-
-      {/* ── Identity (Display Name, handle) ── */}
-      <View className="mt-4">
+<View className="mt-5 rounded-[28px] border border-border bg-bg-card p-5">
         {/* Name + verification */}
         <View className="flex-row items-center gap-1.5">
           <Text
@@ -274,30 +278,31 @@ export const ProfileHero = ({
           </ScrollView>
         )}
 
-        {/* Full Width Edit Profile Button */}
-        <TouchableOpacity
-          className="mt-5 flex-row items-center justify-center gap-2 rounded-2xl py-3.5 border"
+        {/* Full Width Edit profile Button */}
+        <Pressable
+          accessibilityRole="button"
+          className="mt-5 min-h-12 flex-row items-center justify-center gap-2 rounded-2xl border"
           style={{
-            borderColor: Colors.border,
-            backgroundColor: Colors.bgCard,
+            borderColor: Colors.primary,
+            backgroundColor: Colors.primary,
           }}
           onPress={onEditProfile}
-          activeOpacity={0.86}
+
         >
-          <Ionicons name="create-outline" size={18} color={Colors.textPrimary} />
+          <Ionicons name="create-outline" size={18} color={Colors.textInverse} />
           <Text
             className="text-sm font-bold"
-            style={{ color: Colors.textPrimary }}
+            style={{ color: Colors.textInverse }}
           >
-            Edit Profile
+            Edit profile
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   );
 };
 
-// ─── Journey Card ─────────────────────────────────────────────────────────────
+// Section
 
 export const ProfileJourneyCard = ({
   loading,
@@ -350,7 +355,7 @@ export const ProfileJourneyCard = ({
       >
         {!loading ? <View className="h-1.5 w-1.5 rounded-full bg-success" /> : null}
         <Text className="text-[9px] font-bold" style={{ color: Colors.textSecondary }}>
-          {loading ? "Syncing…" : getSyncLabel(updatedAt)}
+          {loading ? "Syncing..." : getSyncLabel(updatedAt)}
         </Text>
       </View>
     </View>
@@ -414,7 +419,7 @@ export const ProfileJourneyCard = ({
   </View>
 );
 
-// ─── Completion Card ──────────────────────────────────────────────────────────
+// Section
 
 export const ProfileCompletionCard = ({
   completion,
@@ -426,7 +431,7 @@ export const ProfileCompletionCard = ({
   const pct = Math.min(100, Math.max(0, completion));
 
   return (
-    <TouchableOpacity
+    <Pressable
       className="mx-5 mt-5 overflow-hidden rounded-[24px]"
       style={{
         borderWidth: 1,
@@ -434,7 +439,7 @@ export const ProfileCompletionCard = ({
         backgroundColor: Colors.bgCard,
       }}
       onPress={onPress}
-      activeOpacity={0.88}
+
     >
       <View className="p-5 flex-row items-center justify-between">
         {/* Left Content */}
@@ -478,11 +483,11 @@ export const ProfileCompletionCard = ({
           />
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
-// ─── Account Actions ──────────────────────────────────────────────────────────
+// Section
 
 export const ProfileAccountActions = ({
   onSettings,
@@ -506,7 +511,7 @@ export const ProfileAccountActions = ({
   </View>
 );
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
+// Section
 
 const TABS: { id: ProfileTab; label: string; icon: keyof typeof Ionicons.glyphMap; activeIcon: keyof typeof Ionicons.glyphMap }[] = [
   { id: "posts", label: "Posts", icon: "grid-outline", activeIcon: "grid" },
@@ -524,17 +529,20 @@ export const ProfileTabs = ({
   onTabChange: (tab: ProfileTab) => void;
   counts?: Partial<Record<ProfileTab, number>>;
 }) => (
-  <View className="mt-6 border-b border-border bg-bg-card">
-    <View className="flex-row px-2">
+  <View className="mx-5 mt-6 rounded-2xl bg-bg-elevated p-1">
+    <View className="flex-row">
       {TABS.map((tab) => {
         const active = activeTab === tab.id;
         const count = counts?.[tab.id] ?? 0;
         return (
-          <TouchableOpacity
+          <Pressable
             key={tab.id}
             onPress={() => onTabChange(tab.id)}
-            activeOpacity={0.8}
-            className="flex-1 items-center py-3.5 relative flex-row justify-center gap-1.5"
+
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            className="relative min-h-12 flex-1 flex-row items-center justify-center gap-1 rounded-xl py-3"
+            style={{ backgroundColor: active ? Colors.bgCard : Colors.transparent }}
           >
             <Ionicons
               name={active ? tab.activeIcon : tab.icon}
@@ -574,14 +582,14 @@ export const ProfileTabs = ({
                 style={{ backgroundColor: Colors.primary }}
               />
             )}
-          </TouchableOpacity>
+          </Pressable>
         );
       })}
     </View>
   </View>
 );
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
+// Section
 
 export const ProfileEmptyState = ({
   icon,
@@ -592,9 +600,9 @@ export const ProfileEmptyState = ({
   title: string;
   subtitle: string;
 }) => (
-  <View className="items-center px-8 py-16">
+  <View className="mx-5 items-center rounded-[28px] border border-border bg-bg-card px-8 py-14">
     <View
-      className="mb-4 h-16 w-16 items-center justify-center rounded-2xl"
+      className="mb-5 h-20 w-20 items-center justify-center rounded-[28px]"
       style={{
         backgroundColor: `${Colors.primaryLight}10`,
         borderWidth: 1.5,
@@ -605,13 +613,13 @@ export const ProfileEmptyState = ({
       <Ionicons name={icon} size={28} color={Colors.primaryLight} />
     </View>
     <Text
-      className="text-base font-bold"
+      className="text-lg font-extrabold"
       style={{ color: Colors.textPrimary }}
     >
       {title}
     </Text>
     <Text
-      className="mt-1.5 text-center text-xs leading-4"
+      className="mt-2 max-w-[280px] text-center text-sm leading-5"
       style={{ color: Colors.textSecondary }}
     >
       {subtitle}
@@ -619,7 +627,7 @@ export const ProfileEmptyState = ({
   </View>
 );
 
-// ─── Private sub-components ───────────────────────────────────────────────────
+// Section
 
 const MetaPill = ({
   icon,
@@ -672,7 +680,7 @@ const AccountAction = ({
   onPress: () => void;
   danger?: boolean;
 }) => (
-  <TouchableOpacity
+  <Pressable
     className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl border py-3.5"
     style={{
       borderColor: danger ? `${Colors.error}40` : Colors.border,
@@ -680,7 +688,7 @@ const AccountAction = ({
       minHeight: 52,
     }}
     onPress={onPress}
-    activeOpacity={0.85}
+
   >
     <Ionicons
       name={icon}
@@ -693,10 +701,10 @@ const AccountAction = ({
     >
       {label}
     </Text>
-  </TouchableOpacity>
+  </Pressable>
 );
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Section
 
 const getSyncLabel = (updatedAt?: string | null) => {
   if (!updatedAt) return "Synced";

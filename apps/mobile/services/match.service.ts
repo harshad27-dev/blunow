@@ -13,6 +13,10 @@ export const matchService = {
 
   getRecommendations: async (filters: MatchRecommendationFilters = {}) => {
     const response = await api.get('/match/recommendations', {
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
       params: {
         ...filters,
         interests: filters.interests?.join(','),

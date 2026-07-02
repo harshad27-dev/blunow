@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Alert,
   ActivityIndicator,
   FlatList,
   Image,
@@ -25,6 +24,7 @@ import {
   useSendMatchRequestMutation,
   useTrendingHashtagsQuery,
 } from '@/hooks/queries';
+import { showToast } from '@/utils/toast';
 
 const calculateAge = (birthDateString: string) => {
   if (!birthDateString) return 0;
@@ -112,12 +112,12 @@ export default function SearchScreen() {
             return;
           }
 
-          Alert.alert('Request sent', 'They will see your connection request.');
+          showToast('They will see your connection request.', 'Request sent');
         },
         onError: (error: any) => {
-          Alert.alert(
-            'Request failed',
+          showToast(
             error?.response?.data?.message || 'Unable to send request.',
+            'Request failed',
           );
         },
       },

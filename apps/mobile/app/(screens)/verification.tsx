@@ -24,6 +24,7 @@ import {
   userService,
   type VerificationRecord,
 } from "@/services/user.service";
+import { showToast } from "@/utils/toast";
 
 export default function VerificationScreen() {
   const queryClient = useQueryClient();
@@ -48,12 +49,12 @@ export default function VerificationScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["verification"] });
-      Alert.alert("Submitted", "Your verification is now under review.");
+      showToast("Your verification is now under review.", "Submitted");
       setIdPhoto(undefined);
       setSelfie(undefined);
     },
     onError: (error: Error) => {
-      Alert.alert("Unable to submit", error.message);
+      showToast(error.message, "Unable to submit");
     },
   });
 

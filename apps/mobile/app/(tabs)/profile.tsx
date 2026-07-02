@@ -6,7 +6,7 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TouchableOpacity,
+  Pressable,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -207,7 +207,7 @@ export default function ProfileScreen() {
     <SafeAreaView edges={["top", "left", "right"]} className="flex-1 bg-bg">
       <ScrollView
         className="flex-1"
-        contentContainerClassName="pb-10"
+        contentContainerClassName="pb-16" keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -247,11 +247,11 @@ export default function ProfileScreen() {
           onRequestsPress={() => setIsRequestsModalVisible(true)}
         />
 
-        <ProfileJourneyCard
+        {/* <ProfileJourneyCard
           loading={statsLoading}
           metrics={journeyMetrics}
           updatedAt={stats?.lastUpdated}
-        />
+        /> */}
         <ProfileCompletionCard completion={completion} onPress={openCompletionDialog} />
         <ProfileTabs
           activeTab={activeTab}
@@ -357,28 +357,54 @@ const RequestsModal = ({
   onReject: (request: MatchRequest) => void;
   onClose: () => void;
 }) => (
-  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <View className="flex-1 justify-end bg-[#00000080]">
-      <View className="max-h-[80%] rounded-t-[32px] bg-bg-card px-5 pb-8 pt-2 border-t border-border">
+  <Modal
+    visible={visible}
+    transparent
+    animationType="slide"
+    statusBarTranslucent
+    accessibilityViewIsModal
+    onRequestClose={onClose}
+  >
+    <View className="flex-1 justify-end" style={{ backgroundColor: Colors.overlayDark }}>
+      <View className="max-h-[84%] rounded-t-[32px] border-t border-border bg-bg-card px-5 pb-8 pt-2">
         {/* Handle */}
-        <View className="self-center w-10 h-1 rounded-full bg-border mb-4 mt-1" />
+        <View className="mb-5 mt-1 h-1 w-10 self-center rounded-full bg-border" />
 
-        <View className="flex-row items-start justify-between mb-5">
-          <View>
-            <Text className="text-xl font-extrabold text-text-primary">Incoming requests</Text>
-            <Text className="text-xs text-text-secondary mt-0.5">{requests.length} people want to connect</Text>
+        <View className="mb-5 flex-row items-start justify-between">
+          <View className="mr-4 flex-1">
+            <View className="flex-row items-center">
+              <View className="mr-2 h-9 w-9 items-center justify-center rounded-xl bg-bg-elevated">
+                <Ionicons name="people-outline" size={18} color={Colors.primary} />
+              </View>
+              <Text className="text-xl font-extrabold text-text-primary">Incoming requests</Text>
+            </View>
+            <Text className="ml-11 mt-1 text-xs leading-5 text-text-secondary">{requests.length} people want to connect</Text>
           </View>
-          <TouchableOpacity
-            className="w-10 h-10 items-center justify-center rounded-xl bg-bg-elevated"
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close requests"
+            hitSlop={8}
+            className="h-12 w-12 items-center justify-center rounded-2xl bg-bg-elevated"
             onPress={onClose}
-            activeOpacity={0.84}
           >
             <Ionicons name="close" size={20} color={Colors.textPrimary} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} className="max-h-[72%]">
-          {requests.map((request) => (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          className="max-h-[72%]"
+          contentContainerClassName="pb-2"
+        >
+          {requests.length === 0 ? (
+            <View className="items-center py-12">
+              <View className="mb-4 h-16 w-16 items-center justify-center rounded-[22px] bg-bg-elevated">
+                <Ionicons name="mail-open-outline" size={27} color={Colors.textSecondary} />
+              </View>
+              <Text className="text-base font-extrabold text-text-primary">All caught up</Text>
+              <Text className="mt-1.5 text-center text-xs text-text-secondary">New connection requests will appear here.</Text>
+            </View>
+          ) : requests.map((request) => (
             <IncomingRequestRow
               key={request.id}
               request={request}
@@ -415,54 +441,58 @@ const IncomingRequestRow = ({
   const avatarUrl = request.sender?.profile?.avatarUrl;
 
   return (
-    <View className="flex-row items-center justify-between p-4 mb-3 rounded-2xl border border-border bg-bg-card">
+    <View className="mb-3 flex-row items-center rounded-[22px] border border-border bg-bg p-4">
       {/* Avatar */}
       {avatarUrl ? (
-        <View className="rounded-xl border border-border p-[1px]">
-          <Image source={{ uri: avatarUrl }} className="h-12 w-12 rounded-xl bg-bg-elevated" />
+        <View className="rounded-2xl border border-border p-[2px] bg-bg-card">
+          <Image source={{ uri: avatarUrl }} className="h-14 w-14 rounded-2xl bg-bg-elevated" />
         </View>
       ) : (
-        <View className="h-12 w-12 items-center justify-center rounded-xl bg-bg-elevated border border-border">
+        <View className="h-14 w-14 items-center justify-center rounded-2xl border border-border bg-bg-elevated">
           <Text className="text-sm font-extrabold text-text-secondary">{name.charAt(0).toUpperCase()}</Text>
         </View>
       )}
 
       {/* Info */}
-      <View className="flex-1 ml-4 mr-2">
-        <Text className="text-sm font-bold text-text-primary" numberOfLines={1}>{name}</Text>
-        <Text className="text-xs text-text-secondary mt-0.5" numberOfLines={1}>
+      <View className="ml-4 mr-3 flex-1">
+        <Text className="text-[15px] font-extrabold text-text-primary" numberOfLines={1}>{name}</Text>
+        <Text className="mt-1 text-xs leading-4 text-text-secondary" numberOfLines={1}>
           {request.message || "Wants to connect with you"}
         </Text>
       </View>
 
       {/* Reject */}
-      <TouchableOpacity
-        className="w-9 h-9 items-center justify-center rounded-xl bg-bg-elevated mr-2"
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Reject request from ${name}`}
+        accessibilityState={{ disabled }}
+        className="mr-2 h-12 w-12 items-center justify-center rounded-2xl bg-bg-elevated"
         onPress={onReject}
         disabled={disabled}
-        activeOpacity={0.84}
       >
         {pendingStatus === "REJECTED" ? (
           <ActivityIndicator color={Colors.textSecondary} size="small" />
         ) : (
-          <Ionicons name="close" size={16} color={Colors.textSecondary} />
+          <Ionicons name="close" size={19} color={Colors.textSecondary} />
         )}
-      </TouchableOpacity>
+      </Pressable>
 
       {/* Accept */}
-      <TouchableOpacity
-        className="w-9 h-9 items-center justify-center rounded-xl"
-        style={{ backgroundColor: Colors.primary }}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Accept request from ${name}`}
+        accessibilityState={{ disabled }}
+        className="h-12 w-12 items-center justify-center rounded-2xl"
+        style={{ backgroundColor: Colors.primary, opacity: disabled ? 0.5 : 1 }}
         onPress={onAccept}
         disabled={disabled}
-        activeOpacity={0.84}
       >
         {pendingStatus === "ACCEPTED" ? (
           <ActivityIndicator color={Colors.white} size="small" />
         ) : (
-          <Ionicons name="checkmark" size={16} color={Colors.white} />
+          <Ionicons name="checkmark" size={20} color={Colors.white} />
         )}
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 };
@@ -488,7 +518,7 @@ const ProfileMatchList = ({
   matches: Match[];
   onMatchPress: (match: Match) => void;
 }) => (
-  <View className="px-5">
+  <View className="px-5 pb-4">
     {matches.map((match) => {
       const matchedUser =
         match.user1Id === currentUserId ? match.user2 : match.user1;
@@ -496,11 +526,12 @@ const ProfileMatchList = ({
       const name = matchedProfile?.username || matchedUser?.username || "Match";
 
       return (
-        <TouchableOpacity
+        <Pressable
           key={match.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Open chat with ${name}`}
           onPress={() => onMatchPress(match)}
-          activeOpacity={0.85}
-          className="mb-3 flex-row items-center rounded-2xl border border-border bg-bg-card p-4"
+          className="mb-3 min-h-[88px] flex-row items-center rounded-[22px] border border-border bg-bg-card p-4"
         >
           {matchedProfile?.avatarUrl ? (
             <Image
@@ -516,11 +547,15 @@ const ProfileMatchList = ({
           )}
           <View className="ml-4 flex-1">
             <Text className="text-base font-bold text-text-primary">{name}</Text>
-            <Text className="mt-1 text-sm text-text-secondary">
-              Matched and ready to chat
-            </Text>
+            <View className="mt-1.5 flex-row items-center">
+              <View className="mr-1.5 h-1.5 w-1.5 rounded-full bg-success" />
+              <Text className="text-xs font-medium text-text-secondary">Matched · Tap to chat</Text>
+            </View>
           </View>
-        </TouchableOpacity>
+          <View className="h-10 w-10 items-center justify-center rounded-xl bg-bg-elevated">
+            <Ionicons name="chatbubble-outline" size={18} color={Colors.primary} />
+          </View>
+        </Pressable>
       );
     })}
   </View>

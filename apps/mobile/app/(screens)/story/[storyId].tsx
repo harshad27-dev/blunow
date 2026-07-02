@@ -18,6 +18,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { storyService } from "@/services/story.service";
 import { moderationService } from "@/services/moderation.service";
 import { useAuthStore } from "@/store/authStore";
+import { showToast } from "@/utils/toast";
 
 const getTimeLeft = (expiresAt?: string) => {
   if (!expiresAt) return "Story";
@@ -103,7 +104,7 @@ export default function StoryDetailScreen() {
             reason: "OTHER",
             description: "Reported from story details",
           });
-          Alert.alert("Report received", "Thank you for helping keep Datebl safe.");
+          showToast("Thank you for helping keep Datebl safe.", "Report received");
         },
       },
       { text: "Cancel", style: "cancel" },

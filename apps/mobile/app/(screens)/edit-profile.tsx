@@ -5,7 +5,9 @@ import {
   Animated,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -342,9 +344,12 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1" style={styles.screen} edges={["top", "left", "right"]}>
+    <SafeAreaView
+      className="flex-1"
+      style={styles.screen}
+      edges={["top", "left", "right"]}
+    >
       <StatusBar style="dark" backgroundColor={Colors.bg} />
-
       {/* Header Banner */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -356,38 +361,22 @@ export default function EditProfileScreen() {
         </TouchableOpacity>
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle}>Edit profile</Text>
-          <Text style={styles.headerSubtitle}>
-            Photos, bio, and preferences
-          </Text>
         </View>
-        <TouchableOpacity
-          style={[
-            styles.saveButton,
-            (isUploading || updateProfileMutation.isPending) &&
-              styles.saveButtonDisabled,
-          ]}
-          onPress={saveProfile}
-          disabled={isUploading || updateProfileMutation.isPending}
-          activeOpacity={0.8}
-        >
-          {isUploading || updateProfileMutation.isPending ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
-          ) : (
-            <>
-              <Ionicons name="checkmark" size={16} color={Colors.textInverse} />
-              <Text style={styles.saveButtonText}>Save</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerProgressPill}>
+          <Text style={styles.headerProgressText}>{completion}%</Text>
+        </View>
       </View>
-
       <ScrollView
         className="flex-1"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile photo */}
-        <View style={styles.mediaPanel}>
+        <LinearGradient colors={Colors.gradientCard} style={styles.mediaPanel}>
+          <View style={styles.heroEyebrow}>
+            <Ionicons name="sparkles" size={14} color={Colors.textSecondary} />
+            <Text style={styles.heroEyebrowText}>YOUR FIRST IMPRESSION</Text>
+          </View>
           <View style={styles.profileStrip}>
             {/* Double Border Avatar ring */}
             <TouchableOpacity
@@ -428,34 +417,13 @@ export default function EditProfileScreen() {
               </Text>
             </View>
           </View>
-        </View>
-
-        {/* Quick horizontal stat cards */}
-        <View style={styles.quickStats}>
-          <QuickStat
-            icon="sparkles-outline"
-            value={String(interests.length)}
-            label="Interests"
-          />
-          <QuickStat
-            icon="navigate-outline"
-            value={`${maxDistance} km`}
-            label="Km range"
-          />
-          <QuickStat
-            icon="heart-outline"
-            value={lookingFor[0] || "New"}
-            label="Looking for"
-          />
-        </View>
-
-        {/* Profile Completion Indicator */}
+        </LinearGradient>
+        `r`n`r`n {/* Profile Completion Indicator */}
         <CompletionPanel
           completion={completion}
           isUploading={isUploading}
           uploadProgress={uploadProgress}
         />
-
         {/* Form fields sections */}
         <SectionTitle title="Profile details" />
         <View style={styles.sectionCard}>
@@ -468,7 +436,6 @@ export default function EditProfileScreen() {
             />
           ))}
         </View>
-
         <SectionTitle title="Dating preferences" />
         <View style={styles.sectionCard}>
           {datingItems.map((item, index) => (
@@ -481,8 +448,27 @@ export default function EditProfileScreen() {
           ))}
         </View>
       </ScrollView>
-
-      {/* Premium Custom Animated Bottom Sheet */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            (isUploading || updateProfileMutation.isPending) &&
+              styles.saveButtonDisabled,
+          ]}
+          onPress={saveProfile}
+          disabled={isUploading || updateProfileMutation.isPending}
+          activeOpacity={0.84}
+          accessibilityRole="button"
+          accessibilityLabel="Save profile changes"
+        >
+          {isUploading || updateProfileMutation.isPending ? (
+            <ActivityIndicator size="small" color={Colors.textInverse} />
+          ) : (
+            <Text style={styles.saveButtonText}>Save changes</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+      `r`n {/* Premium Custom Animated Bottom Sheet */}
       <EditDrawer
         activeSheet={activeSheet}
         onClose={() => setActiveSheet(null)}
@@ -513,7 +499,6 @@ export default function EditProfileScreen() {
           setZodiac,
         }}
       />
-
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -524,32 +509,10 @@ export default function EditProfileScreen() {
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const SectionTitle = ({ title }: { title: string }) => (
   <Text style={styles.sectionTitle}>{title}</Text>
-);
-
-const QuickStat = ({
-  icon,
-  value,
-  label,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  value: string;
-  label: string;
-}) => (
-  <View style={styles.quickStatCard}>
-    <View style={styles.quickStatIcon}>
-      <Ionicons name={icon} size={18} color={Colors.primaryLight} />
-    </View>
-    <Text style={styles.quickStatValue} numberOfLines={1}>
-      {value}
-    </Text>
-    <Text style={styles.quickStatLabel} numberOfLines={1}>
-      {label}
-    </Text>
-  </View>
 );
 
 const CompletionPanel = ({
@@ -613,7 +576,7 @@ const SettingRow = ({
   </TouchableOpacity>
 );
 
-// ─── Premium Custom Animated Edit Sheet Drawer ───────────────────────────────
+// â”€â”€â”€ Premium Custom Animated Edit Sheet Drawer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const EditDrawer = ({
   activeSheet,
@@ -652,7 +615,9 @@ const EditDrawer = ({
 }) => {
   const [mounted, setMounted] = useState(false);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = useRef(new Animated.Value(SCREEN_HEIGHT * 0.76)).current;
+  const sheetTranslateY = useRef(
+    new Animated.Value(SCREEN_HEIGHT * 0.76),
+  ).current;
 
   // Sync animation triggers with activeSheet state changes
   React.useEffect(() => {
@@ -710,10 +675,20 @@ const EditDrawer = ({
   };
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={handleDismiss}>
-      <View style={StyleSheet.absoluteFillObject}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      onRequestClose={handleDismiss}
+    >
+      <KeyboardAvoidingView
+        style={StyleSheet.absoluteFillObject}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         {/* Animated backdrop */}
-        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: backdropOpacity }]}>
+        <Animated.View
+          style={[StyleSheet.absoluteFillObject, { opacity: backdropOpacity }]}
+        >
           <Pressable style={styles.drawerBackdrop} onPress={handleDismiss} />
         </Animated.View>
 
@@ -725,7 +700,7 @@ const EditDrawer = ({
           ]}
         >
           <View style={styles.drawerHandle} />
-          
+
           <View style={styles.drawerHeader}>
             <TouchableOpacity
               style={styles.iconButton}
@@ -734,11 +709,11 @@ const EditDrawer = ({
             >
               <Ionicons name="close" size={20} color={Colors.textPrimary} />
             </TouchableOpacity>
-            
+
             <Text style={styles.drawerTitleText}>
               {getSheetTitle(activeSheet)}
             </Text>
-            
+
             <TouchableOpacity
               style={styles.doneButton}
               onPress={handleDismiss}
@@ -780,14 +755,18 @@ const EditDrawer = ({
               <ChipGrid
                 options={INTERESTED_IN_OPTIONS}
                 selected={values.interestedIn}
-                onToggle={(val) => setters.setInterestedIn(toggleValue(values.interestedIn, val))}
+                onToggle={(val) =>
+                  setters.setInterestedIn(toggleValue(values.interestedIn, val))
+                }
               />
             )}
             {activeSheet === "interests" && (
               <ChipGrid
                 options={INTEREST_OPTIONS}
                 selected={values.interests}
-                onToggle={(val) => setters.setInterests(toggleValue(values.interests, val))}
+                onToggle={(val) =>
+                  setters.setInterests(toggleValue(values.interests, val))
+                }
               />
             )}
             {activeSheet === "lookingFor" && (
@@ -835,7 +814,8 @@ const EditDrawer = ({
             )}
           </ScrollView>
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
+      `r`n{" "}
     </Modal>
   );
 };
@@ -964,7 +944,10 @@ const getSheetTitle = (field: SheetField | null) => {
   }
 };
 
-const compressImage = async (uri: string, type: "avatar" | "other" = "avatar") => {
+const compressImage = async (
+  uri: string,
+  type: "avatar" | "other" = "avatar",
+) => {
   const result = await ImageManipulator.manipulateAsync(
     uri,
     [{ resize: { width: 900 } }],
@@ -1020,9 +1003,44 @@ const getInitials = (value?: string | null) => {
   return initials || fallback;
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const styles = StyleSheet.create({
+  headerProgressPill: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 999,
+    height: 36,
+    justifyContent: "center",
+    minWidth: 58,
+    paddingHorizontal: 12,
+  },
+  headerProgressText: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  heroEyebrow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 7,
+    paddingHorizontal: 22,
+    paddingTop: 20,
+  },
+  heroEyebrowText: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.3,
+  },
+  bottomBar: {
+    backgroundColor: Colors.bgCard,
+    borderTopColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    paddingTop: 12,
+  },
   screen: {
     backgroundColor: Colors.bg,
   },
@@ -1069,8 +1087,8 @@ const styles = StyleSheet.create({
     gap: 6,
     height: 44,
     justifyContent: "center",
-    minWidth: 82,
-    paddingHorizontal: 15,
+    flex: 1,
+    paddingHorizontal: 20,
   },
   saveButtonDisabled: {
     opacity: 0.72,
@@ -1081,29 +1099,33 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   content: {
-    paddingBottom: 36,
+    paddingBottom: 32,
   },
   mediaPanel: {
     backgroundColor: Colors.bgCard,
-    borderBottomColor: Colors.border,
-    borderBottomWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 28,
+    borderWidth: 1,
+    marginHorizontal: 16,
+    marginTop: 8,
     overflow: "hidden",
   },
   profileStrip: {
     alignItems: "flex-start",
     flexDirection: "row",
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingBottom: 24,
+    paddingTop: 14,
   },
   avatarButton: {
     backgroundColor: Colors.bg,
     borderColor: Colors.primaryLight,
-    borderRadius: 36,
-    borderWidth: 3,
-    height: 110,
+    borderRadius: 30,
+    borderWidth: 2,
+    height: 104,
     marginTop: 0,
     padding: 3,
-    width: 110,
+    width: 104,
     position: "relative",
     zIndex: 10,
   },

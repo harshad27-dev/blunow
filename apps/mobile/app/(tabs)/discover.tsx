@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   FlatList,
   NativeScrollEvent,
@@ -41,6 +40,7 @@ import {
   useTrendingPostsQuery,
 } from "@/hooks/queries";
 import type { DiscoverProfile } from "@/types/match.types";
+import { showToast } from "@/utils/toast";
 
 const { width } = Dimensions.get("window");
 
@@ -238,12 +238,12 @@ export default function DiscoverScreen() {
             return;
           }
 
-          Alert.alert("Request sent", "They will see your connection request.");
+          showToast("They will see your connection request.", "Request sent");
         },
         onError: (error: any) => {
-          Alert.alert(
-            "Request failed",
+          showToast(
             error?.response?.data?.message || "Unable to send request.",
+            "Request failed",
           );
         },
       },

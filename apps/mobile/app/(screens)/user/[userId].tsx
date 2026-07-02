@@ -26,6 +26,7 @@ import { userService } from "@/services/user.service";
 import { moderationService } from "@/services/moderation.service";
 import { Colors } from "@/constants/colors";
 import { FontFamily } from "@/constants/typography";
+import { showToast } from "@/utils/toast";
 
 const interestIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
   fitness: "barbell-outline",
@@ -167,10 +168,7 @@ export default function UserDetailScreen() {
       setActionLoading("connect");
       const existingChatId = await findExistingChat();
       if (existingChatId) {
-        Alert.alert(
-          "Already connected",
-          "You already have a chat with this user.",
-        );
+        showToast("You already have a chat with this user.", "Already connected");
         return;
       }
 
@@ -181,11 +179,11 @@ export default function UserDetailScreen() {
         return;
       }
 
-      Alert.alert("Request sent", "They will see your connection request.");
+      showToast("They will see your connection request.", "Request sent");
     } catch (error: any) {
-      Alert.alert(
-        "Connect failed",
+      showToast(
         error?.response?.data?.message || "Unable to send connection request.",
+        "Connect failed",
       );
     } finally {
       setActionLoading(null);
@@ -218,14 +216,14 @@ export default function UserDetailScreen() {
         return;
       }
 
-      Alert.alert(
-        "Request sent",
+      showToast(
         "They need to accept your request before chat opens.",
+        "Request sent",
       );
     } catch (error: any) {
-      Alert.alert(
-        "Message failed",
+      showToast(
         error?.response?.data?.message || "Unable to start this conversation.",
+        "Message failed",
       );
     } finally {
       setActionLoading(null);
@@ -254,9 +252,9 @@ export default function UserDetailScreen() {
       );
       queryClient.invalidateQueries({ queryKey: ["user-stats", userId] });
     } catch (error: any) {
-      Alert.alert(
-        "Unable to update follow",
+      showToast(
         error?.response?.data?.message || "Please try again.",
+        "Unable to update follow",
       );
     } finally {
       setActionLoading(null);
@@ -276,7 +274,7 @@ export default function UserDetailScreen() {
             reason: "OTHER",
             description: "Reported from profile",
           });
-          Alert.alert("Report received", "Thank you for helping keep Datebl safe.");
+          showToast("Thank you for helping keep Datebl safe.", "Report received");
         },
       },
       {

@@ -1,4 +1,4 @@
-import { Alert, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -10,6 +10,7 @@ import {
 import { Colors } from "@/constants/colors";
 import { Radius, Spacing } from "@/constants/spacing";
 import { roomService } from "@/services/room.service";
+import { showToast } from "@/utils/toast";
 
 export default function RoomDetailScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
@@ -32,7 +33,7 @@ export default function RoomDetailScreen() {
     mutationFn: () => roomService.joinRoom(roomId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["room", roomId] });
-      Alert.alert("Joined room", "You are now a member of this room.");
+      showToast("You are now a member of this room.", "Joined room");
     },
   });
 

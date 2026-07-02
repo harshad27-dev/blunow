@@ -18,6 +18,7 @@ import CommentsDrawer from "@/components/feed/CommentsDrawer";
 import { postService } from "@/services/post.service";
 import { moderationService } from "@/services/moderation.service";
 import { useAuthStore } from "@/store/authStore";
+import { showToast } from "@/utils/toast";
 
 const getTimeAgo = (dateString?: string) => {
   if (!dateString) return "just now";
@@ -168,7 +169,7 @@ export default function PostDetailScreen() {
             reason: "OTHER",
             description: "Reported from post details",
           });
-          Alert.alert("Report received", "Thank you for helping keep Datebl safe.");
+          showToast("Thank you for helping keep Datebl safe.", "Report received");
         },
       },
       { text: "Cancel", style: "cancel" },

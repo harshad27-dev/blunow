@@ -1,7 +1,6 @@
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -20,6 +19,7 @@ import {
   useMatchRecommendationsQuery,
   useSendMatchRequestMutation,
 } from "@/hooks/queries";
+import { showToast } from "@/utils/toast";
 
 const fallbackProfileImage =
   "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
@@ -52,12 +52,12 @@ export default function MatchDetailScreen() {
             return;
           }
 
-          Alert.alert("Request sent", "They will see your connection request.");
+          showToast("They will see your connection request.", "Request sent");
         },
         onError: (error: any) => {
-          Alert.alert(
-            "Request failed",
+          showToast(
             error?.response?.data?.message || "Unable to send request.",
+            "Request failed",
           );
         },
       },
