@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   },
 
   inlineInput: {
-    color: Colors.textPrimary,
+    color: Colors.black,
     flex: 1,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.base,

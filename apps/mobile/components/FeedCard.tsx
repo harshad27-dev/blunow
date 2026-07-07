@@ -18,6 +18,24 @@ import { Colors } from "@/constants/colors";
 const { width } = Dimensions.get("window");
 const mediaWidth = width - 24;
 
+export type FeedPostAction =
+  | "edit"
+  | "delete"
+  | "comments"
+  | "report"
+  | "hide"
+  | "block"
+  | "copy"
+  | "share";
+
+type FeedActionItem = {
+  id: FeedPostAction;
+  label: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  destructive?: boolean;
+};
+
 /**
  * Feed-safe aspect ratio limits
  *
@@ -59,11 +77,13 @@ interface FeedCardProps {
     isLiked?: boolean;
     isSaved?: boolean;
     isAnonymous?: boolean;
+    isOwnPost?: boolean;
     timeAgo: string;
   };
   onLikePress?: (postId: string, isLiked?: boolean) => void;
   onCommentPress?: (postId: string) => void;
   onSavePress?: (postId: string, isSaved?: boolean) => void;
+  onMoreAction?: (postId: string, action: FeedPostAction) => void;
 }
 
 export default function FeedCard({
@@ -71,9 +91,11 @@ export default function FeedCard({
   onLikePress,
   onCommentPress,
   onSavePress,
+  onMoreAction,
 }: FeedCardProps) {
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [actionSheetVisible, setActionSheetVisible] = useState(false);
 
   const [mediaAspectRatios, setMediaAspectRatios] = useState<
     Record<string, number>
@@ -84,10 +106,12 @@ export default function FeedCard({
 
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
+  const actionSheetProgress = useRef(new Animated.Value(0)).current;
 
   const hasImage = Boolean(post.mediaUrls?.length);
 
   const displayName = post.isAnonymous ? "Anonymous" : post.author.username;
+  const isOwnPost = Boolean(post.isOwnPost);
 
   const avatarUrl = post.isAnonymous
     ? null
@@ -199,6 +223,117 @@ export default function FeedCard({
     }, 220);
   };
 
+  const actionItems: FeedActionItem[] = isOwnPost
+    ? [
+        {
+          id: "edit",
+          label: "Edit post",
+          description: "Update caption or media",
+          icon: "create-outline",
+        },
+        {
+          id: "comments",
+          label: "Turn off comments",
+          description: "Pause new replies on this post",
+          icon: "chatbubble-ellipses-outline",
+        },
+        {
+          id: "copy",
+          label: "Copy link",
+          description: "Share a direct post link",
+          icon: "link-outline",
+        },
+        {
+          id: "share",
+          label: "Share",
+          description: "Send this post outside the app",
+          icon: "paper-plane-outline",
+        },
+        {
+          id: "delete",
+          label: "Delete post",
+          description: "Remove it from your feed",
+          icon: "trash-outline",
+          destructive: true,
+        },
+      ]
+    : [
+        {
+          id: "report",
+          label: "Report post",
+          description: "Flag unsafe or unwanted content",
+          icon: "flag-outline",
+          destructive: true,
+        },
+        {
+          id: "hide",
+          label: "Hide post",
+          description: "See fewer posts like this",
+          icon: "eye-off-outline",
+        },
+        {
+          id: "block",
+          label: "Block user",
+          description: "Stop seeing each other",
+          icon: "ban-outline",
+          destructive: true,
+        },
+        {
+          id: "copy",
+          label: "Copy link",
+          description: "Share a direct post link",
+          icon: "link-outline",
+        },
+        {
+          id: "share",
+          label: "Share",
+          description: "Send this post outside the app",
+          icon: "paper-plane-outline",
+        },
+      ];
+
+  const actionSheetOpacity = actionSheetProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.62],
+  });
+
+  const actionSheetTranslateY = actionSheetProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [360, 0],
+  });
+
+  const handleOpenPostActions = () => {
+    setActionSheetVisible(true);
+    actionSheetProgress.setValue(0);
+
+    requestAnimationFrame(() => {
+      Animated.spring(actionSheetProgress, {
+        toValue: 1,
+        damping: 22,
+        mass: 0.9,
+        stiffness: 220,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
+  const handleClosePostActions = () => {
+    Animated.timing(actionSheetProgress, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setActionSheetVisible(false);
+      }
+    });
+  };
+
+  const handlePostActionPress = (action: FeedPostAction) => {
+    onMoreAction?.(post.id, action);
+    handleClosePostActions();
+  };
+
   return (
     <View className="overflow-hidden">
       <View className="flex-row items-center justify-between px-4 py-4">
@@ -271,6 +406,7 @@ export default function FeedCard({
 
         <TouchableOpacity
           activeOpacity={0.75}
+          onPress={handleOpenPostActions}
           className="ml-3 h-10 w-10 items-center justify-center rounded-full bg-bg-elevated"
         >
           <Ionicons
@@ -540,6 +676,125 @@ export default function FeedCard({
               </View>
             ))}
           </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={actionSheetVisible}
+        transparent
+        animationType="none"
+        onRequestClose={handleClosePostActions}
+      >
+        <View className="flex-1 justify-end">
+          <Animated.View
+            pointerEvents="none"
+            className="absolute inset-0 bg-black"
+            style={{ opacity: actionSheetOpacity }}
+          />
+
+          <Pressable
+            className="absolute inset-0"
+            onPress={handleClosePostActions}
+          />
+
+          <Animated.View
+            className="rounded-t-[32px] border border-border bg-bg-card px-4 pb-8 pt-3"
+            style={{
+              transform: [{ translateY: actionSheetTranslateY }],
+            }}
+          >
+            <View className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border" />
+
+            <View className="mb-3 flex-row items-center">
+              <View className="mr-3 h-12 w-12 overflow-hidden rounded-full border border-border bg-bg-elevated">
+                {avatarUrl ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    className="h-full w-full"
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View className="h-full w-full items-center justify-center bg-bg-elevated">
+                    <Ionicons
+                      name="eye-off-outline"
+                      size={20}
+                      color={Colors.textMuted}
+                    />
+                  </View>
+                )}
+              </View>
+
+              <View className="min-w-0 flex-1">
+                <Text
+                  className="text-base font-extrabold text-text-primary"
+                  numberOfLines={1}
+                >
+                  {isOwnPost ? "Post options" : displayName}
+                </Text>
+                <Text
+                  className="mt-0.5 text-xs font-medium text-text-secondary"
+                  numberOfLines={1}
+                >
+                  {isOwnPost ? "Manage this post" : "Choose what to do with this post"}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.76}
+                onPress={handleClosePostActions}
+                className="h-10 w-10 items-center justify-center rounded-full bg-bg-elevated"
+              >
+                <Ionicons name="close" size={20} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View className="overflow-hidden rounded-[24px] border border-border bg-bg-elevated">
+              {actionItems.map((item, index) => (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.78}
+                  onPress={() => handlePostActionPress(item.id)}
+                  className={`flex-row items-center px-4 py-3.5 ${
+                    index === actionItems.length - 1 ? "" : "border-b border-border"
+                  }`}
+                >
+                  <View
+                    className={`mr-3 h-10 w-10 items-center justify-center rounded-full ${
+                      item.destructive ? "bg-error/10" : "bg-bg-card"
+                    }`}
+                  >
+                    <Ionicons
+                      name={item.icon}
+                      size={19}
+                      color={item.destructive ? Colors.error : Colors.textPrimary}
+                    />
+                  </View>
+
+                  <View className="min-w-0 flex-1">
+                    <Text
+                      className={`text-[15px] font-extrabold ${
+                        item.destructive ? "text-error" : "text-text-primary"
+                      }`}
+                    >
+                      {item.label}
+                    </Text>
+                    <Text
+                      className="mt-0.5 text-xs font-medium text-text-secondary"
+                      numberOfLines={1}
+                    >
+                      {item.description}
+                    </Text>
+                  </View>
+
+                  <Ionicons
+                    name="chevron-forward"
+                    size={17}
+                    color={Colors.textMuted}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
         </View>
       </Modal>
     </View>

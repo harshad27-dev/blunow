@@ -14,11 +14,13 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Colors } from "@/constants/colors";
+import { getThemeColors } from "@/constants/colors";
 import { Radius, Spacing } from "@/constants/spacing";
 import { FontFamily, FontSize } from "@/constants/typography";
 import { useAuthStore } from "@/store/authStore";
 import type { AuthStartFlow } from "@/types/auth.types";
+
+const colors = getThemeColors("dark");
 
 export default function OtpScreen() {
   const router = useRouter();
@@ -138,7 +140,7 @@ export default function OtpScreen() {
             onPress={() => router.replace("/(auth)")}
             activeOpacity={0.82}
           >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerText}>
             {flow === "signup" ? "Create account" : "Welcome back"}
@@ -166,7 +168,7 @@ export default function OtpScreen() {
                 <Text style={styles.cardSubtitle}>Use the latest code from your inbox.</Text>
               </View>
               <View style={styles.shieldBadge}>
-                <Ionicons name="shield-checkmark" size={21} color={Colors.primaryLight} />
+                <Ionicons name="shield-checkmark" size={21} color={colors.primaryLight} />
               </View>
             </View>
 
@@ -216,7 +218,7 @@ export default function OtpScreen() {
               activeOpacity={0.86}
             >
               {isSubmitting ? (
-                <ActivityIndicator color={Colors.textInverse} />
+                <ActivityIndicator color={colors.textInverse} />
               ) : (
                 <Text style={styles.verifyButtonText}>Verify code</Text>
               )}
@@ -231,7 +233,7 @@ export default function OtpScreen() {
                 activeOpacity={0.8}
               >
                 {isResending ? (
-                  <ActivityIndicator color={Colors.textSecondary} />
+                  <ActivityIndicator color={colors.textSecondary} />
                 ) : (
                   <Text style={styles.resendText}>Resend code</Text>
                 )}
@@ -258,7 +260,7 @@ export default function OtpScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: "#F8F4F0",
+    backgroundColor: colors.bg,
     flex: 1,
   },
   keyboardView: {
@@ -273,8 +275,8 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.9)",
-    borderColor: "rgba(28,28,28,0.08)",
+    backgroundColor: colors.bgCard,
+    borderColor: colors.border,
     borderRadius: Radius.full,
     borderWidth: 1,
     height: 44,
@@ -282,7 +284,7 @@ const styles = StyleSheet.create({
     width: 44,
   },
   headerText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.base,
   },
@@ -303,11 +305,11 @@ const styles = StyleSheet.create({
   },
   iconBadge: {
     alignItems: "center",
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: Radius.full,
     height: 58,
     justifyContent: "center",
-    shadowColor: Colors.black,
+    shadowColor: colors.black,
     shadowOffset: { height: 8, width: 0 },
     shadowOpacity: 0.14,
     shadowRadius: 18,
@@ -322,12 +324,12 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   stepPillText: {
-    color: Colors.secondary,
+    color: colors.secondary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
   },
   eyebrow: {
-    color: Colors.primaryLight,
+    color: colors.primaryLight,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
     letterSpacing: 0.3,
@@ -335,32 +337,32 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   title: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize["3xl"],
     lineHeight: 40,
   },
   subtitle: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.base,
     lineHeight: 22,
     marginTop: Spacing.sm,
   },
   emailText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.base,
     marginTop: Spacing.xs,
   },
   formCard: {
-    backgroundColor: Colors.white,
-    borderColor: "rgba(28,28,28,0.08)",
+    backgroundColor: colors.bgCard,
+    borderColor: colors.border,
     borderRadius: Radius.xl,
     borderWidth: 1,
     marginTop: Spacing.xl,
     padding: Spacing.md,
-    shadowColor: Colors.black,
+    shadowColor: colors.black,
     shadowOffset: { height: 16, width: 0 },
     shadowOpacity: 0.08,
     shadowRadius: 28,
@@ -376,12 +378,12 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.md,
   },
   cardTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.lg,
   },
   cardSubtitle: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
     lineHeight: 19,
@@ -389,7 +391,7 @@ const styles = StyleSheet.create({
   },
   shieldBadge: {
     alignItems: "center",
-    backgroundColor: "rgba(177,159,145,0.16)",
+    backgroundColor: colors.bgElevated,
     borderRadius: Radius.full,
     height: 38,
     justifyContent: "center",
@@ -406,50 +408,50 @@ const styles = StyleSheet.create({
   },
   codeBox: {
     alignItems: "center",
-    borderBottomColor: "rgba(28,28,28,0.24)",
+    borderBottomColor: colors.border,
     borderBottomWidth: 2,
     flex: 1,
     height: 50,
     justifyContent: "center",
   },
   codeBoxActive: {
-    borderBottomColor: Colors.primaryLight,
+    borderBottomColor: colors.borderFocus,
     borderBottomWidth: 3,
   },
   codeBoxFilled: {
-    borderBottomColor: Colors.primary,
+    borderBottomColor: colors.primary,
   },
   codeDigit: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize["2xl"],
     lineHeight: 36,
   },
   hiddenOtpInput: {
     ...StyleSheet.absoluteFillObject,
-    color: Colors.transparent,
+    color: colors.transparent,
     fontSize: 1,
     opacity: 0.01,
     zIndex: 2,
   },
   verifyButton: {
     alignItems: "center",
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: Radius.full,
     justifyContent: "center",
     marginTop: Spacing.md,
     minHeight: 52,
-    shadowColor: Colors.black,
+    shadowColor: colors.black,
     shadowOffset: { height: 8, width: 0 },
     shadowOpacity: 0.12,
     shadowRadius: 16,
   },
   verifyButtonDisabled: {
-    backgroundColor: "rgba(28,28,28,0.28)",
+    backgroundColor: colors.bgElevated,
     shadowOpacity: 0,
   },
   verifyButtonText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.base,
   },
@@ -460,7 +462,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   helperText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
   },
@@ -471,33 +473,33 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
   },
   resendText: {
-    color: Colors.primary,
+    color: colors.primary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
   },
   successBanner: {
-    backgroundColor: Colors.success + "18",
-    borderColor: Colors.success,
+    backgroundColor: colors.success + "18",
+    borderColor: colors.success,
     borderRadius: Radius.sm,
     borderWidth: 1,
     marginTop: Spacing.md,
     padding: Spacing.sm,
   },
   successBannerText: {
-    color: Colors.success,
+    color: colors.success,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
   },
   errorBanner: {
-    backgroundColor: Colors.error + "12",
-    borderColor: Colors.error,
+    backgroundColor: colors.error + "12",
+    borderColor: colors.error,
     borderRadius: Radius.sm,
     borderWidth: 1,
     marginTop: Spacing.md,
     padding: Spacing.sm,
   },
   errorBannerText: {
-    color: Colors.error,
+    color: colors.error,
     fontFamily: FontFamily.regular,
     fontSize: FontSize.sm,
   },
