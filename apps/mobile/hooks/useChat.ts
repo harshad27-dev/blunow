@@ -125,3 +125,34 @@ export const useDeleteChatMutation = () => {
     },
   });
 };
+
+export const useDeleteChatMessageMutation = (chatId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (messageId: string) =>
+      chatService.deleteMessageForEveryone(chatId, messageId),
+    onSuccess: (response) => {
+      const deletedMessage = response?.data as ChatMessage | undefined;
+
+      if (deletedMessage) {
+        queryClient.setQueryData<any>(chatKeys.messages(chatId), (current: any) => {
+          if (!current?.pages) return current;
+
+          return {
+            ...current,
+            pages: current.pages.map((page: ChatMessage[]) =>
+              page.map((message) =>
+                message.id === deletedMessage.id ? deletedMessage : message,
+              ),
+            ),
+          };
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: chatKeys.messages(chatId) });
+      queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
+      queryClient.invalidateQueries({ queryKey: chatKeys.conversation(chatId) });
+    },
+  });
+};

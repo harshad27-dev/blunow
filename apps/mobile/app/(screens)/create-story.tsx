@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -9,25 +10,95 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
+import { useColorScheme } from "nativewind";
 import { useCreateStoryMutation } from "@/hooks/queries";
-import { Colors } from "@/constants/colors";
+import { getThemeColors } from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
 import { FontFamily, FontSize } from "@/constants/typography";
 import { Radius, Spacing } from "@/constants/spacing";
+
+const GRID_COLUMNS = 3;
+const GRID_GAP = 3;
+const GALLERY_PAGE_SIZE = 48;
+
+type GridItem =
+  | { type: "camera"; id: "camera" }
+  | { type: "picker"; id: "picker" }
+  | { type: "asset"; id: string; asset: MediaLibrary.Asset };
 
 export default function CreateStoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const { colorScheme } = useColorScheme();
+  const colors = getThemeColors(colorScheme === "light" ? "light" : "dark");
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const createStoryMutation = useCreateStoryMutation();
   const isLoading = createStoryMutation.isPending;
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
+  const [galleryAssets, setGalleryAssets] = useState<MediaLibrary.Asset[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
+
+  const tileSize = useMemo(() => {
+    const horizontalPadding = Spacing.md * 2;
+    const totalGaps = GRID_GAP * (GRID_COLUMNS - 1);
+    return Math.floor((width - horizontalPadding - totalGaps) / GRID_COLUMNS);
+  }, [width]);
+
+  const gridItems = useMemo<GridItem[]>(
+    () => [
+      { type: "camera", id: "camera" },
+      { type: "picker", id: "picker" },
+      ...galleryAssets.map((asset) => ({
+        type: "asset" as const,
+        id: asset.id,
+        asset,
+      })),
+    ],
+    [galleryAssets],
+  );
+
+  const loadGallery = useCallback(async () => {
+    setGalleryError(null);
+
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync(false, ["photo"]);
+      if (!permission.granted) {
+        setGalleryAssets([]);
+        setGalleryError("Allow photo access to show recent photos here.");
+        return;
+      }
+
+      const result = await MediaLibrary.getAssetsAsync({
+        first: GALLERY_PAGE_SIZE,
+        mediaType: MediaLibrary.MediaType.photo,
+        sortBy: [MediaLibrary.SortBy.creationTime],
+      });
+      setGalleryAssets(result.assets);
+    } catch {
+      setGalleryAssets([]);
+      setGalleryError(
+        "Recent photo grid needs a development build. Use the photo tile in Expo Go.",
+      );
+    } finally {
+      setGalleryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGallery();
+  }, [loadGallery]);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -69,6 +140,18 @@ export default function CreateStoryScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setImageUri(result.assets[0].uri);
+      loadGallery();
+    }
+  };
+
+  const selectGalleryAsset = async (asset: MediaLibrary.Asset) => {
+    if (isLoading) return;
+
+    try {
+      const assetInfo = await MediaLibrary.getAssetInfoAsync(asset);
+      setImageUri(assetInfo.localUri || assetInfo.uri || asset.uri);
+    } catch {
+      setImageUri(asset.uri);
     }
   };
 
@@ -96,6 +179,46 @@ export default function CreateStoryScreen() {
     );
   };
 
+  const renderGridItem = ({ item }: { item: GridItem }) => {
+    if (item.type === "camera") {
+      return (
+        <TouchableOpacity
+          style={[styles.cameraTile, { height: tileSize, width: tileSize }]}
+          onPress={takePhoto}
+          disabled={isLoading}
+          activeOpacity={0.82}
+        >
+          <Ionicons name="camera" size={34} color={colors.textInverse} />
+        </TouchableOpacity>
+      );
+    }
+
+    if (item.type === "picker") {
+      return (
+        <TouchableOpacity
+          style={[styles.pickerTile, { height: tileSize, width: tileSize }]}
+          onPress={pickImage}
+          disabled={isLoading}
+          activeOpacity={0.82}
+        >
+          <Ionicons name="images" size={32} color={colors.textPrimary} />
+          <Text style={styles.pickerTileText}>Photos</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <TouchableOpacity
+        style={[styles.mediaTile, { height: tileSize, width: tileSize }]}
+        onPress={() => selectGalleryAsset(item.asset)}
+        disabled={isLoading}
+        activeOpacity={0.86}
+      >
+        <Image source={{ uri: item.asset.uri }} style={styles.mediaThumb} />
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { paddingTop: insets.top }]}
@@ -108,7 +231,7 @@ export default function CreateStoryScreen() {
           disabled={isLoading}
           activeOpacity={0.78}
         >
-          <Ionicons name="close" size={23} color={Colors.textPrimary} />
+          <Ionicons name="close" size={23} color={colors.textPrimary} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>Create Story</Text>
@@ -123,7 +246,7 @@ export default function CreateStoryScreen() {
           activeOpacity={0.82}
         >
           {isLoading ? (
-            <ActivityIndicator color={Colors.textInverse} />
+            <ActivityIndicator color={colors.textInverse} />
           ) : (
             <Text
               style={[
@@ -137,10 +260,10 @@ export default function CreateStoryScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.previewWrap}>
-        <View style={styles.previewCard}>
-          {imageUri ? (
-            <>
+      {imageUri ? (
+        <>
+          <View style={styles.previewWrap}>
+            <View style={styles.previewCard}>
               <Image
                 source={{ uri: imageUri }}
                 style={styles.previewImage}
@@ -150,12 +273,12 @@ export default function CreateStoryScreen() {
                 <TextInput
                   style={styles.captionInput}
                   placeholder="Add a caption..."
-                  placeholderTextColor={Colors.onImageMuted}
+                  placeholderTextColor={colors.onImageMuted}
                   multiline
                   value={caption}
                   onChangeText={setCaption}
                   editable={!isLoading}
-                  selectionColor={Colors.textInverse}
+                  selectionColor={colors.textInverse}
                 />
               </View>
               <TouchableOpacity
@@ -164,57 +287,81 @@ export default function CreateStoryScreen() {
                 disabled={isLoading}
                 activeOpacity={0.78}
               >
-                <Ionicons name="trash-outline" size={20} color={Colors.textInverse} />
+                <Ionicons name="trash-outline" size={20} color={colors.textInverse} />
               </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.emptyPreview}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="images-outline" size={34} color={Colors.textPrimary} />
-              </View>
-              <Text style={styles.emptyTitle}>Add a moment</Text>
-              <Text style={styles.emptySubtitle}>
-                Stories stay active for 24 hours and appear at the top of the feed.
-              </Text>
             </View>
+          </View>
+
+          <View
+            style={[
+              styles.toolbar,
+              { paddingBottom: Math.max(insets.bottom - 8, 8) },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.primaryToolButton}
+              onPress={pickImage}
+              disabled={isLoading}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="image-outline" size={20} color={colors.textInverse} />
+              <Text style={styles.primaryToolText}>Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryToolButton}
+              onPress={takePhoto}
+              disabled={isLoading}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="camera-outline" size={20} color={colors.textPrimary} />
+              <Text style={styles.secondaryToolText}>Camera</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <View style={styles.galleryWrap}>
+          {galleryLoading && gridItems.length <= 2 ? (
+            <View style={styles.galleryState}>
+              <ActivityIndicator color={colors.primary} size="large" />
+            </View>
+          ) : (
+            <FlatList
+              data={gridItems}
+              keyExtractor={(item) => item.id}
+              renderItem={renderGridItem}
+              numColumns={GRID_COLUMNS}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.galleryContent,
+                { paddingBottom: Math.max(insets.bottom, Spacing.md) },
+              ]}
+              columnWrapperStyle={styles.galleryRow}
+              ListFooterComponent={
+                galleryError ? (
+                  <View style={styles.galleryHint}>
+                    <Text style={styles.galleryStateText}>{galleryError}</Text>
+                    <TouchableOpacity
+                      style={styles.permissionButton}
+                      onPress={loadGallery}
+                      activeOpacity={0.82}
+                    >
+                      <Text style={styles.permissionButtonText}>Try again</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null
+              }
+            />
           )}
         </View>
-      </View>
-
-      <View
-        style={[styles.toolbar, { paddingBottom: Math.max(insets.bottom - 8, 8) }]}
-      >
-        <TouchableOpacity
-          style={styles.primaryToolButton}
-          onPress={pickImage}
-          disabled={isLoading}
-          activeOpacity={0.82}
-        >
-          <Ionicons name="image-outline" size={20} color={Colors.textInverse} />
-          <Text style={styles.primaryToolText}>
-            Gallery
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryToolButton}
-          onPress={takePhoto}
-          disabled={isLoading}
-          activeOpacity={0.82}
-        >
-          <Ionicons name="camera-outline" size={20} color={Colors.textPrimary} />
-          <Text style={styles.secondaryToolText}>
-            Camera
-          </Text>
-        </TouchableOpacity>
-      </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   screen: {
-    backgroundColor: Colors.bg,
+    backgroundColor: colors.bg,
     flex: 1,
   },
   header: {
@@ -226,8 +373,8 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: "center",
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
+    backgroundColor: colors.bgCard,
+    borderColor: colors.border,
     borderRadius: Radius.full,
     borderWidth: 1,
     height: 42,
@@ -235,13 +382,13 @@ const styles = StyleSheet.create({
     width: 42,
   },
   headerTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.lg,
   },
   shareButton: {
     alignItems: "center",
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: Radius.full,
     height: 42,
     justifyContent: "center",
@@ -249,17 +396,86 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
   shareButtonDisabled: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
+    backgroundColor: colors.bgElevated,
+    borderColor: colors.border,
     borderWidth: 1,
   },
   shareButtonText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
   },
   shareButtonTextDisabled: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
+  },
+  galleryWrap: {
+    flex: 1,
+    paddingHorizontal: Spacing.md,
+  },
+  galleryContent: {
+    gap: GRID_GAP,
+  },
+  galleryRow: {
+    gap: GRID_GAP,
+  },
+  cameraTile: {
+    alignItems: "center",
+    backgroundColor: colors.primaryDark,
+    justifyContent: "center",
+  },
+  pickerTile: {
+    alignItems: "center",
+    backgroundColor: colors.bgCard,
+    borderColor: colors.border,
+    borderWidth: 1,
+    justifyContent: "center",
+  },
+  pickerTileText: {
+    color: colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
+    marginTop: Spacing.xs,
+  },
+  mediaTile: {
+    backgroundColor: colors.black,
+    overflow: "hidden",
+  },
+  mediaThumb: {
+    height: "100%",
+    width: "100%",
+  },
+  galleryHint: {
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.xl,
+  },
+  galleryState: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  galleryStateText: {
+    color: colors.textSecondary,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    marginTop: Spacing.md,
+    textAlign: "center",
+  },
+  permissionButton: {
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    borderRadius: Radius.full,
+    height: 44,
+    justifyContent: "center",
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+  },
+  permissionButtonText: {
+    color: colors.textInverse,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
   },
   previewWrap: {
     flex: 1,
@@ -267,8 +483,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
   previewCard: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
+    backgroundColor: colors.bgCard,
+    borderColor: colors.border,
     borderRadius: 32,
     borderWidth: 1,
     flex: 1,
@@ -280,7 +496,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   captionOverlay: {
-    backgroundColor: Colors.overlayDark,
+    backgroundColor: colors.overlayDark,
     bottom: 0,
     left: 0,
     paddingBottom: Spacing.md,
@@ -290,11 +506,11 @@ const styles = StyleSheet.create({
     right: 0,
   },
   captionInput: {
-    backgroundColor: Colors.overlayDarkStrong,
-    borderColor: Colors.overlayLightSoft,
+    backgroundColor: colors.overlayDarkStrong,
+    borderColor: colors.overlayLightSoft,
     borderRadius: 20,
     borderWidth: 1,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: FontFamily.semiBold,
     fontSize: FontSize.base,
     maxHeight: 112,
@@ -303,8 +519,8 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     alignItems: "center",
-    backgroundColor: Colors.overlayDark,
-    borderColor: Colors.overlayLightSoft,
+    backgroundColor: colors.overlayDark,
+    borderColor: colors.overlayLightSoft,
     borderRadius: Radius.full,
     borderWidth: 1,
     height: 42,
@@ -314,41 +530,10 @@ const styles = StyleSheet.create({
     top: Spacing.md,
     width: 42,
   },
-  emptyPreview: {
-    alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyIcon: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
-    borderRadius: 28,
-    borderWidth: 1,
-    height: 82,
-    justifyContent: "center",
-    width: 82,
-  },
-  emptyTitle: {
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.xl,
-    marginTop: Spacing.lg,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    color: Colors.textSecondary,
-    fontFamily: FontFamily.regular,
-    fontSize: FontSize.sm,
-    lineHeight: 20,
-    marginTop: Spacing.sm,
-    textAlign: "center",
-  },
   toolbar: {
     alignItems: "center",
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
+    backgroundColor: colors.bgCard,
+    borderColor: colors.border,
     borderRadius: 28,
     borderWidth: 1,
     flexDirection: "row",
@@ -359,7 +544,7 @@ const styles = StyleSheet.create({
   },
   primaryToolButton: {
     alignItems: "center",
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: Radius.full,
     flex: 1,
     flexDirection: "row",
@@ -367,15 +552,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primaryToolText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
     marginLeft: Spacing.sm,
   },
   secondaryToolButton: {
     alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
+    backgroundColor: colors.bgElevated,
+    borderColor: colors.border,
     borderRadius: Radius.full,
     borderWidth: 1,
     flex: 1,
@@ -384,7 +569,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryToolText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
     marginLeft: Spacing.sm,

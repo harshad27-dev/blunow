@@ -117,4 +117,42 @@ export class MessageRepository {
 
     return new Map(grouped.map((item) => [item.chatId, item._count._all]));
   }
+  async deleteForEveryone(messageId: string, userId: string) {
+    return prisma.$transaction(async (tx) => {
+      const message = await tx.message.findUnique({
+        where: { id: messageId },
+        include: { chat: true },
+      });
+
+      if (!message) throw new Error("Message not found");
+      if (message.senderId !== userId) throw new Error("Forbidden");
+
+      const updatedMessage = await tx.message.update({
+        where: { id: messageId },
+        data: {
+          content: null,
+          mediaUrl: null,
+          isDeleted: true,
+        },
+        include: {
+          sender: {
+            include: {
+              profile: { select: { username: true, avatarUrl: true } },
+            },
+          },
+          readReceipts: true,
+        },
+      });
+
+      if (message.chat.lastMessageId === message.id) {
+        await tx.chat.update({
+          where: { id: message.chatId },
+          data: { lastMessageContent: "Message deleted" },
+        });
+      }
+
+      return updatedMessage;
+    });
+  }
 }
+

@@ -46,9 +46,15 @@ export const chatService = {
     const response = await api.post(`/chat/${chatId}/typing`, { isTyping });
     return response.data;
   },
+  deleteMessageForEveryone: async (chatId: string, messageId: string) => {
+    const response = await api.delete(`/chat/${chatId}/messages/${messageId}`);
+    return response.data;
+  },
 
   deleteConversation: async (chatId: string) => {
     const response = await api.delete(`/chat/${chatId}`);
     return response.data;
   },
 };
+
+

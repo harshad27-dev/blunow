@@ -6,7 +6,6 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -184,8 +183,6 @@ export default function ChatListScreen() {
   const [activeFilter, setActiveFilter] = useState<ChatFilter>("all");
   const [activeSegment, setActiveSegment] =
     useState<MessageSegment>("messages");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSearchVisible, setIsSearchVisible] = useState(false);
 
   const {
     data: conversations = [],
@@ -207,46 +204,28 @@ export default function ChatListScreen() {
     [conversations, user?.id],
   );
 
-  const items = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return allItems
-      .filter((item) => {
+  const items = useMemo(
+    () =>
+      allItems.filter((item) => {
         if (activeFilter === "archived") return item.isArchived;
         if (item.isArchived) return false;
         if (activeFilter === "unread") return item.unreadCount > 0;
         if (activeFilter === "muted") return item.isMuted;
         return true;
-      })
-      .filter((item) => {
-        if (!query) return true;
-        return (
-          item.name.toLowerCase().includes(query) ||
-          item.subtitle.toLowerCase().includes(query)
-        );
-      });
-  }, [activeFilter, allItems, searchQuery]);
+      }),
+    [activeFilter, allItems],
+  );
 
-  const requestItems = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return incomingRequests
-      .map(normalizeRequest)
-      .filter((item) => {
-        if (!query) return true;
-        return (
-          item.name.toLowerCase().includes(query) ||
-          item.subtitle.toLowerCase().includes(query)
-        );
-      });
-  }, [incomingRequests, searchQuery]);
+  const requestItems = useMemo(
+    () => incomingRequests.map(normalizeRequest),
+    [incomingRequests],
+  );
 
   const activeItems = allItems.filter((item) => !item.isArchived);
   const unreadTotal = activeItems.reduce(
     (sum, item) => sum + item.unreadCount,
     0,
   );
-  const hasSearch = searchQuery.trim().length > 0;
   const matchStories = activeItems.slice(0, 12);
   const listData = activeSegment === "requests" ? requestItems : items;
   const isRefreshing =
@@ -258,6 +237,7 @@ export default function ChatListScreen() {
       return;
     }
     refetch();
+    refetchRequests();
   };
 
   useEffect(() => {
@@ -274,6 +254,7 @@ export default function ChatListScreen() {
     };
   }, [refetch, socket]);
 
+
   const openConversation = (item: ConversationItem) => {
     router.push({
       pathname: "/(screens)/chat/[roomId]",
@@ -289,7 +270,10 @@ export default function ChatListScreen() {
     Alert.alert("Filter messages", "Choose which conversations to show.", [
       ...FILTERS.map((filter) => ({
         text: filter.label,
-        onPress: () => setActiveFilter(filter.value),
+        onPress: () => {
+          setActiveFilter(filter.value);
+          setActiveSegment("messages");
+        },
       })),
       { text: "Cancel", style: "cancel" as const },
     ]);
@@ -316,6 +300,8 @@ export default function ChatListScreen() {
               onPress={() => router.back()}
               activeOpacity={0.82}
               style={CARD_SHADOW}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
               <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
@@ -331,9 +317,11 @@ export default function ChatListScreen() {
           <View className="absolute right-0 flex-row items-center">
             <TouchableOpacity
               className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-card"
-              onPress={() => setIsSearchVisible((value) => !value)}
+              onPress={() => router.push("/(screens)/search")}
               activeOpacity={0.82}
               style={CARD_SHADOW}
+              accessibilityRole="button"
+              accessibilityLabel="Search profiles"
             >
               <Ionicons name="search" size={19} color={Colors.textPrimary} />
             </TouchableOpacity>
@@ -342,36 +330,13 @@ export default function ChatListScreen() {
               onPress={showFilters}
               activeOpacity={0.82}
               style={CARD_SHADOW}
+              accessibilityRole="button"
+              accessibilityLabel="Filter messages"
             >
               <Ionicons name="options-outline" size={20} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>
         </View>
-
-        {isSearchVisible ? (
-          <View className="mt-5 flex-row items-center rounded-[24px] border border-border bg-bg-card px-4">
-            <Ionicons name="search" size={18} color={Colors.textSecondary} />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search matches"
-              placeholderTextColor={Colors.textMuted}
-              className="h-[52px] flex-1 px-3 text-[15px] font-semibold text-text-primary"
-              autoCorrect={false}
-              returnKeyType="search"
-              style={{ paddingVertical: 0 }}
-            />
-            {hasSearch ? (
-              <TouchableOpacity
-                className="h-8 w-8 items-center justify-center rounded-full bg-bg"
-                onPress={() => setSearchQuery("")}
-                activeOpacity={0.82}
-              >
-                <Ionicons name="close" size={16} color={Colors.textPrimary} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        ) : null}
       </View>
 
       {isLoading ? (
@@ -395,6 +360,7 @@ export default function ChatListScreen() {
               <MatchStories
                 items={matchStories}
                 onPress={openConversation}
+                onLikesPress={() => router.push("/(tabs)/matches")}
                 unreadTotal={unreadTotal}
               />
               <MessagesSectionHeader
@@ -409,8 +375,6 @@ export default function ChatListScreen() {
             <EmptyState
               segment={activeSegment}
               filter={activeSegment === "requests" ? "all" : activeFilter}
-              hasSearch={hasSearch}
-              onClearSearch={() => setSearchQuery("")}
             />
           }
           data={listData}
@@ -450,10 +414,12 @@ export default function ChatListScreen() {
 const MatchStories = ({
   items,
   onPress,
+  onLikesPress,
   unreadTotal,
 }: {
   items: ConversationItem[];
   onPress: (item: ConversationItem) => void;
+  onLikesPress: () => void;
   unreadTotal: number;
 }) => (
   <View className="pb-6">
@@ -480,7 +446,13 @@ const MatchStories = ({
       showsHorizontalScrollIndicator={false}
       contentContainerClassName="pr-5"
     >
-      <TouchableOpacity className="mr-3 w-[64px]" activeOpacity={0.84}>
+      <TouchableOpacity
+        className="mr-3 w-[64px]"
+        onPress={onLikesPress}
+        activeOpacity={0.84}
+        accessibilityRole="button"
+        accessibilityLabel="Open likes"
+      >
         <View
           className="h-[64px] w-[64px] items-center justify-center rounded-full border border-primary-light bg-bg-card"
           style={CARD_SHADOW}
@@ -591,17 +563,11 @@ const MessagesSectionHeader = ({
 const EmptyState = ({
   segment,
   filter,
-  hasSearch,
-  onClearSearch,
 }: {
   segment: MessageSegment;
   filter: ChatFilter;
-  hasSearch: boolean;
-  onClearSearch: () => void;
 }) => {
-  const title = hasSearch
-    ? "No chats found"
-    : segment === "requests"
+  const title = segment === "requests"
       ? "No requests"
       : filter === "unread"
         ? "You're all caught up"
@@ -611,9 +577,7 @@ const EmptyState = ({
             ? "No archived chats"
             : "No messages yet";
 
-  const description = hasSearch
-    ? "Try a different name or message preview."
-    : segment === "requests"
+  const description = segment === "requests"
       ? "Message requests from new matches will appear here."
       : filter === "unread"
         ? "New messages will collect here when someone replies."
@@ -627,7 +591,7 @@ const EmptyState = ({
     <View className="flex-1 items-center justify-center px-6">
       <View className="mb-5 h-24 w-24 items-center justify-center rounded-[30px] bg-primary">
         <Ionicons
-          name={hasSearch ? "search" : "chatbubbles-outline"}
+          name="chatbubbles-outline"
           size={36}
           color={Colors.textInverse}
         />
@@ -638,17 +602,6 @@ const EmptyState = ({
       <Text className="max-w-[310px] text-center text-sm font-medium leading-5 text-text-secondary">
         {description}
       </Text>
-      {hasSearch ? (
-        <TouchableOpacity
-          className="mt-5 rounded-full bg-primary px-5 py-3"
-          onPress={onClearSearch}
-          activeOpacity={0.84}
-        >
-          <Text className="text-sm font-extrabold text-inverse">
-            Clear search
-          </Text>
-        </TouchableOpacity>
-      ) : null}
     </View>
   );
 };

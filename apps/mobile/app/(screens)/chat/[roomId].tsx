@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -17,10 +20,14 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { MessageBubble } from "@/components/chat/MessageBubble";
+import {
+  MessageBubble,
+  type MessageReplyPreview,
+} from "@/components/chat/MessageBubble";
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import {
   useChatConversationQuery,
+  useDeleteChatMessageMutation,
   useInfiniteChatMessagesQuery,
   useMarkChatReadMutation,
   useUpdateChatSettingsMutation,
@@ -35,7 +42,16 @@ import { moderationService } from "@/services/moderation.service";
 import { userService } from "@/services/user.service";
 import { useQueryClient } from "@tanstack/react-query";
 
-type PendingMessage = ChatMessage & { isPending?: boolean };
+type PendingMessage = ChatMessage & {
+  isPending?: boolean;
+  replyPreview?: MessageReplyPreview | null;
+};
+
+type TimelineItem =
+  | { type: "message"; id: string; message: PendingMessage }
+  | { type: "date"; id: string; label: string };
+
+const QUICK_REACTIONS = ["\u2764\uFE0F", "\uD83D\uDE02", "\uD83D\uDC4D", "\uD83D\uDE2E", "\uD83D\uDE22"] as const;
 
 const getParam = (value?: string | string[]) => {
   if (Array.isArray(value)) return value[0];
@@ -46,6 +62,59 @@ const getOtherParticipant = (conversation: any, currentUserId?: string) =>
   conversation?.user1Id === currentUserId
     ? conversation?.user2
     : conversation?.user1;
+
+const getDateKey = (value?: string) => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "unknown";
+
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+
+const getDateLabel = (value?: string) => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (getDateKey(value) === getDateKey(today.toISOString())) return "Today";
+  if (getDateKey(value) === getDateKey(yesterday.toISOString())) {
+    return "Yesterday";
+  }
+
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+};
+
+
+const getMessagePreviewText = (message: PendingMessage) => {
+  if (message.isDeleted) return "Message deleted";
+  return message.content || (message.mediaUrl ? "Shared media" : "Message");
+};
+const buildTimelineItems = (items: PendingMessage[]): TimelineItem[] => {
+  return items.flatMap((message, index) => {
+    const nextMessage = items[index + 1];
+    const currentDateKey = getDateKey(message.createdAt);
+    const nextDateKey = nextMessage ? getDateKey(nextMessage.createdAt) : null;
+    const timelineItems: TimelineItem[] = [
+      { type: "message", id: message.id, message },
+    ];
+
+    if (currentDateKey !== nextDateKey) {
+      timelineItems.push({
+        type: "date",
+        id: `date-${currentDateKey}-${message.id}`,
+        label: getDateLabel(message.createdAt),
+      });
+    }
+
+    return timelineItems;
+  });
+};
 
 export default function ChatRoomScreen() {
   const router = useRouter();
@@ -66,6 +135,12 @@ export default function ChatRoomScreen() {
   const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
   const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [hiddenMessageIds, setHiddenMessageIds] = useState<string[]>([]);
+  const [selectedMessage, setSelectedMessage] = useState<PendingMessage | null>(null);
+  const [messageReactions, setMessageReactions] = useState<Record<string, string>>({});
+  const [replyTarget, setReplyTarget] = useState<PendingMessage | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const actionOverlayAnim = useRef(new Animated.Value(0)).current;
 
   const { data: conversation, isFetching: isConversationFetching } =
     useChatConversationQuery(roomId);
@@ -80,6 +155,7 @@ export default function ChatRoomScreen() {
   } = useInfiniteChatMessagesQuery(roomId);
   const markReadMutation = useMarkChatReadMutation(roomId);
   const updateSettingsMutation = useUpdateChatSettingsMutation(roomId);
+  const deleteMessageMutation = useDeleteChatMessageMutation(roomId);
 
   const otherParticipant = getOtherParticipant(conversation, user?.id);
   const name =
@@ -95,8 +171,25 @@ export default function ChatRoomScreen() {
 
   const messages = useMemo(() => {
     const pendingNewestFirst = [...pendingMessages].reverse();
-    return [...pendingNewestFirst, ...serverMessages];
-  }, [pendingMessages, serverMessages]);
+    return [...pendingNewestFirst, ...serverMessages].filter(
+      (message) => !hiddenMessageIds.includes(message.id),
+    );
+  }, [hiddenMessageIds, pendingMessages, serverMessages]);
+
+  const timelineItems = useMemo(() => buildTimelineItems(messages), [messages]);
+
+  useEffect(() => {
+    if (!selectedMessage) return;
+
+    actionOverlayAnim.setValue(0);
+    Animated.spring(actionOverlayAnim, {
+      toValue: 1,
+      damping: 17,
+      stiffness: 230,
+      mass: 0.75,
+      useNativeDriver: true,
+    }).start();
+  }, [actionOverlayAnim, selectedMessage]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -216,6 +309,13 @@ export default function ChatRoomScreen() {
     type: ChatMessageType = "TEXT",
     mediaUrl?: string,
   ) => {
+    const replyPreview = replyTarget
+      ? {
+          title: `Replying to ${replyTarget.senderId === user?.id ? "yourself" : name}`,
+          body: getMessagePreviewText(replyTarget),
+        }
+      : null;
+
     const pendingMessage: PendingMessage = {
       id: `${roomId}-${Date.now()}`,
       chatId: roomId,
@@ -225,6 +325,7 @@ export default function ChatRoomScreen() {
       mediaUrl,
       createdAt: new Date().toISOString(),
       isPending: true,
+      replyPreview,
     };
 
     setPendingMessages((current) => [...current, pendingMessage]);
@@ -287,6 +388,94 @@ export default function ChatRoomScreen() {
     }
   };
 
+  const hideMessageForMe = (messageId: string) => {
+    setPendingMessages((current) =>
+      current.filter((message) => message.id !== messageId),
+    );
+    setHiddenMessageIds((current) =>
+      current.includes(messageId) ? current : [...current, messageId],
+    );
+  };
+
+  const showActionNotice = (message: string) => {
+    setActionNotice(message);
+    setTimeout(() => setActionNotice(null), 1600);
+  };
+
+  const closeMessageActions = useCallback(() => {
+    Animated.timing(actionOverlayAnim, {
+      toValue: 0,
+      duration: 140,
+      useNativeDriver: true,
+    }).start(() => setSelectedMessage(null));
+  }, [actionOverlayAnim]);
+
+  const reportMessage = async (message: PendingMessage) => {
+    closeMessageActions();
+    try {
+      await moderationService.report({
+        contentId: message.id,
+        contentType: "MESSAGE",
+        reportedId: message.senderId,
+        reason: "HARASSMENT",
+        description: "Reported from a chat message",
+      });
+      showActionNotice("Report sent for review");
+    } catch (error: any) {
+      showActionNotice(
+        error?.response?.data?.message || "Unable to report this message",
+      );
+    }
+  };
+
+  const showMessageActions = (message: PendingMessage) => {
+    setSelectedMessage(message);
+  };
+
+  const replyToMessage = (message: PendingMessage) => {
+    setReplyTarget(message);
+    closeMessageActions();
+    showActionNotice("Reply selected");
+  };
+
+  const reactToMessage = (message: PendingMessage, reaction: string) => {
+    setMessageReactions((current) => ({ ...current, [message.id]: reaction }));
+    closeMessageActions();
+  };
+
+  const copyMessageText = (message: PendingMessage) => {
+    closeMessageActions();
+    showActionNotice(message.content ? "Text ready to copy" : "No text to copy");
+  };
+
+  const deleteMessageForMe = (message: PendingMessage) => {
+    closeMessageActions();
+    hideMessageForMe(message.id);
+    showActionNotice("Deleted for you");
+  };
+  const deleteMessageForEveryone = async (message: PendingMessage) => {
+    closeMessageActions();
+
+    if (message.isPending) {
+      hideMessageForMe(message.id);
+      showActionNotice("Message removed");
+      return;
+    }
+
+    try {
+      await deleteMessageMutation.mutateAsync(message.id);
+      setMessageReactions((current) => {
+        const next = { ...current };
+        delete next[message.id];
+        return next;
+      });
+      showActionNotice("Deleted for everyone");
+    } catch (error: any) {
+      showActionNotice(
+        error?.response?.data?.message || "Unable to delete for everyone",
+      );
+    }
+  };
   const loadOlderMessages = () => {
     if (!hasNextPage || isFetchingNextPage) return;
     fetchNextPage();
@@ -338,8 +527,8 @@ export default function ChatRoomScreen() {
     >
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 4 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
       >
         <View className="flex-row items-center border-b border-border bg-bg px-5 py-3.5">
           <TouchableOpacity
@@ -403,19 +592,19 @@ export default function ChatRoomScreen() {
 
         <FlatList
           className="flex-1"
-          data={messages}
-          keyExtractor={(message) => message.id}
+          data={timelineItems}
+          keyExtractor={(item) => item.id}
           inverted
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: messages.length ? "flex-start" : "center",
+            justifyContent: timelineItems.length ? "flex-start" : "center",
             paddingHorizontal: 12,
             paddingBottom: 14,
             paddingTop: 14,
           }}
-          ItemSeparatorComponent={() => <View className="h-3.5" />}
+          ItemSeparatorComponent={() => <View className="h-2.5" />}
           onEndReached={loadOlderMessages}
           onEndReachedThreshold={0.25}
           refreshControl={
@@ -432,15 +621,6 @@ export default function ChatRoomScreen() {
             isFetchingNextPage ? (
               <View className="items-center py-4">
                 <ActivityIndicator color={Colors.primaryLight} />
-              </View>
-            ) : messages.length ? (
-              <View className="items-center pb-6">
-                <Text
-                  className="overflow-hidden rounded-full border border-border bg-bg-card px-4 py-1.5 text-xs font-extrabold text-text-secondary"
-                  style={styles.datePill}
-                >
-                  Recent messages
-                </Text>
               </View>
             ) : null
           }
@@ -478,19 +658,27 @@ export default function ChatRoomScreen() {
             )
           }
           renderItem={({ item, index }) => {
-            const next = messages[index + 1];
+            if (item.type === "date") {
+              return <MessageDateSeparator label={item.label} />;
+            }
+
+            const nextItem = timelineItems[index + 1];
+            const nextMessage =
+              nextItem?.type === "message" ? nextItem.message : undefined;
             const showAvatar =
-              item.senderId !== user?.id && next?.senderId !== item.senderId;
-            const showReaction =
-              item.senderId !== user?.id && index === 0;
+              item.message.senderId !== user?.id &&
+              nextMessage?.senderId !== item.message.senderId;
+            const showReaction = item.message.senderId !== user?.id && index === 0;
 
             return (
               <MessageBubble
-                message={item}
-                isMine={item.senderId === user?.id}
+                message={item.message}
+                isMine={item.message.senderId === user?.id}
                 showAvatar={showAvatar}
                 avatarUrl={avatarUrl}
-                reaction={showReaction ? "heart" : undefined}
+                reaction={messageReactions[item.message.id] || (showReaction ? "\u2764\uFE0F" : undefined)}
+                replyPreview={item.message.replyPreview}
+                onLongPress={() => showMessageActions(item.message)}
               />
             );
           }}
@@ -498,19 +686,276 @@ export default function ChatRoomScreen() {
 
         <SafeAreaView edges={["bottom"]} className="bg-bg">
           <ChatInput
-            placeholder="Type a message..."
+            placeholder={replyTarget ? "Reply to message..." : "Type a message..."}
             disabled={!isSocketConnected || isUploadingMedia}
-            onSend={(content) => sendMessage(content)}
+            replyPreview={
+              replyTarget
+                ? {
+                    title: `Replying to ${replyTarget.senderId === user?.id ? "yourself" : name}`,
+                    body: replyTarget.isDeleted
+                      ? "Message deleted"
+                      : replyTarget.content ||
+                        (replyTarget.mediaUrl ? "Shared media" : "Message"),
+                    onClear: () => setReplyTarget(null),
+                  }
+                : null
+            }
+            onSend={(content) => {
+              sendMessage(content);
+              setReplyTarget(null);
+            }}
             onPickImage={pickImage}
             onTypingChange={sendTypingState}
           />
         </SafeAreaView>
       </KeyboardAvoidingView>
+
+      {actionNotice ? (
+        <View className="absolute left-8 right-8 top-16 items-center" pointerEvents="none">
+          <View className="rounded-full border border-border bg-bg-card px-4 py-2" style={styles.floatingNotice}>
+            <Text className="text-xs font-extrabold text-text-primary">{actionNotice}</Text>
+          </View>
+        </View>
+      ) : null}
+
+      <MessageActionOverlay
+        message={selectedMessage}
+        isMine={selectedMessage?.senderId === user?.id}
+        animatedValue={actionOverlayAnim}
+        onClose={closeMessageActions}
+        onReply={replyToMessage}
+        onReact={reactToMessage}
+        onCopy={copyMessageText}
+        onDelete={deleteMessageForMe}
+        onDeleteForEveryone={deleteMessageForEveryone}
+        onReport={reportMessage}
+      />
     </SafeAreaView>
   );
 }
 
+const MessageDateSeparator = ({ label }: { label: string }) => (
+  <View className="items-center py-1">
+    <Text
+      className="overflow-hidden rounded-full border border-border bg-bg-card px-3 py-1 text-[11px] font-extrabold text-text-secondary"
+      style={styles.datePill}
+    >
+      {label}
+    </Text>
+  </View>
+);
+
+const MessageActionOverlay = ({
+  message,
+  isMine,
+  animatedValue,
+  onClose,
+  onReply,
+  onReact,
+  onCopy,
+  onDelete,
+  onDeleteForEveryone,
+  onReport,
+}: {
+  message: PendingMessage | null;
+  isMine: boolean;
+  animatedValue: Animated.Value;
+  onClose: () => void;
+  onReply: (message: PendingMessage) => void;
+  onReact: (message: PendingMessage, reaction: string) => void;
+  onCopy: (message: PendingMessage) => void;
+  onDelete: (message: PendingMessage) => void;
+  onDeleteForEveryone: (message: PendingMessage) => void;
+  onReport: (message: PendingMessage) => void;
+}) => {
+  if (!message) return null;
+
+  const content =
+    message.content ||
+    (message.isDeleted
+      ? "Message deleted"
+      : message.mediaUrl
+        ? "Shared media"
+        : "Message");
+  const scale = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.94, 1],
+  });
+  const translateY = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, 0],
+  });
+
+  return (
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+      <View className="flex-1 justify-center px-5">
+        <Pressable
+          className="absolute inset-0"
+          style={styles.actionBackdrop}
+          onPress={onClose}
+        />
+
+        <Animated.View
+          style={{
+            opacity: animatedValue,
+            transform: [{ scale }, { translateY }],
+          }}
+        >
+          <View className={isMine ? "items-end" : "items-start"}>
+            <View
+              className={`mb-3 max-w-[82%] rounded-[22px] px-4 py-3 ${
+                isMine ? "rounded-br-md" : "rounded-bl-md"
+              }`}
+              style={isMine ? styles.actionPreviewMine : styles.actionPreviewOther}
+            >
+              <Text
+                className={`text-[14px] font-semibold leading-5 ${
+                  isMine ? "text-inverse" : "text-text-primary"
+                }`}
+                numberOfLines={4}
+              >
+                {content}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            className="self-center rounded-full border border-border bg-bg-card px-2.5 py-2"
+            style={styles.reactionDock}
+          >
+            <View className="flex-row items-center">
+              {QUICK_REACTIONS.map((reaction) => (
+                <Pressable
+                  key={reaction}
+                  className="mx-1 h-10 w-10 items-center justify-center rounded-full bg-bg-elevated"
+                  onPress={() => onReact(message, reaction)}
+                >
+                  <Text className="text-[20px]">{reaction}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View
+            className="mt-3 overflow-hidden rounded-[24px] border border-border bg-bg-card"
+            style={styles.actionCard}
+          >
+            <MessageActionRow
+              icon="return-up-back-outline"
+              label="Reply"
+              onPress={() => onReply(message)}
+            />
+            {message.content?.trim() ? (
+              <MessageActionRow
+                icon="copy-outline"
+                label="Copy text"
+                onPress={() => onCopy(message)}
+              />
+            ) : null}
+            <MessageActionRow
+              icon="trash-outline"
+              label="Delete for me"
+              destructive
+              onPress={() => onDelete(message)}
+            />
+            {isMine ? (
+              <MessageActionRow
+                icon="close-circle-outline"
+                label="Delete for everyone"
+                destructive
+                onPress={() => onDeleteForEveryone(message)}
+              />
+            ) : null}
+            {!isMine ? (
+              <MessageActionRow
+                icon="flag-outline"
+                label="Report message"
+                destructive
+                onPress={() => onReport(message)}
+              />
+            ) : null}
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const MessageActionRow = ({
+  icon,
+  label,
+  destructive = false,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  destructive?: boolean;
+  onPress: () => void;
+}) => (
+  <Pressable
+    className="min-h-[52px] flex-row items-center px-4"
+    onPress={onPress}
+    android_ripple={{ color: `${Colors.primaryLight}18` }}
+  >
+    <View className="mr-3 h-9 w-9 items-center justify-center rounded-full bg-bg-elevated">
+      <Ionicons
+        name={icon}
+        size={18}
+        color={destructive ? Colors.error : Colors.textPrimary}
+      />
+    </View>
+    <Text
+      className="flex-1 text-[15px] font-extrabold"
+      style={{ color: destructive ? Colors.error : Colors.textPrimary }}
+    >
+      {label}
+    </Text>
+    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+  </Pressable>
+);
 const styles = StyleSheet.create({
+  actionBackdrop: {
+    backgroundColor: Colors.overlayDark,
+  },
+  actionCard: {
+    shadowColor: Colors.black,
+    shadowOffset: { height: 18, width: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 28,
+    elevation: 10,
+  },
+  actionPreviewMine: {
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.black,
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    elevation: 8,
+  },
+  actionPreviewOther: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderWidth: 1,
+    shadowColor: Colors.black,
+    shadowOffset: { height: 12, width: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 8,
+  },
+  floatingNotice: {
+    shadowColor: Colors.black,
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 7,
+  },
+  reactionDock: {
+    shadowColor: Colors.black,
+    shadowOffset: { height: 14, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 9,
+  },
   navButton: {
     shadowColor: Colors.black,
     shadowOffset: { height: 6, width: 0 },
@@ -526,3 +971,22 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

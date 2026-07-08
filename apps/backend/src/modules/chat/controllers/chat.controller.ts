@@ -84,6 +84,23 @@ export class ChatController {
         .json({ success: false, message: error.message });
     }
   };
+  deleteMessageForEveryone = async (
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const message = await this.messageService.deleteForEveryone(
+        req.params.chatId,
+        req.params.messageId,
+        req.user!.id,
+      );
+      res.status(200).json({ success: true, data: message });
+    } catch (error: any) {
+      res
+        .status(error.statusCode ?? 400)
+        .json({ success: false, message: error.message });
+    }
+  };
 
   updateChatSettings = async (
     req: AuthRequest,
@@ -122,3 +139,5 @@ export class ChatController {
     }
   };
 }
+
+

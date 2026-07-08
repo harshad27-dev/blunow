@@ -21,6 +21,7 @@ router.get("/online/:userId", rtController.getOnlineStatus);
 router.get("/:chatId", controller.getChat);
 router.get("/:chatId/messages", controller.getMessages);
 router.post("/:chatId/messages", controller.sendMessage);
+router.delete("/:chatId/messages/:messageId", controller.deleteMessageForEveryone);
 router.patch("/:chatId/read", controller.markChatRead);
 router.delete("/:chatId", controller.deleteChat);
 
@@ -33,3 +34,4 @@ router.patch(
 );
 
 export default router;
+

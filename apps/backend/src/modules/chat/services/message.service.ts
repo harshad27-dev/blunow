@@ -98,4 +98,24 @@ export class MessageService {
       shareReceipt: privacy?.readReceipts !== false,
     };
   }
+  async deleteForEveryone(chatId: string, messageId: string, userId: string) {
+    const chat = await this.chatRepository.findById(chatId);
+    if (!chat) throw new AppError("Chat not found", 404);
+    if (chat.user1Id !== userId && chat.user2Id !== userId) {
+      throw new AppError("Forbidden", 403);
+    }
+
+    try {
+      return await this.messageRepository.deleteForEveryone(messageId, userId);
+    } catch (error: any) {
+      if (error.message === "Message not found") {
+        throw new AppError("Message not found", 404);
+      }
+      if (error.message === "Forbidden") {
+        throw new AppError("Only the sender can delete this message", 403);
+      }
+      throw error;
+    }
+  }
 }
+

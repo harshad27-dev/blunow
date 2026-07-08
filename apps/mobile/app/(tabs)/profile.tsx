@@ -410,58 +410,70 @@ const IncomingRequestRow = ({
   const avatarUrl = request.sender?.profile?.avatarUrl;
 
   return (
-    <View className="mb-3 flex-row items-center rounded-[22px] border border-border bg-bg p-4">
-      {/* Avatar */}
+    <View className="mb-2.5 flex-row items-center rounded-[18px] border border-border bg-bg-card px-3 py-2.5">
       {avatarUrl ? (
-        <View className="rounded-2xl border border-border p-[2px] bg-bg-card">
-          <Image source={{ uri: avatarUrl }} className="h-14 w-14 rounded-2xl bg-bg-elevated" />
+        <View className="rounded-[15px] border border-border bg-bg p-[2px]">
+          <Image
+            source={{ uri: avatarUrl }}
+            className="h-11 w-11 rounded-[13px] bg-bg-elevated"
+          />
         </View>
       ) : (
-        <View className="h-14 w-14 items-center justify-center rounded-2xl border border-border bg-bg-elevated">
-          <Text className="text-sm font-extrabold text-text-secondary">{name.charAt(0).toUpperCase()}</Text>
+        <View className="h-11 w-11 items-center justify-center rounded-[15px] border border-border bg-bg-elevated">
+          <Text className="text-sm font-extrabold text-text-secondary">
+            {name.charAt(0).toUpperCase()}
+          </Text>
         </View>
       )}
 
-      {/* Info */}
-      <View className="ml-4 mr-3 flex-1">
-        <Text className="text-[15px] font-extrabold text-text-primary" numberOfLines={1}>{name}</Text>
-        <Text className="mt-1 text-xs leading-4 text-text-secondary" numberOfLines={1}>
+      <View className="ml-3 mr-2 min-w-0 flex-1">
+        <Text
+          className="text-[14px] font-extrabold text-text-primary"
+          numberOfLines={1}
+        >
+          {name}
+        </Text>
+        <Text
+          className="mt-0.5 text-[11px] font-medium leading-4 text-text-secondary"
+          numberOfLines={1}
+        >
           {request.message || "Wants to connect with you"}
         </Text>
       </View>
 
-      {/* Reject */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Reject request from ${name}`}
-        accessibilityState={{ disabled }}
-        className="mr-2 h-12 w-12 items-center justify-center rounded-2xl bg-bg-elevated"
-        onPress={onReject}
-        disabled={disabled}
-      >
-        {pendingStatus === "REJECTED" ? (
-          <ActivityIndicator color={Colors.textSecondary} size="small" />
-        ) : (
-          <Ionicons name="close" size={19} color={Colors.textSecondary} />
-        )}
-      </Pressable>
+      <View className="flex-row items-center">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Reject request from ${name}`}
+          accessibilityState={{ disabled }}
+          className="mr-2 h-10 w-10 items-center justify-center rounded-[14px] border border-border bg-bg-elevated"
+          onPress={onReject}
+          disabled={disabled}
+          style={{ opacity: disabled ? 0.55 : 1 }}
+        >
+          {pendingStatus === "REJECTED" ? (
+            <ActivityIndicator color={Colors.textSecondary} size="small" />
+          ) : (
+            <Ionicons name="close" size={18} color={Colors.textSecondary} />
+          )}
+        </Pressable>
 
-      {/* Accept */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Accept request from ${name}`}
-        accessibilityState={{ disabled }}
-        className="h-12 w-12 items-center justify-center rounded-2xl"
-        style={{ backgroundColor: Colors.primary, opacity: disabled ? 0.5 : 1 }}
-        onPress={onAccept}
-        disabled={disabled}
-      >
-        {pendingStatus === "ACCEPTED" ? (
-          <ActivityIndicator color={Colors.white} size="small" />
-        ) : (
-          <Ionicons name="checkmark" size={20} color={Colors.white} />
-        )}
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Accept request from ${name}`}
+          accessibilityState={{ disabled }}
+          className="h-10 w-10 items-center justify-center rounded-[14px]"
+          style={{ backgroundColor: Colors.success, opacity: disabled ? 0.55 : 1 }}
+          onPress={onAccept}
+          disabled={disabled}
+        >
+          {pendingStatus === "ACCEPTED" ? (
+            <ActivityIndicator color={Colors.black} size="small" />
+          ) : (
+            <Ionicons name="checkmark" size={19} color={Colors.black} />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 };

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   ActivityIndicator,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -22,7 +21,6 @@ import { Radius, Spacing } from '@/constants/spacing';
 import {
   useSearchQuery,
   useSendMatchRequestMutation,
-  useTrendingHashtagsQuery,
 } from '@/hooks/queries';
 import { showToast } from '@/utils/toast';
 
@@ -60,11 +58,7 @@ export default function SearchScreen() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const { data, isLoading } = useSearchQuery(debouncedQuery, 'all');
-  const { data: trendingHashtags = [] } = useTrendingHashtagsQuery();
-  const trendingTopics = trendingHashtags.map((item) =>
-    item.hashtag.replace(/^#/, ''),
-  );
+  const { data, isLoading } = useSearchQuery(debouncedQuery, 'users');
 
   const users = data?.users?.map((user: any) => ({
     id: user.id,
@@ -90,17 +84,6 @@ export default function SearchScreen() {
     matchScore: user.matchScore,
     isConnected: Boolean(user.isConnected),
   })) || [];
-  const posts = (data?.posts || []) as {
-    id: string;
-    caption?: string | null;
-    mediaUrls?: string[];
-  }[];
-  const rooms = (data?.rooms || []) as {
-    id: string;
-    name: string;
-    description?: string | null;
-  }[];
-
   const handleConnect = (user: (typeof users)[number]) => {
     sendMatchRequest.mutate(
       {
@@ -158,7 +141,7 @@ export default function SearchScreen() {
             <Input
               value={searchQuery}
               onChangeText={runSearch}
-              placeholder="Search people or interests..."
+              placeholder="Search profiles..."
               autoFocus
               icon={<Ionicons name="search" size={20} color={Colors.textSecondary} />}
               containerStyle={{ marginBottom: 0 }}
@@ -211,25 +194,6 @@ export default function SearchScreen() {
                 </View>
                 </View>
               ) : null}
-
-              {trendingTopics.length ? (
-                <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Trending</Text>
-                <View style={styles.topicRow}>
-                  {trendingTopics.map((topic, index) => (
-                    <TouchableOpacity 
-                      key={index} 
-                      style={styles.topicChip}
-                      onPress={() => setSearchQuery(topic)}
-                      activeOpacity={0.82}
-                    >
-                      <Ionicons name="trending-up" size={14} color={Colors.textSecondary} />
-                      <Text style={styles.topicText}>#{topic}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                </View>
-              ) : null}
             </ScrollView>
           ) : (
             <View style={styles.results}>
@@ -245,73 +209,9 @@ export default function SearchScreen() {
                   data={users}
                   keyExtractor={(item) => item.id}
                   showsVerticalScrollIndicator={false}
-                  ListHeaderComponent={
-                    <>
-                      {posts.length ? (
-                        <View style={styles.resultSection}>
-                          <Text style={styles.resultSectionTitle}>Posts</Text>
-                          {posts.map((post) => (
-                            <TouchableOpacity
-                              key={post.id}
-                              style={styles.compactResult}
-                              onPress={() =>
-                                router.push({
-                                  pathname: "/(screens)/post/[postId]",
-                                  params: { postId: post.id },
-                                })
-                              }
-                            >
-                              {post.mediaUrls?.[0] ? (
-                                <Image source={{ uri: post.mediaUrls[0] }} style={styles.resultImage} />
-                              ) : (
-                                <View style={styles.resultImagePlaceholder}>
-                                  <Ionicons name="image-outline" size={22} color={Colors.textMuted} />
-                                </View>
-                              )}
-                              <View style={styles.compactCopy}>
-                                <Text style={styles.compactTitle} numberOfLines={1}>
-                                  {post.caption || "Post"}
-                                </Text>
-                                <Text style={styles.compactSubtitle}>View post</Text>
-                              </View>
-                              <Ionicons name="chevron-forward" size={19} color={Colors.textMuted} />
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : null}
-                      {rooms.length ? (
-                        <View style={styles.resultSection}>
-                          <Text style={styles.resultSectionTitle}>Rooms</Text>
-                          {rooms.map((room) => (
-                            <TouchableOpacity
-                              key={room.id}
-                              style={styles.compactResult}
-                              onPress={() =>
-                                router.push({
-                                  pathname: "/(screens)/room/[roomId]",
-                                  params: { roomId: room.id },
-                                })
-                              }
-                            >
-                              <View style={styles.resultImagePlaceholder}>
-                                <Ionicons name="people-outline" size={22} color={Colors.textSecondary} />
-                              </View>
-                              <View style={styles.compactCopy}>
-                                <Text style={styles.compactTitle}>{room.name}</Text>
-                                <Text style={styles.compactSubtitle} numberOfLines={1}>
-                                  {room.description || "Open room"}
-                                </Text>
-                              </View>
-                              <Ionicons name="chevron-forward" size={19} color={Colors.textMuted} />
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      ) : null}
-                      {users.length ? (
-                        <Text style={styles.resultSectionTitle}>People</Text>
-                      ) : null}
-                    </>
-                  }
+                  ListHeaderComponent={users.length ? (
+                    <Text style={styles.sectionTitle}>People</Text>
+                  ) : null}
                   renderItem={({ item }) => (
                     <View style={styles.resultCardWrap}>
                       <DiscoverUserCard 
@@ -322,19 +222,17 @@ export default function SearchScreen() {
                       />
                     </View>
                   )}
-                  ListEmptyComponent={() =>
-                    posts.length || rooms.length ? null : (
+                  ListEmptyComponent={() => (
                     <View style={styles.stateWrap}>
                       <View style={styles.emptyIcon}>
                         <Ionicons name="search-outline" size={34} color={Colors.textMuted} />
                       </View>
-                      <Text style={styles.stateTitle}>No results</Text>
+                      <Text style={styles.stateTitle}>No profiles</Text>
                       <Text style={styles.stateText}>
-                        {`No results found for "${searchQuery}"`}
+                        {`No profiles found for "${searchQuery}"`}
                       </Text>
                     </View>
-                    )
-                  }
+                  )}
                   contentContainerStyle={styles.resultsContent}
                 />
               )}
@@ -442,27 +340,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 32,
   },
-  topicRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  topicChip: {
-    alignItems: 'center',
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-  },
-  topicText: {
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.semiBold,
-    fontSize: FontSize.sm,
-    marginLeft: Spacing.xs,
-  },
   results: {
     flex: 1,
   },
@@ -473,53 +350,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 2,
     // marginHorizontal: -(Spacing.md + 4),
-  },
-  resultSection: {
-    marginBottom: Spacing.lg,
-  },
-  resultSectionTitle: {
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.lg,
-    marginBottom: Spacing.md,
-  },
-  compactResult: {
-    alignItems: "center",
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    flexDirection: "row",
-    marginBottom: Spacing.sm,
-    padding: Spacing.sm,
-  },
-  compactCopy: {
-    flex: 1,
-    paddingHorizontal: Spacing.md,
-  },
-  compactTitle: {
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.semiBold,
-    fontSize: FontSize.base,
-  },
-  compactSubtitle: {
-    color: Colors.textSecondary,
-    fontFamily: FontFamily.regular,
-    fontSize: FontSize.sm,
-    marginTop: 3,
-  },
-  resultImage: {
-    borderRadius: Radius.md,
-    height: 54,
-    width: 54,
-  },
-  resultImagePlaceholder: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: Radius.md,
-    height: 54,
-    justifyContent: "center",
-    width: 54,
   },
   stateWrap: {
     alignItems: 'center',

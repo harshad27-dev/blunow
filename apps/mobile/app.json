@@ -47,6 +47,14 @@
       "expo-secure-store",
       "expo-font",
       [
+        "expo-media-library",
+        {
+          "photosPermission": "Datebl uses your photo library so you can choose photos for stories.",
+          "savePhotosPermission": "Datebl can save photos you capture for stories to your library.",
+          "granularPermissions": ["photo"]
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Datebl uses your location during signup to help show nearby people and rooms."
