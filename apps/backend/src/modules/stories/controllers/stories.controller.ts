@@ -50,6 +50,19 @@ export class StoriesController {
     }
   };
 
+
+  replyToStory = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const result = await this.storiesService.replyToStory(
+        req.params.id,
+        req.user!.id,
+        req.body.content,
+      );
+      res.status(201).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
   viewStory = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       await this.storiesService.recordView(req.params.id, req.user!.id);

@@ -23,8 +23,7 @@ export class MessageService {
       chatId,
       pagination,
     );
-    const otherUserId =
-      chat.user1Id === userId ? chat.user2Id : chat.user1Id;
+    const otherUserId = chat.user1Id === userId ? chat.user2Id : chat.user1Id;
     const privacy = await prisma.userPrivacyPreference.findUnique({
       where: { userId: otherUserId },
       select: { readReceipts: true },
@@ -37,7 +36,7 @@ export class MessageService {
         ? {
             ...message,
             isRead: false,
-            readReceipts: message.readReceipts.filter(
+            readReceipts: (message.readReceipts as any[]).filter(
               (receipt) => receipt.readByUserId !== otherUserId,
             ),
           }
@@ -52,6 +51,7 @@ export class MessageService {
       type: any;
       content?: string;
       mediaUrl?: string;
+      replyToMessageId?: string;
     },
   ) {
     if (!data.content?.trim() && !data.mediaUrl) {
@@ -65,6 +65,37 @@ export class MessageService {
     if (!chat) throw new AppError("Chat not found", 404);
     if (chat.user1Id !== senderId && chat.user2Id !== senderId) {
       throw new AppError("Forbidden", 403);
+    }
+
+    if (chat.status === "REQUESTED") {
+      if (chat.requestedById !== senderId) {
+        throw new AppError("Accept the message request before replying", 403);
+      }
+      if (data.type !== "TEXT" || data.mediaUrl) {
+        throw new AppError("Message requests support text only", 400);
+      }
+      if (data.replyToMessageId) {
+        throw new AppError("Accept the message request before replying to messages", 403);
+      }
+      const requestMessageCount = await prisma.message.count({
+        where: { chatId, senderId },
+      });
+      if (requestMessageCount >= 3) {
+        throw new AppError("Wait for this request to be accepted before sending more messages", 403);
+      }
+    } else if (chat.status !== "ACTIVE") {
+      throw new AppError("This conversation is no longer available", 403);
+    }
+
+    if (data.replyToMessageId) {
+      const replyTarget = await prisma.message.findUnique({
+        where: { id: data.replyToMessageId },
+        select: { chatId: true },
+      });
+
+      if (!replyTarget || replyTarget.chatId !== chatId) {
+        throw new AppError("Reply message not found", 404);
+      }
     }
 
     const message = await this.messageRepository.create({
@@ -98,6 +129,7 @@ export class MessageService {
       shareReceipt: privacy?.readReceipts !== false,
     };
   }
+
   async deleteForEveryone(chatId: string, messageId: string, userId: string) {
     const chat = await this.chatRepository.findById(chatId);
     if (!chat) throw new AppError("Chat not found", 404);

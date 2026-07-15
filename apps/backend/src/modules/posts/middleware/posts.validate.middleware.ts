@@ -20,6 +20,8 @@ const createPostSchema = z
 
 const updatePostSchema = z.object({
   caption: z.string().max(2200).optional(),
+  mediaUrls: z.array(z.string().url()).max(10).optional(),
+  mediaTypes: z.array(z.enum(["IMAGE", "VIDEO", "AUDIO"])).max(10).optional(),
   isPublic: z.boolean().optional(),
   isAnonymous: z.boolean().optional(),
 });

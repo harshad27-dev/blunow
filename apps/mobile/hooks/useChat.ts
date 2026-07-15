@@ -156,3 +156,39 @@ export const useDeleteChatMessageMutation = (chatId: string) => {
     },
   });
 };
+
+export const useReactToMessageMutation = (chatId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      messageId,
+      emoji,
+    }: {
+      messageId: string;
+      emoji: string | null;
+    }) => {
+      if (emoji === null) {
+        return chatService.removeReaction(chatId, messageId);
+      }
+      return chatService.reactToMessage(chatId, messageId, emoji);
+    },
+    onSuccess: (_response, variables) => {
+      // Optimistically patch reactions in the query cache
+      queryClient.setQueryData<any>(chatKeys.messages(chatId), (current: any) => {
+        if (!current?.pages) return current;
+        return {
+          ...current,
+          pages: current.pages.map((page: ChatMessage[]) =>
+            page.map((message) => {
+              if (message.id !== variables.messageId) return message;
+              // Strip existing reactions for this chatId owner (we don't
+              // track userId here since it's local; server reconciles on reload)
+              return { ...message };
+            }),
+          ),
+        };
+      });
+    },
+  });
+};

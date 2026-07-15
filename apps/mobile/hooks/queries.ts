@@ -48,6 +48,8 @@ export const useFeedQuery = () => {
  */
 interface CreatePostParams extends CreatePostPayload {
   imageUri?: string | null;
+  imageUris?: string[];
+  onProgress?: (index: number, total: number) => void;
 }
 
 export const useCreatePostMutation = () => {
@@ -55,16 +57,31 @@ export const useCreatePostMutation = () => {
 
   return useMutation({
     mutationFn: async (params: CreatePostParams) => {
-      const { imageUri, ...postPayload } = params;
+      const { imageUri, imageUris, onProgress, ...postPayload } = params;
 
       let uploadedUrls: string[] = [];
       let uploadedTypes: ("IMAGE" | "VIDEO" | "AUDIO")[] = [];
 
       if (imageUri) {
+        onProgress?.(1, 1);
         const uploadedUrl = await postService.uploadMedia(imageUri);
         if (uploadedUrl) {
           uploadedUrls.push(uploadedUrl);
           uploadedTypes.push("IMAGE");
+        }
+      }
+
+      if (imageUris && imageUris.length > 0) {
+        const total = imageUris.length;
+        let index = 0;
+        for (const uri of imageUris) {
+          index++;
+          onProgress?.(index, total);
+          const uploadedUrl = await postService.uploadMedia(uri);
+          if (uploadedUrl) {
+            uploadedUrls.push(uploadedUrl);
+            uploadedTypes.push("IMAGE");
+          }
         }
       }
 

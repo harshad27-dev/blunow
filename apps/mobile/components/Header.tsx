@@ -47,7 +47,7 @@ export default function Header() {
           <TouchableOpacity 
             className={ACTION_BUTTON_CLASS}
             activeOpacity={0.78}
-            onPress={() => router.push('/(screens)/create-post')}
+            onPress={() => router.push({ pathname: '/(screens)/create', params: { type: 'post' } })}
             style={HEADER_SHADOW}
           >
             <Ionicons name="add" size={24} color={Colors.textPrimary} />

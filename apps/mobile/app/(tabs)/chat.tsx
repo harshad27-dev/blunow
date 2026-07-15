@@ -43,11 +43,14 @@ type ConversationItem = {
 
 type RequestItem = {
   id: string;
+  chatId?: string;
+  requestId?: string;
   name: string;
   avatarUrl?: string;
   subtitle: string;
   timeLabel: string;
-  raw: MatchRequest;
+  isIncoming: boolean;
+  raw: ChatConversation | MatchRequest;
 };
 
 type ChatListItem = ConversationItem | RequestItem;
@@ -158,7 +161,7 @@ const normalizeConversation = (
   };
 };
 
-const normalizeRequest = (request: MatchRequest): RequestItem => {
+const normalizeLegacyRequest = (request: MatchRequest): RequestItem => {
   const sender = request.sender;
   const name =
     sender?.profile?.username ||
@@ -167,12 +170,39 @@ const normalizeRequest = (request: MatchRequest): RequestItem => {
     "Datebl user";
 
   return {
-    id: request.id,
+    id: request.chat?.id || request.id,
+    chatId: request.chat?.id,
+    requestId: request.id,
     name,
     avatarUrl: sender?.profile?.avatarUrl || undefined,
     subtitle: request.message || "Wants to connect with you.",
     timeLabel: getTimeLabel(request.createdAt),
+    isIncoming: true,
     raw: request,
+  };
+};
+const normalizeRequestConversation = (
+  chat: ChatConversation,
+  currentUserId?: string,
+): RequestItem => {
+  const participant = getOtherParticipant(chat, currentUserId);
+  const isIncoming = chat.requestedById !== currentUserId;
+  const name = getParticipantName(participant);
+  const latest = chat.messages?.[0];
+
+  return {
+    id: chat.id,
+    chatId: chat.id,
+    requestId: chat.requestId || chat.request?.id || undefined,
+    name,
+    avatarUrl: participant?.profile?.avatarUrl || undefined,
+    subtitle:
+      latest?.content ||
+      chat.lastMessageContent ||
+      (isIncoming ? "Wants to message you." : "Waiting for them to accept."),
+    timeLabel: getTimeLabel(chat.lastMessageAt || latest?.createdAt || chat.updatedAt),
+    isIncoming,
+    raw: chat,
   };
 };
 
@@ -199,9 +229,17 @@ export default function ChatListScreen() {
   const respondRequestMutation = useRespondMatchRequestMutation();
   const socket = useChatSocket();
 
+  const activeConversations = useMemo(
+    () => conversations.filter((chat) => chat.status !== "REQUESTED"),
+    [conversations],
+  );
+  const requestConversations = useMemo(
+    () => conversations.filter((chat) => chat.status === "REQUESTED"),
+    [conversations],
+  );
   const allItems = useMemo(
-    () => conversations.map((chat) => normalizeConversation(chat, user?.id)),
-    [conversations, user?.id],
+    () => activeConversations.map((chat) => normalizeConversation(chat, user?.id)),
+    [activeConversations, user?.id],
   );
 
   const items = useMemo(
@@ -216,10 +254,17 @@ export default function ChatListScreen() {
     [activeFilter, allItems],
   );
 
-  const requestItems = useMemo(
-    () => incomingRequests.map(normalizeRequest),
-    [incomingRequests],
-  );
+  const requestItems = useMemo(() => {
+    const byId = new Map<string, RequestItem>();
+    requestConversations.forEach((chat) => {
+      const item = normalizeRequestConversation(chat, user?.id);
+      byId.set(item.id, item);
+    });
+    incomingRequests.map(normalizeLegacyRequest).forEach((item) => {
+      if (!item.chatId) byId.set(item.id, item);
+    });
+    return Array.from(byId.values());
+  }, [incomingRequests, requestConversations, user?.id]);
 
   const activeItems = allItems.filter((item) => !item.isArchived);
   const unreadTotal = activeItems.reduce(
@@ -366,7 +411,7 @@ export default function ChatListScreen() {
               <MessagesSectionHeader
                 activeSegment={activeSegment}
                 onChangeSegment={setActiveSegment}
-                requestCount={incomingRequests.length}
+                requestCount={requestItems.length}
                 unreadTotal={unreadTotal}
               />
             </View>
@@ -384,18 +429,34 @@ export default function ChatListScreen() {
               <RequestRow
                 item={item as RequestItem}
                 disabled={respondRequestMutation.isPending}
-                onAccept={() =>
+                onPress={() => {
+                  const requestItem = item as RequestItem;
+                  if (!requestItem.chatId) return;
+                  router.push({
+                    pathname: "/(screens)/chat/[roomId]",
+                    params: {
+                      roomId: requestItem.chatId,
+                      name: requestItem.name,
+                      avatarUrl: requestItem.avatarUrl || "",
+                    },
+                  });
+                }}
+                onAccept={() => {
+                  const requestId = (item as RequestItem).requestId;
+                  if (!requestId) return;
                   respondRequestMutation.mutate({
-                    requestId: item.id,
+                    requestId,
                     status: "ACCEPTED",
-                  })
-                }
-                onReject={() =>
+                  });
+                }}
+                onReject={() => {
+                  const requestId = (item as RequestItem).requestId;
+                  if (!requestId) return;
                   respondRequestMutation.mutate({
-                    requestId: item.id,
+                    requestId,
                     status: "REJECTED",
-                  })
-                }
+                  });
+                }}
               />
             ) : (
               <ConversationRow
@@ -609,15 +670,17 @@ const EmptyState = ({
 const RequestRow = ({
   item,
   disabled,
+  onPress,
   onAccept,
   onReject,
 }: {
   item: RequestItem;
   disabled: boolean;
+  onPress: () => void;
   onAccept: () => void;
   onReject: () => void;
 }) => (
-  <View className="flex-row items-center py-3.5">
+  <TouchableOpacity className="flex-row items-center py-3.5" onPress={onPress} activeOpacity={0.84}>
     {item.avatarUrl ? (
       <Image
         source={{ uri: item.avatarUrl }}
@@ -652,24 +715,32 @@ const RequestRow = ({
     </View>
 
     <View className="ml-3 flex-row items-center">
-      <TouchableOpacity
-        className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-primary"
-        onPress={onAccept}
-        disabled={disabled}
-        activeOpacity={0.84}
-      >
-        <Ionicons name="checkmark" size={20} color={Colors.textInverse} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        className="h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card"
-        onPress={onReject}
-        disabled={disabled}
-        activeOpacity={0.84}
-      >
-        <Ionicons name="close" size={20} color={Colors.textPrimary} />
-      </TouchableOpacity>
+      {item.isIncoming ? (
+        <>
+          <TouchableOpacity
+            className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-primary"
+            onPress={onAccept}
+            disabled={disabled}
+            activeOpacity={0.84}
+          >
+            <Ionicons name="checkmark" size={20} color={Colors.textInverse} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card"
+            onPress={onReject}
+            disabled={disabled}
+            activeOpacity={0.84}
+          >
+            <Ionicons name="close" size={20} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View className="rounded-full border border-border bg-bg-card px-3 py-2">
+          <Text className="text-xs font-extrabold text-text-secondary">Waiting</Text>
+        </View>
+      )}
     </View>
-  </View>
+  </TouchableOpacity>
 );
 
 const ConversationSkeletonList = () => (

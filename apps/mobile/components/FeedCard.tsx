@@ -14,9 +14,19 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/colors";
+import * as Haptics from "expo-haptics";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  Easing,
+  runOnJS,
+} from "react-native-reanimated";
 
 const { width } = Dimensions.get("window");
-const mediaWidth = width - 24;
+const mediaWidth = width;
 
 export type FeedPostAction =
   | "edit"
@@ -36,24 +46,69 @@ type FeedActionItem = {
   destructive?: boolean;
 };
 
-/**
- * Feed-safe aspect ratio limits
- *
- * 4 / 5  = portrait post
- * 1 / 1  = square post
- *
- * This keeps the feed clean.
- * The full-screen viewer still uses resizeMode="contain",
- * so users can see the complete image there.
- */
-const MIN_MEDIA_RATIO = 4 / 5;
-const MAX_MEDIA_RATIO = 1 / 1;
+const MIN_MEDIA_RATIO = 4 / 5;   // 0.8 (tallest portrait)
+const MAX_MEDIA_RATIO = 16 / 9;  // 1.77 (widest landscape)
 
 const normalizeAspectRatio = (ratio: number) => {
   if (!Number.isFinite(ratio) || ratio <= 0) return 4 / 5;
-
   return Math.min(Math.max(ratio, MIN_MEDIA_RATIO), MAX_MEDIA_RATIO);
 };
+
+interface ZoomableImageProps {
+  uri: string;
+  width: number;
+  aspectRatio: number;
+  onLoad?: (event: any) => void;
+}
+
+function ZoomableImage({ uri, width, aspectRatio, onLoad }: ZoomableImageProps) {
+  const scale = useSharedValue(1);
+  const focalX = useSharedValue(0);
+  const focalY = useSharedValue(0);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  const pinchGesture = Gesture.Pinch()
+    .onStart((event) => {
+      focalX.value = event.focalX;
+      focalY.value = event.focalY;
+    })
+    .onUpdate((event) => {
+      scale.value = Math.max(1, event.scale);
+      translateX.value = (width / 2 - focalX.value) * (scale.value - 1);
+      translateY.value = ((width / aspectRatio) / 2 - focalY.value) * (scale.value - 1);
+    })
+    .onEnd(() => {
+      scale.value = withSpring(1);
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+    });
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+        { scale: scale.value },
+      ],
+      zIndex: scale.value > 1 ? 9999 : 1,
+    };
+  });
+
+  return (
+    <GestureDetector gesture={pinchGesture}>
+      <Reanimated.Image
+        source={{ uri }}
+        style={[
+          { width, aspectRatio },
+          animatedStyle,
+        ]}
+        resizeMode="cover"
+        onLoad={onLoad}
+      />
+    </GestureDetector>
+  );
+}
 
 const getStableImageNumber = (value: string, offset: number) => {
   const total = value
@@ -94,7 +149,6 @@ export default function FeedCard({
   onMoreAction,
 }: FeedCardProps) {
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
-  const [viewerOpen, setViewerOpen] = useState(false);
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
 
   const [mediaAspectRatios, setMediaAspectRatios] = useState<
@@ -144,13 +198,7 @@ export default function FeedCard({
     setActiveMediaIndex(nextIndex);
   };
 
-  const handleViewerScrollEnd = (
-    event: NativeSyntheticEvent<NativeScrollEvent>,
-  ) => {
-    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
 
-    setActiveMediaIndex(nextIndex);
-  };
 
   const playDoubleTapHeart = () => {
     heartScale.setValue(0);
@@ -203,24 +251,13 @@ export default function FeedCard({
     lastTap.current = now;
 
     if (isDoubleTap) {
-      if (tapTimeout.current) {
-        clearTimeout(tapTimeout.current);
-        tapTimeout.current = null;
-      }
-
       playDoubleTapHeart();
 
       if (!post.isLiked) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         onLikePress?.(post.id, post.isLiked);
       }
-
-      return;
     }
-
-    tapTimeout.current = setTimeout(() => {
-      setViewerOpen(true);
-      tapTimeout.current = null;
-    }, 220);
   };
 
   const actionItems: FeedActionItem[] = isOwnPost
@@ -299,28 +336,25 @@ export default function FeedCard({
 
   const actionSheetTranslateY = actionSheetProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [360, 0],
+    outputRange: [380, 0],
   });
 
   const handleOpenPostActions = () => {
     setActionSheetVisible(true);
     actionSheetProgress.setValue(0);
-
-    requestAnimationFrame(() => {
-      Animated.spring(actionSheetProgress, {
-        toValue: 1,
-        damping: 22,
-        mass: 0.9,
-        stiffness: 220,
-        useNativeDriver: true,
-      }).start();
-    });
+    Animated.timing(actionSheetProgress, {
+      toValue: 1,
+      duration: 250,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleClosePostActions = () => {
     Animated.timing(actionSheetProgress, {
       toValue: 0,
       duration: 180,
+      easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
     }).start(({ finished }) => {
       if (finished) {
@@ -335,7 +369,7 @@ export default function FeedCard({
   };
 
   return (
-    <View className="overflow-hidden">
+    <View>
       <View className="flex-row items-center justify-between px-4 py-4">
         <View className="min-w-0 flex-1 flex-row items-center">
           <View className="mr-3 h-12 w-12 overflow-hidden rounded-full border border-border bg-bg-elevated">
@@ -419,10 +453,11 @@ export default function FeedCard({
 
       {hasImage ? (
         <View
-          className="mx-3 overflow-hidden rounded-[24px] bg-bg-elevated"
+          className="bg-bg-elevated"
           style={{
             width: mediaWidth,
             aspectRatio: mediaAspectRatio,
+            zIndex: 1, // base zIndex
           }}
         >
           <ScrollView
@@ -445,10 +480,10 @@ export default function FeedCard({
                     aspectRatio: currentRatio,
                   }}
                 >
-                  <Image
-                    source={{ uri: mediaUrl }}
-                    className="h-full w-full"
-                    resizeMode="cover"
+                  <ZoomableImage
+                    uri={mediaUrl}
+                    width={mediaWidth}
+                    aspectRatio={currentRatio}
                     onLoad={(event) => {
                       const source = event.nativeEvent.source;
 
@@ -629,55 +664,7 @@ export default function FeedCard({
 
       <View className="mx-4 mb-4 h-px bg-border" />
 
-      <Modal
-        visible={viewerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setViewerOpen(false)}
-      >
-        <View className="flex-1 bg-black">
-          <View className="absolute left-0 right-0 top-0 z-10 flex-row items-center justify-between px-4 pt-12">
-            <TouchableOpacity
-              className="h-11 w-11 items-center justify-center rounded-full bg-white/15"
-              onPress={() => setViewerOpen(false)}
-              activeOpacity={0.78}
-            >
-              <Ionicons name="close" size={22} color={Colors.white} />
-            </TouchableOpacity>
 
-            <View className="rounded-full bg-white/15 px-3 py-2">
-              <Text className="text-xs font-extrabold text-white">
-                {activeMediaIndex + 1}/{post.mediaUrls?.length || 1}
-              </Text>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={handleViewerScrollEnd}
-            contentOffset={{
-              x: activeMediaIndex * width,
-              y: 0,
-            }}
-          >
-            {(post.mediaUrls || []).map((mediaUrl) => (
-              <View
-                key={`viewer-${mediaUrl}`}
-                className="items-center justify-center"
-                style={{ width }}
-              >
-                <Image
-                  source={{ uri: mediaUrl }}
-                  className="h-full w-full"
-                  resizeMode="contain"
-                />
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </Modal>
 
       <Modal
         visible={actionSheetVisible}
@@ -699,9 +686,7 @@ export default function FeedCard({
 
           <Animated.View
             className="rounded-t-[32px] border border-border bg-bg-card px-4 pb-8 pt-3"
-            style={{
-              transform: [{ translateY: actionSheetTranslateY }],
-            }}
+            style={{ transform: [{ translateY: actionSheetTranslateY }] }}
           >
             <View className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border" />
 

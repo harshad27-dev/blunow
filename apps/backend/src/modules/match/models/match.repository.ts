@@ -25,17 +25,18 @@ export class MatchRepository {
   async findRequest(senderId: string, receiverId: string) {
     return prisma.matchRequest.findUnique({
       where: { senderId_receiverId: { senderId, receiverId } },
+      include: { chat: true },
     });
   }
 
   async findRequestById(id: string) {
-    return prisma.matchRequest.findUnique({ where: { id } });
+    return prisma.matchRequest.findUnique({ where: { id }, include: { chat: true } });
   }
 
   async findIncomingRequests(receiverId: string) {
     return prisma.matchRequest.findMany({
       where: { receiverId, status: 'PENDING' },
-      include: { sender: { include: { profile: true } } },
+      include: { sender: { include: { profile: true } }, chat: { include: { messages: { take: 1, orderBy: { createdAt: 'desc' } } } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -43,7 +44,7 @@ export class MatchRepository {
   async findOutgoingRequests(senderId: string) {
     return prisma.matchRequest.findMany({
       where: { senderId, status: 'PENDING' },
-      include: { receiver: { include: { profile: true } } },
+      include: { receiver: { include: { profile: true } }, chat: { include: { messages: { take: 1, orderBy: { createdAt: 'desc' } } } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -331,4 +332,3 @@ const normalizePreferenceGenders = (values: string[]) => {
 
   return normalized.length ? normalized : undefined;
 };
-

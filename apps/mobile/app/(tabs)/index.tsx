@@ -135,7 +135,7 @@ export default function FeedScreen() {
     user?.profile?.username || user?.username || "Your story";
   const currentUserAvatar = currentUserStory?.mediaUrl || user?.profile?.avatarUrl;
 
-  const openCreateStory = () => router.push("/(screens)/create-story");
+  const openCreateStory = () => router.push({ pathname: "/(screens)/create", params: { type: "story" } });
   const openCurrentUserStory = () => {
     if (currentUserStory?.id) {
       openStory(currentUserStory.id);

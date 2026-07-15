@@ -53,7 +53,9 @@ export class ChatController {
     try {
       const type = req.body.type ?? "TEXT";
       if (!["TEXT", "IMAGE", "VIDEO", "AUDIO"].includes(type)) {
-        res.status(400).json({ success: false, message: "Invalid message type" });
+        res
+          .status(400)
+          .json({ success: false, message: "Invalid message type" });
         return;
       }
 
@@ -64,6 +66,7 @@ export class ChatController {
           type,
           content: req.body.content,
           mediaUrl: req.body.mediaUrl,
+          replyToMessageId: req.body.replyToMessageId,
         },
       );
       res.status(201).json({ success: true, data: message });
@@ -139,5 +142,3 @@ export class ChatController {
     }
   };
 }
-
-

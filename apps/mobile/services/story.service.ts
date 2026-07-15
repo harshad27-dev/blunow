@@ -32,6 +32,11 @@ export const storyService = {
     return response.data;
   },
 
+  replyToStory: async (storyId: string, content: string) => {
+    const response = await api.post(`/stories/${storyId}/reply`, { content });
+    return response.data;
+  },
+
   deleteStory: async (storyId: string) => {
     const response = await api.delete("/stories/" + storyId);
     return response.data;

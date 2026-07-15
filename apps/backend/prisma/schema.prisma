@@ -64,34 +64,34 @@ model User {
 }
 
 model Profile {
-  id           String   @id @default(uuid())
-  userId       String   @unique
-  name         String?
-  username     String   @unique
-  bio          String?
-  birthDate    DateTime
-  gender       Gender
-  avatarUrl    String?
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  name             String?
+  username         String   @unique
+  bio              String?
+  birthDate        DateTime
+  gender           Gender
+  avatarUrl        String?
   profilePhotoUrls String[] @default([])
-  location     String?
-  latitude     Float?
-  longitude    Float?
-  interests    String[]
-  interestedIn String[]
-  lookingFor   String[]
-  relationship String?
-  drinking     String?
-  smoking      String?
-  workout      String?
-  pets         String?
-  zodiac       String?
-  minAge       Int      @default(18)
-  maxAge       Int      @default(35)
-  maxDistance  Int      @default(50)
-  isPrivate    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location         String?
+  latitude         Float?
+  longitude        Float?
+  interests        String[]
+  interestedIn     String[]
+  lookingFor       String[]
+  relationship     String?
+  drinking         String?
+  smoking          String?
+  workout          String?
+  pets             String?
+  zodiac           String?
+  minAge           Int      @default(18)
+  maxAge           Int      @default(35)
+  maxDistance      Int      @default(50)
+  isPrivate        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profiles")
 }
@@ -185,6 +185,7 @@ model MatchRequest {
   updatedAt  DateTime    @updatedAt
   receiver   User        @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
   sender     User        @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  chat       Chat?
 
   @@unique([senderId, receiverId])
   @@map("match_requests")
@@ -316,45 +317,58 @@ model StoryView {
 }
 
 model Chat {
-  id                 String    @id @default(uuid())
-  matchId            String    @unique
+  id                 String        @id @default(uuid())
+  matchId            String?       @unique
+  requestId          String?       @unique
   user1Id            String
   user2Id            String
-  createdAt          DateTime  @default(now())
-  archivedBy1        Boolean   @default(false)
-  archivedBy2        Boolean   @default(false)
-  deletedBy1         Boolean   @default(false)
-  deletedBy2         Boolean   @default(false)
+  requestedById      String?
+  status             ChatStatus    @default(ACTIVE)
+  createdAt          DateTime      @default(now())
+  archivedBy1        Boolean       @default(false)
+  archivedBy2        Boolean       @default(false)
+  deletedBy1         Boolean       @default(false)
+  deletedBy2         Boolean       @default(false)
   lastMessageAt      DateTime?
   lastMessageContent String?
   lastMessageId      String?
-  mutedBy1           Boolean   @default(false)
-  mutedBy2           Boolean   @default(false)
-  unreadCount        Int       @default(0)
-  updatedAt          DateTime  @updatedAt
-  match              Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  user1              User      @relation("ChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2              User      @relation("ChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  mutedBy1           Boolean       @default(false)
+  mutedBy2           Boolean       @default(false)
+  unreadCount        Int           @default(0)
+  updatedAt          DateTime      @updatedAt
+  match              Match?        @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  request            MatchRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  user1              User          @relation("ChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2              User          @relation("ChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
   messages           Message[]
 
+  @@index([status, requestedById])
   @@map("chats")
 }
 
 model Message {
-  id           String               @id @default(uuid())
-  chatId       String
-  senderId     String
-  type         MessageType          @default(TEXT)
-  content      String?
-  mediaUrl     String?
-  isRead       Boolean              @default(false)
-  createdAt    DateTime             @default(now())
-  deliveredAt  DateTime?
-  isDeleted    Boolean              @default(false)
-  readReceipts MessageReadReceipt[]
-  chat         Chat                 @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sender       User                 @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  id                   String               @id @default(uuid())
+  chatId               String
+  senderId             String
+  type                 MessageType          @default(TEXT)
+  content              String?
+  mediaUrl             String?
+  isRead               Boolean              @default(false)
+  createdAt            DateTime             @default(now())
+  deliveredAt          DateTime?
+  isDeleted            Boolean              @default(false)
+  replyToMessageId     String?
+  storyId              String?
+  storyPreviewMediaUrl String?
+  storyPreviewCaption  String?
+  storyAuthorId        String?
+  readReceipts         MessageReadReceipt[]
+  chat                 Chat                 @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender               User                 @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyToMessage       Message?             @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies              Message[]            @relation("MessageReplies")
 
+  @@index([replyToMessageId])
   @@map("messages")
 }
 
@@ -572,8 +586,15 @@ enum MatchStatus {
   REJECTED
 }
 
+enum ChatStatus {
+  REQUESTED
+  ACTIVE
+  REJECTED
+}
+
 enum MessageType {
   TEXT
+  STORY_REPLY
   IMAGE
   VIDEO
   AUDIO
@@ -671,4 +692,3 @@ enum FlagStatus {
   QUEUED_FOR_REVIEW
   AUTO_REMOVED
 }
-

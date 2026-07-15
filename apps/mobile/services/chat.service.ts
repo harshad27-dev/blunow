@@ -1,6 +1,14 @@
 import { api } from "./api";
-import type { ChatSettingsPayload, SendMessagePayload } from "@/types/chat.types";
-export type { ChatConversation, ChatMessage, ChatParticipant } from "@/types/chat.types";
+import type {
+  ChatSettingsPayload,
+  SendMessagePayload,
+} from "@/types/chat.types";
+export type {
+  ChatConversation,
+  ChatMessage,
+  ChatMessageReaction,
+  ChatParticipant,
+} from "@/types/chat.types";
 
 export const chatService = {
   getConversations: async () => {
@@ -20,14 +28,13 @@ export const chatService = {
     return response.data;
   },
 
-  sendMessage: async (
-    chatId: string,
-    payload: SendMessagePayload,
-  ) => {
+  sendMessage: async (chatId: string, payload: SendMessagePayload) => {
     const response = await api.post(`/chat/${chatId}/messages`, {
       type: payload.type || "TEXT",
       content: payload.content,
       mediaUrl: payload.mediaUrl,
+      replyToMessageId: payload.replyToMessageId,
+      clientId: payload.clientId,
     });
     return response.data;
   },
@@ -46,6 +53,7 @@ export const chatService = {
     const response = await api.post(`/chat/${chatId}/typing`, { isTyping });
     return response.data;
   },
+
   deleteMessageForEveryone: async (chatId: string, messageId: string) => {
     const response = await api.delete(`/chat/${chatId}/messages/${messageId}`);
     return response.data;
@@ -55,6 +63,23 @@ export const chatService = {
     const response = await api.delete(`/chat/${chatId}`);
     return response.data;
   },
+
+  reactToMessage: async (
+    chatId: string,
+    messageId: string,
+    emoji: string,
+  ) => {
+    const response = await api.post(
+      `/chat/${chatId}/messages/${messageId}/reaction`,
+      { emoji },
+    );
+    return response.data;
+  },
+
+  removeReaction: async (chatId: string, messageId: string) => {
+    const response = await api.delete(
+      `/chat/${chatId}/messages/${messageId}/reaction`,
+    );
+    return response.data;
+  },
 };
-
-

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -19,6 +20,7 @@ import { getThemeColors } from "@/constants/colors";
 import { AnimatedAppSplash } from "@/components/AnimatedAppSplash";
 import { StartupLocationPrompt } from "@/components/location/StartupLocationPrompt";
 import { useColorScheme } from "nativewind";
+import { GlobalDialog } from "@/components/common/Modal";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -33,7 +35,7 @@ function AuthGuard() {
     const inAuthGroup = segments[0] === "(auth)";
     const onOnboarding = segments[1] === "onboarding";
     const needsOnboarding =
-      isAuthenticated && !(user?.profile?.lookingFor?.length);
+      isAuthenticated && !user?.profile?.lookingFor?.length;
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace("/");
@@ -90,36 +92,41 @@ export default function RootLayout() {
 
   if (isLoading || !splashDelayDone) {
     return (
-      <SafeAreaProvider>
-        <AnimatedAppSplash />
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <AnimatedAppSplash />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>
-          <AuthGuard />
-          <StatusBar
-            style={themeName === "dark" ? "light" : "dark"}
-            backgroundColor={colors.bg}
-            translucent={false}
-          />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.bg },
-              animation: "none",
-            }}
-          >
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="(screens)" />
-          </Stack>
-          <StartupLocationPrompt />
-        </View>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <View style={{ flex: 1, backgroundColor: colors.bg }}>
+            <AuthGuard />
+            <StatusBar
+              style={themeName === "dark" ? "light" : "dark"}
+              backgroundColor={colors.bg}
+              translucent={false}
+            />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.bg },
+                animation: "none",
+              }}
+            >
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="(screens)" />
+            </Stack>
+            <StartupLocationPrompt />
+            <GlobalDialog />
+          </View>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

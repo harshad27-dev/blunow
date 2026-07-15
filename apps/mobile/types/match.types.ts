@@ -19,7 +19,10 @@ export type MatchUser = {
 
 export type MatchChat = {
   id: string;
-  matchId?: string;
+  matchId?: string | null;
+  requestId?: string | null;
+  requestedById?: string | null;
+  status?: "REQUESTED" | "ACTIVE" | "REJECTED";
   user1Id?: string;
   user2Id?: string;
 };
@@ -44,6 +47,7 @@ export type MatchRequest = {
   updatedAt: string;
   sender?: MatchUser;
   receiver?: MatchUser;
+  chat?: MatchChat | null;
 };
 
 export type MatchRecommendation = {
@@ -104,4 +108,3 @@ export type RespondMatchRequestPayload = {
   requestId: string;
   status: Extract<MatchRequestStatus, "ACCEPTED" | "REJECTED">;
 };
-

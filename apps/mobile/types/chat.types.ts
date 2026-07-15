@@ -1,4 +1,7 @@
-export type ChatMessageType = "TEXT" | "IMAGE" | "VIDEO" | "AUDIO";
+import type { MatchRequest } from "./match.types";
+
+export type ChatMessageType = "TEXT" | "STORY_REPLY" | "IMAGE" | "VIDEO" | "AUDIO";
+export type ChatStatus = "REQUESTED" | "ACTIVE" | "REJECTED";
 
 export type ChatParticipant = {
   id: string;
@@ -17,6 +20,13 @@ export type ChatReadReceipt = {
   readAt: string;
 };
 
+export type ChatMessageReaction = {
+  messageId: string;
+  userId: string;
+  emoji: string;
+  createdAt: string;
+};
+
 export type ChatMessage = {
   id: string;
   chatId: string;
@@ -30,11 +40,23 @@ export type ChatMessage = {
   createdAt: string;
   sender?: ChatParticipant;
   readReceipts?: ChatReadReceipt[];
+  replyToMessageId?: string | null;
+  replyToMessage?: ChatMessage | null;
+  storyId?: string | null;
+  storyPreviewMediaUrl?: string | null;
+  storyPreviewCaption?: string | null;
+  storyAuthorId?: string | null;
+  clientId?: string;
+  reactions?: ChatMessageReaction[];
 };
 
 export type ChatConversation = {
   id: string;
-  matchId?: string;
+  matchId?: string | null;
+  requestId?: string | null;
+  requestedById?: string | null;
+  status?: ChatStatus;
+  request?: MatchRequest | null;
   user1Id: string;
   user2Id: string;
   user1?: ChatParticipant;
@@ -59,6 +81,8 @@ export type SendMessagePayload = {
   content?: string;
   mediaUrl?: string;
   type?: ChatMessageType;
+  replyToMessageId?: string;
+  clientId?: string;
 };
 
 export type ChatSettingsPayload = {

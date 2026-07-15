@@ -3,11 +3,13 @@ import { io, type Socket } from "socket.io-client";
 import { Config } from "@/constants/config";
 import { storage } from "@/utils/storage";
 
+export type ChatSocketError = { clientId?: string; message?: string };
+
 type ServerToClientEvents = {
   "chat:message:new": (message: unknown) => void;
   "chat:typing": (payload: { userId: string; isTyping: boolean }) => void;
   "chat:read": (payload: { chatId: string; userId: string }) => void;
-  "chat:error": (payload: { message?: string }) => void;
+  "chat:error": (payload: ChatSocketError) => void;
 };
 
 type ClientToServerEvents = {
@@ -15,9 +17,11 @@ type ClientToServerEvents = {
   "chat:leave": (chatId: string) => void;
   "chat:message": (payload: {
     chatId: string;
-    type: "TEXT" | "IMAGE" | "VIDEO" | "AUDIO";
+    type: "TEXT" | "STORY_REPLY" | "IMAGE" | "VIDEO" | "AUDIO";
     content?: string;
     mediaUrl?: string;
+    replyToMessageId?: string;
+    clientId?: string;
   }) => void;
   "chat:typing": (payload: { chatId: string; isTyping: boolean }) => void;
   "chat:read": (chatId: string) => void;

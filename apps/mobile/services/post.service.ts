@@ -47,7 +47,7 @@ export const postService = {
 
   updatePost: async (
     postId: string,
-    payload: Pick<CreatePostPayload, "caption" | "isPublic" | "isAnonymous">,
+    payload: Partial<CreatePostPayload>,
   ) => {
     const response = await api.patch("/posts/" + postId, payload);
     return response.data;

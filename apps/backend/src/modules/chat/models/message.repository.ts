@@ -1,5 +1,37 @@
 import { prisma } from "../../../prisma/prisma";
 
+const baseMessageInclude = {
+  sender: {
+    include: {
+      profile: { select: { username: true, avatarUrl: true } },
+    },
+  },
+  readReceipts: true,
+};
+
+const messageInclude = {
+  ...baseMessageInclude,
+  replyToMessage: {
+    include: {
+      sender: {
+        include: {
+          profile: { select: { username: true, avatarUrl: true } },
+        },
+      },
+    },
+  },
+};
+
+const isStaleReplyClientError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("Unknown field `replyToMessage`") ||
+    message.includes("Unknown argument `replyToMessageId`") ||
+    message.includes("Unknown arg `replyToMessageId`") ||
+    message.includes("Unknown argument `replyToMessage`")
+  );
+};
+
 export class MessageRepository {
   async create(data: {
     chatId: string;
@@ -7,39 +39,50 @@ export class MessageRepository {
     type: any;
     content?: string;
     mediaUrl?: string;
+    replyToMessageId?: string;
   }) {
-    return prisma.$transaction(async (tx) => {
-      const message = await tx.message.create({
-        data: {
-          ...data,
+    const createMessage = (includeReply: boolean) =>
+      prisma.$transaction(async (tx) => {
+        const messageData: Record<string, unknown> = {
+          chatId: data.chatId,
+          senderId: data.senderId,
+          type: data.type,
           content: data.content?.trim(),
+          mediaUrl: data.mediaUrl,
           deliveredAt: new Date(),
-        },
-        include: {
-          sender: {
-            include: {
-              profile: { select: { username: true, avatarUrl: true } },
-            },
+        };
+
+        if (includeReply && data.replyToMessageId) {
+          messageData.replyToMessageId = data.replyToMessageId;
+        }
+
+        const message = await tx.message.create({
+          data: messageData as any,
+          include: includeReply ? (messageInclude as any) : baseMessageInclude,
+        });
+
+        await tx.chat.update({
+          where: { id: data.chatId },
+          data: {
+            deletedBy1: false,
+            deletedBy2: false,
+            lastMessageAt: message.createdAt,
+            lastMessageContent:
+              data.content || (data.mediaUrl ? "Shared media" : null),
+            lastMessageId: message.id,
+            unreadCount: { increment: 1 },
           },
-          readReceipts: true,
-        },
+        });
+
+        return message;
       });
 
-      await tx.chat.update({
-        where: { id: data.chatId },
-        data: {
-          deletedBy1: false,
-          deletedBy2: false,
-          lastMessageAt: message.createdAt,
-          lastMessageContent:
-            data.content || (data.mediaUrl ? "Shared media" : null),
-          lastMessageId: message.id,
-          unreadCount: { increment: 1 },
-        },
-      });
-
-      return message;
-    });
+    try {
+      return await createMessage(true);
+    } catch (error) {
+      if (!isStaleReplyClientError(error)) throw error;
+      return createMessage(false);
+    }
   }
 
   async findByChatId(
@@ -47,18 +90,21 @@ export class MessageRepository {
     pagination: { page: number; limit: number },
   ) {
     const skip = (pagination.page - 1) * pagination.limit;
-    return prisma.message.findMany({
-      where: { chatId },
-      include: {
-        sender: {
-          include: { profile: { select: { username: true, avatarUrl: true } } },
-        },
-        readReceipts: true,
-      },
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: pagination.limit,
-    });
+    const query = (includeReply: boolean) =>
+      prisma.message.findMany({
+        where: { chatId },
+        include: includeReply ? (messageInclude as any) : baseMessageInclude,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pagination.limit,
+      });
+
+    try {
+      return await query(true);
+    } catch (error) {
+      if (!isStaleReplyClientError(error)) throw error;
+      return query(false);
+    }
   }
 
   async markAllRead(chatId: string, userId: string) {
@@ -117,42 +163,44 @@ export class MessageRepository {
 
     return new Map(grouped.map((item) => [item.chatId, item._count._all]));
   }
+
   async deleteForEveryone(messageId: string, userId: string) {
-    return prisma.$transaction(async (tx) => {
-      const message = await tx.message.findUnique({
-        where: { id: messageId },
-        include: { chat: true },
-      });
-
-      if (!message) throw new Error("Message not found");
-      if (message.senderId !== userId) throw new Error("Forbidden");
-
-      const updatedMessage = await tx.message.update({
-        where: { id: messageId },
-        data: {
-          content: null,
-          mediaUrl: null,
-          isDeleted: true,
-        },
-        include: {
-          sender: {
-            include: {
-              profile: { select: { username: true, avatarUrl: true } },
-            },
-          },
-          readReceipts: true,
-        },
-      });
-
-      if (message.chat.lastMessageId === message.id) {
-        await tx.chat.update({
-          where: { id: message.chatId },
-          data: { lastMessageContent: "Message deleted" },
+    const deleteMessage = (includeReply: boolean) =>
+      prisma.$transaction(async (tx) => {
+        const message = await tx.message.findUnique({
+          where: { id: messageId },
+          include: { chat: true },
         });
-      }
 
-      return updatedMessage;
-    });
+        if (!message) throw new Error("Message not found");
+        if (message.senderId !== userId) throw new Error("Forbidden");
+
+        const updatedMessage = await tx.message.update({
+          where: { id: messageId },
+          data: {
+            content: null,
+            mediaUrl: null,
+            isDeleted: true,
+          },
+          include: includeReply ? (messageInclude as any) : baseMessageInclude,
+        });
+
+        if (message.chat.lastMessageId === message.id) {
+          await tx.chat.update({
+            where: { id: message.chatId },
+            data: { lastMessageContent: "Message deleted" },
+          });
+        }
+
+        return updatedMessage;
+      });
+
+    try {
+      return await deleteMessage(true);
+    } catch (error) {
+      if (!isStaleReplyClientError(error)) throw error;
+      return deleteMessage(false);
+    }
   }
 }
 
