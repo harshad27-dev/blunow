@@ -121,6 +121,12 @@ export default function RootLayout() {
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="(screens)" />
+              <Stack.Screen
+                name="match-detail/[profileId]"
+                options={{
+                  animation: "default",
+                }}
+              />
             </Stack>
             <StartupLocationPrompt />
             <GlobalDialog />

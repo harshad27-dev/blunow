@@ -797,7 +797,7 @@ export default function ChatRoomScreen() {
     socket.on("chat:typing", handleTyping);
     socket.on("chat:read", handleRead);
     socket.on("chat:error", handleSocketError);
-    socket.on("chat:reaction", handleReaction);
+    socket.on("chat:reaction" as any, handleReaction);
     if (socket.connected) handleConnect();
     return () => {
       socket.emit("chat:leave", roomId);
@@ -807,7 +807,7 @@ export default function ChatRoomScreen() {
       socket.off("chat:typing", handleTyping);
       socket.off("chat:read", handleRead);
       socket.off("chat:error", handleSocketError);
-      socket.off("chat:reaction", handleReaction);
+      socket.off("chat:reaction" as any, handleReaction);
     };
   }, [
     isAwayFromBottom,
@@ -959,7 +959,7 @@ export default function ChatRoomScreen() {
 
     // Broadcast to partner via socket
     if (isSocketConnected) {
-      socket.emit("chat:reaction", {
+      socket.emit("chat:reaction" as any, {
         chatId: roomId,
         messageId: message.id,
         emoji: nextEmoji,

@@ -197,13 +197,13 @@ export class MatchRepository {
         verification: { select: { status: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: Math.max(limit * 4, 40),
+      take: Math.max(limit * 10, 150),
     });
 
     const currentInterests = currentUser?.profile?.interests ?? [];
     const incomingSenderIds = new Set(incomingRequests.map((request) => request.senderId));
 
-    return users.map((user) => {
+    const recommendations = users.map((user) => {
       const interests = user.profile?.interests ?? [];
       const sharedInterestCount = interests.filter((interest) =>
         currentInterests.includes(interest),
@@ -250,7 +250,17 @@ export class MatchRepository {
         return getDistanceValue(recommendation.distance)! <= filters.maxDistance;
       }
       return true;
-    }).slice(0, limit);
+    });
+
+    if (currentUser?.profile?.latitude != null && currentUser?.profile?.longitude != null) {
+      recommendations.sort((a, b) => {
+        const distA = getDistanceValue(a.distance) ?? 0;
+        const distB = getDistanceValue(b.distance) ?? 0;
+        return distA - distB;
+      });
+    }
+
+    return recommendations.slice(0, limit);
   }
 
   async dismissRecommendation(userId: string, dismissedUserId: string) {

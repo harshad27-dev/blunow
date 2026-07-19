@@ -273,12 +273,12 @@ export default function FeedScreen() {
                     openCreateStory();
                   }}
                 >
-                  <Ionicons name="add" size={18} color={Colors.white} />
+                  <Ionicons name="add" size={18} color={Colors.textInverse} />
                 </TouchableOpacity>
               </>
             ) : (
               <View className="absolute -bottom-1 -right-1 h-7 w-7 items-center justify-center rounded-full border-2 border-bg bg-primary">
-                <Ionicons name="add" size={18} color={Colors.white} />
+                <Ionicons name="add" size={18} color={Colors.textInverse} />
               </View>
             )}
           </View>
