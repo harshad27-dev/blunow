@@ -18,7 +18,7 @@ export const chatKeys = {
   messages: (chatId: string) => ["chat-messages", chatId] as const,
 };
 
-export const useChatConversationsQuery = () => {
+export const useChatConversationsQuery = (enabled = true) => {
   return useQuery({
     queryKey: chatKeys.conversations,
     queryFn: async () => {
@@ -26,7 +26,8 @@ export const useChatConversationsQuery = () => {
       if (!response?.success || !Array.isArray(response.data)) return [];
       return response.data as ChatConversation[];
     },
-    refetchInterval: 30000,
+    enabled,
+    refetchInterval: enabled ? 30000 : false,
   });
 };
 
@@ -76,6 +77,39 @@ export const useInfiniteChatMessagesQuery = (chatId?: string) => {
   });
 };
 
+export type SharePostResult = {
+  sharedCount: number;
+  failedCount: number;
+  results: {
+    chatId: string;
+    success: boolean;
+    messageId?: string;
+    message?: string;
+  }[];
+};
+
+export const useSharePostMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      postId,
+      chatIds,
+    }: {
+      postId: string;
+      chatIds: string[];
+    }) => {
+      const response = await chatService.sharePost(postId, chatIds);
+      if (!response?.success) {
+        throw new Error(response?.message || "Unable to share post");
+      }
+      return response.data as SharePostResult;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: chatKeys.conversations });
+    },
+  });
+};
 export const useSendChatMessageMutation = (chatId: string) => {
   const queryClient = useQueryClient();
 

@@ -18,6 +18,8 @@ router.patch("/conversations/:chatId/read", controller.markChatRead);
 router.get("/online/batch", rtController.getBatchOnlineStatus);
 router.get("/online/:userId", rtController.getOnlineStatus);
 
+router.post("/share/post", controller.sharePost);
+
 router.get("/:chatId", controller.getChat);
 router.get("/:chatId/messages", controller.getMessages);
 router.post("/:chatId/messages", controller.sendMessage);

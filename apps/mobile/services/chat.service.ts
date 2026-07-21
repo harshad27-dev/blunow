@@ -28,6 +28,11 @@ export const chatService = {
     return response.data;
   },
 
+  sharePost: async (postId: string, chatIds: string[]) => {
+    const response = await api.post("/chat/share/post", { postId, chatIds });
+    return response.data;
+  },
+
   sendMessage: async (chatId: string, payload: SendMessagePayload) => {
     const response = await api.post(`/chat/${chatId}/messages`, {
       type: payload.type || "TEXT",

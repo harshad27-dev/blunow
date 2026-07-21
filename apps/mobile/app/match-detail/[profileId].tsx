@@ -1,7 +1,11 @@
-import React, { useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  FlatList,
   Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,20 +18,24 @@ import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useColorScheme } from "nativewind";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Colors, getThemeColors, type ThemeColors } from "@/constants/colors";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { getThemeColors, type ThemeColors } from "@/constants/colors";
 import { FontFamily, FontSize } from "@/constants/typography";
 import {
   useMatchRecommendationsQuery,
   useSendMatchRequestMutation,
 } from "@/hooks/queries";
-import { showToast } from "@/utils/toast";
-
-import Reanimated, { FadeIn, FadeInDown, FadeInUp, ZoomIn } from "react-native-reanimated";
 import type { MatchRecommendation } from "@/types/match.types";
+import { showToast } from "@/utils/toast";
 
 const fallbackProfileImage =
   "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=90";
+
+const HERO_HEIGHT = 500;
+const ACTION_BAR_HEIGHT = 70;
 
 const DUMMY_PROFILES: MatchRecommendation[] = [
   {
@@ -40,13 +48,15 @@ const DUMMY_PROFILES: MatchRecommendation[] = [
     occupation: "UX Designer",
     online: true,
     verified: true,
-    quote: "Life is short, make every moment count ✨",
-    imageUrl: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=800&q=80",
-    avatarUrl: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=200&q=80",
+    quote: "Life is short, make every moment count.",
+    imageUrl:
+      "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=1200&q=90",
+    avatarUrl:
+      "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=300&q=90",
     profilePhotoUrls: [
-      "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=800&q=80",
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&q=80",
-      "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&q=80",
+      "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=1200&q=90",
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=1200&q=90",
+      "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=1200&q=90",
     ],
     interests: ["Travel", "Photography", "Coffee", "Fitness", "Music"],
     matchScore: 87,
@@ -63,12 +73,14 @@ const DUMMY_PROFILES: MatchRecommendation[] = [
     occupation: "Software Engineer",
     online: false,
     verified: true,
-    quote: "Always curious, forever learning. Let's grab coffee! ☕",
-    imageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&q=80",
-    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80",
+    quote: "Always curious, forever learning. Let's grab coffee.",
+    imageUrl:
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=1200&q=90",
+    avatarUrl:
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&q=90",
     profilePhotoUrls: [
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&q=80",
-      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=800&q=80",
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=1200&q=90",
+      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=1200&q=90",
     ],
     interests: ["Coding", "Coffee", "Gaming", "Music"],
     matchScore: 92,
@@ -85,52 +97,134 @@ const DUMMY_PROFILES: MatchRecommendation[] = [
     occupation: "Product Manager",
     online: true,
     verified: false,
-    quote: "Building cool things and exploring hidden food spots 🍜",
-    imageUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&q=80",
-    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80",
+    quote: "Building cool things and exploring hidden food spots.",
+    imageUrl:
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=1200&q=90",
+    avatarUrl:
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&q=90",
     profilePhotoUrls: [
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&q=80",
-      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&q=80",
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=1200&q=90",
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=1200&q=90",
     ],
     interests: ["Food", "Travel", "Art", "Books"],
     matchScore: 78,
     chatRequests: 0,
     alreadyLikedMe: true,
-  }
+  },
 ];
 
 export default function MatchDetailScreen() {
   const router = useRouter();
+  const {
+    profileId,
+    initialPhotoIndex: initialPhotoIndexParam,
+  } = useLocalSearchParams<{
+    profileId: string;
+    initialPhotoIndex?: string;
+  }>();
+
   const { colorScheme } = useColorScheme();
-  const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
   const theme = getThemeColors(colorScheme === "light" ? "light" : "dark");
-  const { width: screenWidth } = useWindowDimensions();
+  const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
-  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const compactLayout = useMemo(() => {
+    const isShortScreen = screenHeight < 760;
+    const heroHeight = Math.min(
+      isShortScreen ? 430 : HERO_HEIGHT,
+      Math.max(screenHeight * 0.58, 390),
+    );
+    const actionBarHeight = isShortScreen ? 64 : ACTION_BAR_HEIGHT;
 
-  const { profileId } = useLocalSearchParams<{ profileId: string }>();
-  const { data: profiles = [], isLoading } = useMatchRecommendationsQuery();
+    return {
+      actionBarHeight,
+      actionCircleSize: isShortScreen ? 48 : 52,
+      heroHeight,
+      horizontalPadding: screenWidth < 380 ? 14 : 16,
+      likeHeight: isShortScreen ? 48 : 52,
+      topBarButtonSize: isShortScreen ? 40 : 42,
+    };
+  }, [screenHeight, screenWidth]);
+
+  const parsedInitialIndex = Number.parseInt(
+    initialPhotoIndexParam ?? "0",
+    10,
+  );
+
+  const [activePhotoIndex, setActivePhotoIndex] = useState(
+    Number.isFinite(parsedInitialIndex) && parsedInitialIndex >= 0
+      ? parsedInitialIndex
+      : 0,
+  );
+  const photoListRef = useRef<FlatList<string>>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  const { data: profiles = [], isLoading } =
+    useMatchRecommendationsQuery();
   const sendMatchRequest = useSendMatchRequestMutation();
 
-  let profile = profiles.find((item) => item.id === profileId);
-  if (!profile) {
-    profile = DUMMY_PROFILES.find((item) => item.id === profileId) || DUMMY_PROFILES[0];
-  }
+  const profile = useMemo(() => {
+    return (
+      profiles.find((item) => item.id === profileId) ??
+      DUMMY_PROFILES.find((item) => item.id === profileId) ??
+      DUMMY_PROFILES[0]
+    );
+  }, [profiles, profileId]);
+
+  const isDummyId =
+    profileId?.startsWith("dummy-") ||
+    profileId === "1" ||
+    profileId === "2" ||
+    profileId === "3";
+
+  const photos = useMemo(() => {
+    if (!profile) return [fallbackProfileImage];
+
+    if (
+      profile.profilePhotoUrls &&
+      profile.profilePhotoUrls.length > 0
+    ) {
+      return profile.profilePhotoUrls;
+    }
+
+    return [
+      profile.imageUrl ||
+        profile.avatarUrl ||
+        fallbackProfileImage,
+    ];
+  }, [profile]);
+
+  const visiblePhotoIndex = Math.min(
+    activePhotoIndex,
+    Math.max(photos.length - 1, 0),
+  );
+  const headerBgOpacity = scrollY.interpolate({
+    inputRange: [0, 120, 220],
+    outputRange: [0, 0.65, 1],
+    extrapolate: "clamp",
+  });
 
   const sendRequest = (message?: string) => {
     if (!profile) return;
 
     if (profile.id.startsWith("dummy-")) {
-      showToast("They will see your connection request.", "Request sent");
+      showToast(
+        "They will see your connection request.",
+        "Request sent",
+      );
       return;
     }
 
     sendMatchRequest.mutate(
-      { receiverId: profile.id, message },
+      {
+        receiverId: profile.id,
+        message,
+      },
       {
         onSuccess: (response: any) => {
           const chatId = response?.data?.chat?.id;
+
           if (chatId) {
             router.push({
               pathname: "/(screens)/chat/[roomId]",
@@ -138,17 +232,24 @@ export default function MatchDetailScreen() {
                 roomId: chatId,
                 userId: profile.id,
                 name: `${profile.name} ${profile.lastName}`,
-                avatarUrl: profile.avatarUrl || profile.imageUrl || "",
+                avatarUrl:
+                  profile.avatarUrl ||
+                  profile.imageUrl ||
+                  "",
               },
             });
             return;
           }
 
-          showToast("They will see your connection request.", "Request sent");
+          showToast(
+            "They will see your connection request.",
+            "Request sent",
+          );
         },
         onError: (error: any) => {
           showToast(
-            error?.response?.data?.message || "Unable to send request.",
+            error?.response?.data?.message ||
+              "Unable to send request.",
             "Request failed",
           );
         },
@@ -156,246 +257,875 @@ export default function MatchDetailScreen() {
     );
   };
 
-  const isDummyId = profileId?.startsWith("dummy-") || profileId === "1" || profileId === "2" || profileId === "3";
+  const handlePhotoScrollEnd = (
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+  ) => {
+    const index = Math.round(
+      event.nativeEvent.contentOffset.x / screenWidth,
+    );
+
+    if (index !== activePhotoIndex) {
+      setActivePhotoIndex(index);
+    }
+  };
+
+  const selectPhoto = (index: number) => {
+    setActivePhotoIndex(index);
+    photoListRef.current?.scrollToIndex({
+      index,
+      animated: true,
+    });
+  };
 
   if (isLoading && !isDummyId) {
     return (
-      <SafeAreaView style={[styles.emptyState, { backgroundColor: theme.bg }]}>
-        <ActivityIndicator color={theme.textPrimary} size="large" />
-        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading real profile...</Text>
+      <SafeAreaView
+        style={[
+          styles.emptyState,
+          { backgroundColor: theme.bg },
+        ]}
+      >
+        <ActivityIndicator
+          color={theme.primary}
+          size="large"
+        />
+        <Text
+          style={[
+            styles.loadingText,
+            { color: theme.textSecondary },
+          ]}
+        >
+          Loading profile...
+        </Text>
       </SafeAreaView>
     );
   }
 
   if (!profile) {
     return (
-      <SafeAreaView style={[styles.emptyState, { backgroundColor: theme.bg }]}>
-        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Profile not found</Text>
-        <TouchableOpacity style={[styles.emptyButton, { backgroundColor: theme.bgCard, borderColor: theme.border }]} onPress={() => router.back()}>
-          <Text style={[styles.emptyButtonText, { color: theme.textPrimary }]}>Go Back</Text>
+      <SafeAreaView
+        style={[
+          styles.emptyState,
+          { backgroundColor: theme.bg },
+        ]}
+      >
+        <Ionicons
+          name="person-circle-outline"
+          size={72}
+          color={theme.textSecondary}
+        />
+        <Text
+          style={[
+            styles.emptyText,
+            { color: theme.textPrimary },
+          ]}
+        >
+          Profile not found
+        </Text>
+
+        <TouchableOpacity
+          style={[
+            styles.emptyButton,
+            {
+              backgroundColor: theme.primary,
+            },
+          ]}
+          onPress={() => router.back()}
+        >
+          <Text
+            style={[
+              styles.emptyButtonText,
+              { color: theme.textInverse },
+            ]}
+          >
+            Go Back
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
-  const photos = profile.profilePhotoUrls && profile.profilePhotoUrls.length > 0
-    ? profile.profilePhotoUrls
-    : [profile.imageUrl || profile.avatarUrl || fallbackProfileImage];
+  const lifestyleItems = [
+    {
+      icon: "wine-outline" as const,
+      label: "Drinks",
+      value: "Socially",
+    },
+    {
+      icon: "barbell-outline" as const,
+      label: "Fitness",
+      value: profile.interests.some(
+        (item) => item.toLowerCase() === "fitness",
+      )
+        ? "Active"
+        : "Sometimes",
+    },
+    {
+      icon: "paw-outline" as const,
+      label: "Pets",
+      value: "Likes pets",
+    },
+    {
+      icon: "moon-outline" as const,
+      label: "Routine",
+      value: "Night owl",
+    },
+  ];
 
   return (
-    <Reanimated.View style={[{ flex: 1, backgroundColor: theme.bg }, styles.root]} entering={FadeIn.duration(400)}>
-      <StatusBar style={statusBarStyle} translucent backgroundColor="transparent" />
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: theme.bg },
+      ]}
+    >
+      <StatusBar
+        style={statusBarStyle}
+        translucent
+        backgroundColor="transparent"
+      />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + 100 }
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.fixedTopBarBg,
+          {
+            backgroundColor: theme.bg,
+            borderBottomColor: theme.border,
+            height: insets.top + 70,
+            opacity: headerBgOpacity,
+          },
         ]}
+      />
+
+      <View style={[styles.fixedTopBar, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity
+          style={[
+            styles.glassButton,
+            {
+              borderRadius: compactLayout.topBarButtonSize / 2,
+              height: compactLayout.topBarButtonSize,
+              width: compactLayout.topBarButtonSize,
+            },
+          ]}
+          activeOpacity={0.82}
+          onPress={() => router.back()}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={24}
+            color="#FFFFFF"
+          />
+        </TouchableOpacity>
+
+        <View style={styles.topBarRight}>
+          <View style={styles.glassPill}>
+            <Ionicons
+              name="images-outline"
+              size={15}
+              color="#FFFFFF"
+            />
+            <Text style={styles.glassPillText}>
+              {visiblePhotoIndex + 1}/{photos.length}
+            </Text>
+          </View>
+
+          <View style={styles.glassPill}>
+            <Ionicons
+              name="sparkles"
+              size={15}
+              color="#FFFFFF"
+            />
+            <Text style={styles.glassPillText}>
+              {profile.matchScore}%
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingBottom:
+            insets.bottom + compactLayout.actionBarHeight + 26,
+        }}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [
+            {
+              nativeEvent: {
+                contentOffset: { y: scrollY },
+              },
+            },
+          ],
+          { useNativeDriver: true },
+        )}
       >
-        <View style={styles.hero}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={(e) => {
-              const slide = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-              if (slide !== activePhotoIndex) {
-                setActivePhotoIndex(slide);
+        <View style={[styles.hero, { height: compactLayout.heroHeight }]}>
+          <View style={StyleSheet.absoluteFillObject}>
+            <FlatList
+              ref={photoListRef}
+              data={photos}
+              horizontal
+              pagingEnabled
+              initialScrollIndex={visiblePhotoIndex}
+              getItemLayout={(_, index) => ({
+                length: screenWidth,
+                offset: screenWidth * index,
+                index,
+              })}
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item, index) =>
+                `${item}-${index}`
               }
-            }}
-            scrollEventThrottle={16}
-            style={StyleSheet.absoluteFillObject}
-          >
-            {photos.map((photo, index) => {
-              const isFirst = index === 0;
-              return (
-                <Reanimated.Image
-                  key={`${photo}-${index}`}
-                  {...(isFirst ? ({ sharedTransitionTag: `profile-photo-${profile.id}` } as any) : {})}
-                  source={{ uri: photo }}
-                  style={{ width: screenWidth, height: 510 }}
+              onMomentumScrollEnd={handlePhotoScrollEnd}
+              renderItem={({ item }) => (
+                <Image
+                  source={{ uri: item }}
                   resizeMode="cover"
+                  style={{
+                    width: screenWidth,
+                    height: compactLayout.heroHeight,
+                  }}
                 />
-              );
-            })}
-          </ScrollView>
+              )}
+            />
+          </View>
 
           <LinearGradient
             colors={[
-              "rgba(0, 0, 0, 0.45)",
-              "transparent",
-              "rgba(15, 14, 13, 0.95)",
+              "rgba(0,0,0,0.58)",
+              "rgba(0,0,0,0.02)",
+              "rgba(0,0,0,0.86)",
             ]}
             locations={[0, 0.42, 1]}
             style={StyleSheet.absoluteFillObject}
             pointerEvents="none"
           />
 
-          {/* Carousel dots */}
-          {photos.length > 1 && (
-            <View style={styles.heroDots} pointerEvents="none">
-              {photos.map((_, idx) => (
-                <View
-                  key={`dot-${idx}`}
-                  style={[
-                    styles.heroDot,
-                    {
-                      width: idx === activePhotoIndex ? 18 : 6,
-                      backgroundColor: idx === activePhotoIndex ? "#fff" : "rgba(255,255,255,0.4)",
-                    },
-                  ]}
+          <SafeAreaView
+            style={styles.heroSafe}
+            edges={["left", "right"]}
+            pointerEvents="box-none"
+          >
+            <View style={styles.heroBottom}>
+              <View style={styles.heroStatusRow}>
+                <StatusBadge
+                  icon="radio-button-on"
+                  label={
+                    profile.online
+                      ? "Online now"
+                      : "Recently active"
+                  }
+                  dotColor={
+                    profile.online
+                      ? theme.success
+                      : "rgba(255,255,255,0.72)"
+                  }
                 />
-              ))}
-            </View>
-          )}
 
-          <SafeAreaView style={styles.heroSafe} edges={["top", "left", "right"]} pointerEvents="box-none">
-            <View style={styles.topBar}>
-              <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-                <Ionicons name="chevron-back" size={24} color="#fff" />
-              </TouchableOpacity>
-              <View style={[styles.matchPill, { backgroundColor: "rgba(255, 255, 255, 0.22)", borderColor: "rgba(255, 255, 255, 0.3)" }]}>
-                <Ionicons name="sparkles" size={14} color="#fff" />
-                <Text style={[styles.matchText, { color: "#fff" }]}>{profile.matchScore}% match</Text>
-              </View>
-            </View>
-
-            <View style={styles.heroCopy} pointerEvents="none">
-              <View style={styles.nameRow}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {profile.name}, {profile.age}
-                </Text>
                 {profile.verified ? (
-                  <View style={[styles.verifiedBadge, { backgroundColor: theme.success }]}>
-                    <Ionicons name="checkmark" size={12} color="#fff" />
-                  </View>
+                  <StatusBadge
+                    icon="shield-checkmark"
+                    label="Verified"
+                    dotColor={theme.success}
+                  />
                 ) : null}
               </View>
-              <Text style={styles.fullName}>{profile.name} {profile.lastName}</Text>
+
+              <View style={styles.heroNameRow}>
+                <Text
+                  style={styles.heroName}
+                  numberOfLines={1}
+                >
+                  {profile.name}, {profile.age}
+                </Text>
+
+                {profile.verified ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={24}
+                    color="#70D6FF"
+                  />
+                ) : null}
+              </View>
+
+              <Text
+                style={styles.heroOccupation}
+                numberOfLines={1}
+              >
+                {profile.occupation}
+              </Text>
+
+              <View style={styles.heroMetaRow}>
+                <Ionicons
+                  name="location-outline"
+                  size={16}
+                  color="rgba(255,255,255,0.88)"
+                />
+                <Text
+                  style={styles.heroMetaText}
+                  numberOfLines={1}
+                >
+                  {profile.city}
+                </Text>
+                <View style={styles.heroMetaDot} />
+                <Text style={styles.heroMetaText}>
+                  {profile.distance} away
+                </Text>
+              </View>
             </View>
           </SafeAreaView>
         </View>
 
-        <View style={styles.body}>
-          {/* Quick stats grid */}
-          <Reanimated.View
-            entering={FadeInDown.delay(200).duration(450).springify().damping(15)}
-            style={styles.quickStats}
-          >
-            <DetailStat icon="radio-button-on" label={profile.online ? "Online now" : "Away"} theme={theme} />
-            <DetailStat icon="location-outline" label={profile.distance} theme={theme} />
-            <DetailStat icon="chatbubble-ellipses" label={`${profile.chatRequests} asks`} theme={theme} />
-          </Reanimated.View>
+        <View
+          style={[
+            styles.body,
+            {
+              backgroundColor: theme.bg,
+              paddingHorizontal: compactLayout.horizontalPadding,
+            },
+          ]}
+        >
+          <View>
+            <View
+              style={[
+                styles.profileSummaryCard,
+                {
+                  backgroundColor: theme.bgCard,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <View style={styles.profileSummaryTop}>
+                <Image
+                  source={{
+                    uri:
+                      profile.avatarUrl ||
+                      profile.imageUrl ||
+                      fallbackProfileImage,
+                  }}
+                  style={[
+                    styles.avatar,
+                    {
+                      borderColor: theme.bgCard,
+                    },
+                  ]}
+                />
 
-          {/* About section */}
-          <Reanimated.View
-            entering={FadeInDown.delay(350).duration(450).springify().damping(15)}
-          >
-            <Section title="About" theme={theme}>
-              <View style={[styles.quoteContainer, { borderLeftColor: theme.primaryLight }]}>
-                <Text style={[styles.quote, { color: theme.textSecondary }]}>"{profile.quote}"</Text>
+                <View style={styles.summaryIdentity}>
+                  <Text
+                    style={[
+                      styles.summaryName,
+                      { color: theme.textPrimary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {profile.name} {profile.lastName}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.summaryOccupation,
+                      { color: theme.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {profile.occupation}
+                  </Text>
+                </View>
+
+                <MatchRing
+                  score={profile.matchScore}
+                  theme={theme}
+                />
               </View>
-              <InfoRow icon="location-outline" label="Location" value={profile.city} theme={theme} />
-              <InfoRow icon="briefcase-outline" label="Work" value={profile.occupation} theme={theme} />
-              <InfoRow
-                icon={profile.alreadyLikedMe ? "heart" : "eye-outline"}
-                label="Signal"
-                value={profile.alreadyLikedMe ? "Liked you first" : "Fresh profile"}
-                theme={theme}
-              />
-            </Section>
-          </Reanimated.View>
 
-          {/* Interests section */}
-          <Reanimated.View
-            entering={FadeInDown.delay(500).duration(450).springify().damping(15)}
-          >
-            <Section title="Interests" theme={theme}>
-              <View style={styles.interestRow}>
+              <View
+                style={[
+                  styles.summaryDivider,
+                  { backgroundColor: theme.border },
+                ]}
+              />
+
+              <View style={styles.summaryStats}>
+                <MiniStat
+                  icon="navigate-outline"
+                  value={profile.distance}
+                  label="Distance"
+                  theme={theme}
+                />
+                <MiniStat
+                  icon="chatbubble-ellipses-outline"
+                  value={`${profile.chatRequests}`}
+                  label="Requests"
+                  theme={theme}
+                />
+                <MiniStat
+                  icon={
+                    profile.alreadyLikedMe
+                      ? "heart"
+                      : "eye-outline"
+                  }
+                  value={
+                    profile.alreadyLikedMe
+                      ? "Liked you"
+                      : "New"
+                  }
+                  label="Signal"
+                  theme={theme}
+                />
+              </View>
+            </View>
+          </View>
+
+          {photos.length > 1 ? (
+            <View style={styles.thumbnailRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={
+                  styles.thumbnailContent
+                }
+              >
+                {photos.map((photo, index) => {
+                  const active =
+                    index === visiblePhotoIndex;
+
+                  return (
+                    <TouchableOpacity
+                      key={`${photo}-thumb-${index}`}
+                      activeOpacity={0.86}
+                      onPress={() => selectPhoto(index)}
+                      style={[
+                        styles.thumbnailButton,
+                        {
+                          borderColor: active
+                            ? theme.primary
+                            : theme.border,
+                          opacity: active ? 1 : 0.62,
+                        },
+                      ]}
+                    >
+                      <Image
+                        source={{ uri: photo }}
+                        style={styles.thumbnailImage}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          <View>
+            <PremiumSection
+              icon="person-outline"
+              title="About me"
+              theme={theme}
+            >
+              <View
+                style={[
+                  styles.quoteCard,
+                  {
+                    backgroundColor: theme.bgElevated,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.quoteAccent,
+                    { backgroundColor: theme.primaryLight },
+                  ]}
+                />
+
+                <Text
+                  style={[
+                    styles.quoteMark,
+                    { color: theme.primaryLight },
+                  ]}
+                >
+                  {'"'}
+                </Text>
+
+                <View style={styles.quoteBody}>
+                  <Text
+                    style={[
+                      styles.quoteText,
+                      { color: theme.textPrimary },
+                    ]}
+                  >
+                    {profile.quote}
+                  </Text>
+
+                  <View style={styles.quoteFooter}>
+                    <Ionicons
+                      name="sparkles"
+                      size={15}
+                      color={theme.primaryLight}
+                    />
+                    <Text
+                      style={[
+                        styles.quoteFooterText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      In their own words
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </PremiumSection>
+          </View>
+
+          <View>
+            <PremiumSection
+              icon="heart-outline"
+              title="Interests"
+              theme={theme}
+            >
+              <View style={styles.interestWrap}>
                 {profile.interests.map((interest) => (
-                  <InterestChip key={interest} label={interest} theme={theme} />
+                  <InterestChip
+                    key={interest}
+                    label={interest}
+                    theme={theme}
+                  />
                 ))}
               </View>
-            </Section>
-          </Reanimated.View>
-        </View>
-      </ScrollView>
+            </PremiumSection>
+          </View>
 
-      {/* Floating Action Bar */}
-      <Reanimated.View
-        entering={FadeInUp.delay(650).duration(500).springify()}
+          <View>
+            <PremiumSection
+              icon="grid-outline"
+              title="Lifestyle"
+              theme={theme}
+            >
+              <View style={styles.lifestyleGrid}>
+                {lifestyleItems.map((item) => (
+                  <LifestyleTile
+                    key={item.label}
+                    icon={item.icon}
+                    label={item.label}
+                    value={item.value}
+                    theme={theme}
+                  />
+                ))}
+              </View>
+            </PremiumSection>
+          </View>
+
+          <View>
+            <PremiumSection
+              icon="information-circle-outline"
+              title="Profile details"
+              theme={theme}
+            >
+              <InfoRow
+                icon="location-outline"
+                label="Location"
+                value={profile.city}
+                theme={theme}
+              />
+              <InfoRow
+                icon="briefcase-outline"
+                label="Work"
+                value={profile.occupation}
+                theme={theme}
+              />
+              <InfoRow
+                icon="navigate-outline"
+                label="Distance"
+                value={profile.distance}
+                theme={theme}
+              />
+              <InfoRow
+                icon={
+                  profile.alreadyLikedMe
+                    ? "heart"
+                    : "eye-outline"
+                }
+                label="Connection signal"
+                value={
+                  profile.alreadyLikedMe
+                    ? "Liked you first"
+                    : "Fresh recommendation"
+                }
+                theme={theme}
+                isLast
+              />
+            </PremiumSection>
+          </View>
+        </View>
+      </Animated.ScrollView>
+
+      <SafeAreaView
+        edges={["bottom"]}
         style={[
-          styles.actionFloatingBar,
+          styles.bottomActionSafeArea,
           {
-            backgroundColor: theme.bg === "#0F0E0D" ? "rgba(23, 20, 18, 0.95)" : "rgba(255, 255, 255, 0.95)",
-            borderColor: theme.border,
-            bottom: Math.max(insets.bottom + 12, 16),
+            backgroundColor: theme.bg,
+            borderTopColor: theme.border,
           },
         ]}
       >
-        <TouchableOpacity
-          style={[styles.actionCircle, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
-          activeOpacity={0.82}
-          onPress={() => router.back()}
+        <View
+          style={[
+            styles.actionBar,
+            {
+              height: compactLayout.actionBarHeight,
+              backgroundColor:
+                colorScheme === "dark"
+                  ? "rgba(24,22,21,0.96)"
+                  : "rgba(255,255,255,0.97)",
+              borderColor: theme.border,
+            },
+          ]}
         >
-          <Ionicons name="close" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.actionCircle,
+              {
+                backgroundColor: theme.bgElevated,
+                borderColor: theme.border,
+                borderRadius: compactLayout.actionCircleSize / 2,
+                height: compactLayout.actionCircleSize,
+                width: compactLayout.actionCircleSize,
+              },
+            ]}
+            activeOpacity={0.82}
+            onPress={() => router.back()}
+          >
+            <Ionicons
+              name="close"
+              size={25}
+              color={theme.textPrimary}
+            />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButtonLike, { backgroundColor: theme.primary }]}
-          activeOpacity={0.86}
-          disabled={sendMatchRequest.isPending}
-          onPress={() => sendRequest("I would like to connect with you.")}
-        >
-          {sendMatchRequest.isPending ? (
-            <ActivityIndicator color={theme.textInverse} />
-          ) : (
-            <>
-              <Ionicons name="heart" size={20} color={theme.textInverse} />
-              <Text style={[styles.actionButtonLikeText, { color: theme.textInverse }]}>Like</Text>
-            </>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.actionCircle,
+              {
+                backgroundColor: theme.bgElevated,
+                borderColor: theme.border,
+                borderRadius: compactLayout.actionCircleSize / 2,
+                height: compactLayout.actionCircleSize,
+                width: compactLayout.actionCircleSize,
+              },
+            ]}
+            activeOpacity={0.82}
+            disabled={sendMatchRequest.isPending}
+            onPress={() =>
+              sendRequest(
+                "Hi, I enjoyed your profile. Would you like to chat?",
+              )
+            }
+          >
+            <Ionicons
+              name="chatbubble-ellipses"
+              size={23}
+              color={theme.primaryLight}
+            />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionCircle, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
-          activeOpacity={0.82}
-          disabled={sendMatchRequest.isPending}
-          onPress={() => sendRequest("Hi, I would like to chat with you.")}
-        >
-          <Ionicons name="chatbubble-ellipses" size={24} color={theme.textPrimary} />
-        </TouchableOpacity>
-      </Reanimated.View>
-    </Reanimated.View>
+          <TouchableOpacity
+            style={[styles.likeButtonWrapper, { height: compactLayout.likeHeight }]}
+            activeOpacity={0.9}
+            disabled={sendMatchRequest.isPending}
+            onPress={() =>
+              sendRequest(
+                "I would like to connect with you.",
+              )
+            }
+          >
+            <LinearGradient
+              colors={[
+                theme.primary,
+                theme.primaryLight,
+              ]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.likeButton}
+            >
+              {sendMatchRequest.isPending ? (
+                <ActivityIndicator
+                  color={theme.textInverse}
+                />
+              ) : (
+                <>
+                  <Ionicons
+                    name="heart"
+                    size={20}
+                    color={theme.textInverse}
+                  />
+                  <Text
+                    style={[
+                      styles.likeButtonText,
+                      { color: theme.textInverse },
+                    ]}
+                  >
+                    Connect
+                  </Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
-const DetailStat = ({
+const StatusBadge = ({
   icon,
+  label,
+  dotColor,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  dotColor: string;
+}) => (
+  <View style={styles.statusBadge}>
+    <Ionicons
+      name={icon}
+      size={13}
+      color={dotColor}
+    />
+    <Text style={styles.statusBadgeText}>{label}</Text>
+  </View>
+);
+
+const MatchRing = ({
+  score,
+  theme,
+}: {
+  score: number;
+  theme: ThemeColors;
+}) => (
+  <View
+    style={[
+      styles.matchRingOuter,
+      {
+        borderColor: theme.primary,
+        backgroundColor: theme.bgElevated,
+      },
+    ]}
+  >
+    <Text
+      style={[
+        styles.matchRingValue,
+        { color: theme.textPrimary },
+      ]}
+    >
+      {score}%
+    </Text>
+    <Text
+      style={[
+        styles.matchRingLabel,
+        { color: theme.textSecondary },
+      ]}
+    >
+      Match
+    </Text>
+  </View>
+);
+
+const MiniStat = ({
+  icon,
+  value,
   label,
   theme,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
+  value: string;
   label: string;
   theme: ThemeColors;
 }) => (
-  <View style={[styles.statItem, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
-    <Ionicons name={icon} size={17} color={theme.textPrimary} />
-    <Text style={[styles.statText, { color: theme.textPrimary }]} numberOfLines={1}>
+  <View style={styles.miniStat}>
+    <View
+      style={[
+        styles.miniStatIcon,
+        { backgroundColor: theme.bgElevated },
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={16}
+        color={theme.primaryLight}
+      />
+    </View>
+
+    <Text
+      style={[
+        styles.miniStatValue,
+        { color: theme.textPrimary },
+      ]}
+      numberOfLines={1}
+    >
+      {value}
+    </Text>
+    <Text
+      style={[
+        styles.miniStatLabel,
+        { color: theme.textSecondary },
+      ]}
+    >
       {label}
     </Text>
   </View>
 );
 
-const Section = ({ title, children, theme }: { title: string; children: React.ReactNode; theme: ThemeColors }) => (
-  <View style={[styles.section, { backgroundColor: theme.bgCard, borderColor: theme.border }]}>
-    <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{title}</Text>
+const PremiumSection = ({
+  icon,
+  title,
+  children,
+  theme,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  children: React.ReactNode;
+  theme: ThemeColors;
+}) => (
+  <View
+    style={[
+      styles.section,
+      {
+        backgroundColor: theme.bgCard,
+        borderColor: theme.border,
+      },
+    ]}
+  >
+    <View style={styles.sectionHeader}>
+      <View
+        style={[
+          styles.sectionIcon,
+          { backgroundColor: theme.bgElevated },
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={19}
+          color={theme.primaryLight}
+        />
+      </View>
+
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: theme.textPrimary },
+        ]}
+      >
+        {title}
+      </Text>
+    </View>
+
     {children}
   </View>
 );
 
-const InfoRow = ({
+const LifestyleTile = ({
   icon,
   label,
   value,
@@ -406,174 +1136,561 @@ const InfoRow = ({
   value: string;
   theme: ThemeColors;
 }) => (
-  <View style={styles.infoRow}>
-    <View style={[styles.infoIcon, { backgroundColor: theme.bgElevated }]}>
-      <Ionicons name={icon} size={18} color={theme.textPrimary} />
+  <View
+    style={[
+      styles.lifestyleTile,
+      {
+        backgroundColor: theme.bgElevated,
+        borderColor: theme.border,
+      },
+    ]}
+  >
+    <View
+      style={[
+        styles.lifestyleIcon,
+        { backgroundColor: theme.bgCard },
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={20}
+        color={theme.primaryLight}
+      />
     </View>
+
+    <Text
+      style={[
+        styles.lifestyleLabel,
+        { color: theme.textSecondary },
+      ]}
+    >
+      {label}
+    </Text>
+    <Text
+      style={[
+        styles.lifestyleValue,
+        { color: theme.textPrimary },
+      ]}
+      numberOfLines={1}
+    >
+      {value}
+    </Text>
+  </View>
+);
+
+const InfoRow = ({
+  icon,
+  label,
+  value,
+  theme,
+  isLast = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  theme: ThemeColors;
+  isLast?: boolean;
+}) => (
+  <View
+    style={[
+      styles.infoRow,
+      !isLast && {
+        borderBottomColor: theme.border,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+      },
+    ]}
+  >
+    <View
+      style={[
+        styles.infoIcon,
+        { backgroundColor: theme.bgElevated },
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={18}
+        color={theme.primaryLight}
+      />
+    </View>
+
     <View style={styles.infoBody}>
-      <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: theme.textPrimary }]}>{value}</Text>
+      <Text
+        style={[
+          styles.infoLabel,
+          { color: theme.textSecondary },
+        ]}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.infoValue,
+          { color: theme.textPrimary },
+        ]}
+        numberOfLines={2}
+      >
+        {value}
+      </Text>
     </View>
   </View>
 );
 
-const InterestChip = ({ label, theme }: { label: string; theme: ThemeColors }) => {
+const InterestChip = ({
+  label,
+  theme,
+}: {
+  label: string;
+  theme: ThemeColors;
+}) => {
   const meta = getInterestMeta(label, theme);
 
   return (
-    <View style={[styles.interestChip, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-      <Ionicons name={meta.icon} size={15} color={meta.color} />
-      <Text style={[styles.interestText, { color: theme.textPrimary }]}>{label}</Text>
+    <View
+      style={[
+        styles.interestChip,
+        {
+          backgroundColor: theme.bgElevated,
+          borderColor: theme.border,
+        },
+      ]}
+    >
+      <Ionicons
+        name={meta.icon}
+        size={16}
+        color={meta.color}
+      />
+      <Text
+        style={[
+          styles.interestText,
+          { color: theme.textPrimary },
+        ]}
+      >
+        {label}
+      </Text>
     </View>
   );
 };
 
-const getInterestMeta = (label: string, theme: ThemeColors) => {
+const getInterestMeta = (
+  label: string,
+  theme: ThemeColors,
+) => {
   const interestMeta: Record<
     string,
-    { icon: keyof typeof Ionicons.glyphMap; color: string }
+    {
+      icon: keyof typeof Ionicons.glyphMap;
+      color: string;
+    }
   > = {
-    art: { icon: "color-palette", color: theme.warning },
-    coffee: { icon: "cafe", color: theme.primaryLight },
-    design: { icon: "sparkles", color: theme.accent },
-    fashion: { icon: "shirt", color: theme.secondaryLight },
-    fitness: { icon: "barbell", color: theme.success },
-    football: { icon: "football", color: theme.success },
-    food: { icon: "restaurant", color: theme.warning },
-    music: { icon: "musical-notes", color: theme.secondary },
-    movies: { icon: "videocam", color: theme.primaryLight },
-    startups: { icon: "rocket", color: theme.accent },
-    travel: { icon: "airplane", color: theme.primaryLight },
+    art: {
+      icon: "color-palette",
+      color: theme.warning,
+    },
+    books: {
+      icon: "book",
+      color: theme.secondaryLight,
+    },
+    coding: {
+      icon: "code-slash",
+      color: theme.primaryLight,
+    },
+    coffee: {
+      icon: "cafe",
+      color: theme.warning,
+    },
+    design: {
+      icon: "sparkles",
+      color: theme.accent,
+    },
+    fashion: {
+      icon: "shirt",
+      color: theme.secondaryLight,
+    },
+    fitness: {
+      icon: "barbell",
+      color: theme.success,
+    },
+    football: {
+      icon: "football",
+      color: theme.success,
+    },
+    food: {
+      icon: "restaurant",
+      color: theme.warning,
+    },
+    gaming: {
+      icon: "game-controller",
+      color: theme.secondary,
+    },
+    music: {
+      icon: "musical-notes",
+      color: theme.secondary,
+    },
+    movies: {
+      icon: "videocam",
+      color: theme.primaryLight,
+    },
+    photography: {
+      icon: "camera",
+      color: theme.accent,
+    },
+    startups: {
+      icon: "rocket",
+      color: theme.accent,
+    },
+    travel: {
+      icon: "airplane",
+      color: theme.primaryLight,
+    },
   };
 
-  return interestMeta[label.toLowerCase()] || {
-    icon: "sparkles" as const,
-    color: theme.textSecondary,
-  };
+  return (
+    interestMeta[label.toLowerCase()] || {
+      icon: "sparkles" as const,
+      color: theme.textSecondary,
+    }
+  );
 };
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  content: {
-    paddingBottom: 28,
-  },
   hero: {
-    height: 510,
+    height: HERO_HEIGHT,
     overflow: "hidden",
-  },
-  heroImage: {
-    height: "100%",
-    position: "absolute",
-    width: "100%",
   },
   heroSafe: {
     flex: 1,
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
   },
-  topBar: {
+  fixedTopBarBg: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 19,
+    elevation: 19,
+  },
+  fixedTopBar: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 18,
-    paddingTop: 8,
+    left: 0,
+    paddingHorizontal: 14,
+    position: "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 20,
+    elevation: 20,
   },
-  iconButton: {
+  topBarRight: {
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.38)",
-    borderColor: "rgba(255,255,255,0.14)",
-    borderRadius: 22,
+    flexDirection: "row",
+    gap: 7,
+  },
+  glassButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.36)",
+    borderColor: "rgba(255,255,255,0.24)",
+    borderRadius: 21,
     borderWidth: 1,
-    height: 44,
+    height: 42,
     justifyContent: "center",
-    width: 44,
+    width: 42,
   },
-  matchPill: {
+  glassPill: {
     alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.36)",
+    borderColor: "rgba(255,255,255,0.22)",
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
-    height: 36,
-    paddingHorizontal: 12,
+    gap: 5,
+    height: 34,
+    paddingHorizontal: 10,
   },
-  matchText: {
+  glassPillText: {
+    color: "#FFFFFF",
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.xs,
-    marginLeft: 6,
+    fontSize: 11,
   },
-  heroCopy: {
-    padding: 22,
+  heroBottom: {
+    paddingBottom: 24,
+    paddingHorizontal: 16,
   },
-  nameRow: {
+  heroStatusRow: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginBottom: 9,
   },
-  name: {
-    color: "#fff",
+  statusBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderColor: "rgba(255,255,255,0.22)",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  statusBadgeText: {
+    color: "rgba(255,255,255,0.94)",
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+  },
+  heroNameRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 7,
+  },
+  heroName: {
+    color: "#FFFFFF",
     flexShrink: 1,
     fontFamily: FontFamily.bold,
-    fontSize: 36,
-    lineHeight: 42,
+    fontSize: 34,
+    lineHeight: 39,
   },
-  verifiedBadge: {
-    alignItems: "center",
-    borderRadius: 13,
-    height: 26,
-    justifyContent: "center",
-    marginLeft: 10,
-    width: 26,
-  },
-  fullName: {
-    color: "rgba(255, 255, 255, 0.72)",
+  heroOccupation: {
+    color: "rgba(255,255,255,0.9)",
     fontFamily: FontFamily.semiBold,
-    fontSize: FontSize.base,
-    marginTop: 4,
+    fontSize: FontSize.sm,
+    marginTop: 2,
+  },
+  heroMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    marginTop: 7,
+  },
+  heroMetaText: {
+    color: "rgba(255,255,255,0.84)",
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  heroMetaDot: {
+    backgroundColor: "rgba(255,255,255,0.46)",
+    borderRadius: 2,
+    height: 4,
+    marginHorizontal: 8,
+    width: 4,
   },
   body: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -18,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  quickStats: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  statItem: {
-    alignItems: "center",
+  profileSummaryCard: {
     borderRadius: 18,
     borderWidth: 1,
-    flex: 1,
-    minHeight: 70,
-    justifyContent: "center",
-    paddingHorizontal: 8,
+    padding: 12,
   },
-  statText: {
+  profileSummaryTop: {
+    alignItems: "center",
+    flexDirection: "row",
+  },
+  avatar: {
+    borderRadius: 26,
+    borderWidth: 2,
+    height: 52,
+    width: 52,
+  },
+  summaryIdentity: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+  summaryName: {
     fontFamily: FontFamily.bold,
+    fontSize: FontSize.base,
+  },
+  summaryOccupation: {
+    fontFamily: FontFamily.medium,
     fontSize: FontSize.xs,
-    marginTop: 8,
-    textAlign: "center",
+    marginTop: 2,
+  },
+  matchRingOuter: {
+    alignItems: "center",
+    borderRadius: 27,
+    borderWidth: 3,
+    height: 54,
+    justifyContent: "center",
+    width: 54,
+  },
+  matchRingValue: {
+    fontFamily: FontFamily.bold,
+    fontSize: 13,
+    lineHeight: 16,
+  },
+  matchRingLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 8,
+  },
+  summaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 12,
+  },
+  summaryStats: {
+    flexDirection: "row",
+  },
+  miniStat: {
+    alignItems: "center",
+    flex: 1,
+    paddingHorizontal: 3,
+  },
+  miniStatIcon: {
+    alignItems: "center",
+    borderRadius: 13,
+    height: 28,
+    justifyContent: "center",
+    marginBottom: 5,
+    width: 28,
+  },
+  miniStatValue: {
+    fontFamily: FontFamily.bold,
+    fontSize: 12,
+  },
+  miniStatLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 9,
+    marginTop: 1,
+  },
+  thumbnailRow: {
+    marginBottom: 2,
+    marginTop: 10,
+  },
+  thumbnailContent: {
+    gap: 8,
+    paddingRight: 16,
+  },
+  thumbnailButton: {
+    borderRadius: 12,
+    borderWidth: 2,
+    height: 58,
+    overflow: "hidden",
+    width: 48,
+  },
+  thumbnailImage: {
+    height: "100%",
+    width: "100%",
   },
   section: {
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
-    marginTop: 14,
-    padding: 16,
+    marginTop: 10,
+    padding: 12,
+  },
+  sectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    marginBottom: 10,
+  },
+  sectionIcon: {
+    alignItems: "center",
+    borderRadius: 13,
+    height: 32,
+    justifyContent: "center",
+    marginRight: 8,
+    width: 32,
   },
   sectionTitle: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.lg,
-    marginBottom: 12,
+    fontSize: FontSize.base,
   },
-  quoteContainer: {
-    borderLeftWidth: 3,
-    paddingLeft: 12,
-    marginBottom: 16,
+  quoteCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    overflow: "hidden",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
-  quote: {
-    fontFamily: FontFamily.medium,
+  quoteAccent: {
+    borderRadius: 3,
+    bottom: 13,
+    left: 0,
+    opacity: 0.9,
+    position: "absolute",
+    top: 13,
+    width: 4,
+  },
+  quoteMark: {
+    fontFamily: FontFamily.bold,
+    fontSize: 46,
+    lineHeight: 48,
+    marginRight: 8,
+    marginTop: -8,
+    opacity: 0.26,
+  },
+  quoteBody: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  quoteText: {
+    fontFamily: FontFamily.semiBold,
     fontSize: FontSize.base,
     lineHeight: 23,
-    fontStyle: "italic",
+  },
+  quoteFooter: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 9,
+  },
+  quoteFooterText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 11,
+  },
+  interestWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  interestChip: {
+    alignItems: "center",
+    borderRadius: 15,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  interestText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+  },
+  lifestyleGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  lifestyleTile: {
+    borderRadius: 15,
+    borderWidth: 1,
+    padding: 10,
+    width: "48.5%",
+  },
+  lifestyleIcon: {
+    alignItems: "center",
+    borderRadius: 13,
+    height: 30,
+    justifyContent: "center",
+    marginBottom: 7,
+    width: 30,
+  },
+  lifestyleLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 11,
+  },
+  lifestyleValue: {
+    fontFamily: FontFamily.bold,
+    fontSize: 12,
+    marginTop: 2,
   },
   infoRow: {
     alignItems: "center",
@@ -582,41 +1699,75 @@ const styles = StyleSheet.create({
   },
   infoIcon: {
     alignItems: "center",
-    borderRadius: 18,
-    height: 36,
+    borderRadius: 15,
+    height: 34,
     justifyContent: "center",
-    marginRight: 12,
-    width: 36,
+    marginRight: 10,
+    width: 34,
   },
   infoBody: {
     flex: 1,
   },
   infoLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSize.xs,
+    fontSize: 11,
   },
   infoValue: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.base,
-    marginTop: 2,
+    fontSize: FontSize.sm,
+    marginTop: 1,
   },
-  interestRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  bottomActionSafeArea: {
+    borderTopWidth: 0,
+    bottom: 0,
+    elevation: 20,
+    left: 0,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    position: "absolute",
+    right: 0,
+    zIndex: 20,
   },
-  interestChip: {
+  actionBar: {
     alignItems: "center",
-    borderRadius: 15,
+    borderRadius: 28,
     borderWidth: 1,
+    elevation: 12,
     flexDirection: "row",
-    paddingHorizontal: 11,
-    paddingVertical: 9,
+    gap: 8,
+    height: ACTION_BAR_HEIGHT,
+    paddingHorizontal: 9,
+    shadowColor: "#000000",
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
   },
-  interestText: {
+  actionCircle: {
+    alignItems: "center",
+    borderRadius: 26,
+    borderWidth: 1,
+    height: 52,
+    justifyContent: "center",
+    width: 52,
+  },
+  likeButtonWrapper: {
+    flex: 1,
+    height: 52,
+  },
+  likeButton: {
+    alignItems: "center",
+    borderRadius: 26,
+    flex: 1,
+    flexDirection: "row",
+    gap: 7,
+    justifyContent: "center",
+  },
+  likeButtonText: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.xs,
-    marginLeft: 7,
+    fontSize: 15,
   },
   emptyState: {
     alignItems: "center",
@@ -624,76 +1775,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  emptyText: {
-    fontFamily: FontFamily.medium,
-    fontSize: FontSize.lg,
-    marginBottom: 18,
-  },
   loadingText: {
     fontFamily: FontFamily.medium,
     fontSize: FontSize.sm,
     marginTop: 14,
   },
+  emptyText: {
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.lg,
+    marginBottom: 18,
+    marginTop: 14,
+  },
   emptyButton: {
     borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
   emptyButtonText: {
     fontFamily: FontFamily.bold,
     fontSize: FontSize.sm,
-  },
-  heroDots: {
-    position: "absolute",
-    bottom: 22,
-    right: 22,
-    flexDirection: "row",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  heroDot: {
-    height: 6,
-    borderRadius: 3,
-    marginHorizontal: 3,
-  },
-  actionFloatingBar: {
-    position: "absolute",
-    left: 20,
-    right: 20,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  actionCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  actionButtonLike: {
-    flex: 1,
-    height: 52,
-    borderRadius: 26,
-    marginHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  actionButtonLikeText: {
-    fontSize: 16,
-    fontWeight: "800",
   },
 });

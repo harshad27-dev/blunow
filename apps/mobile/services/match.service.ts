@@ -31,6 +31,11 @@ export const matchService = {
     return response.data;
   },
 
+  cancelPendingRequest: async (receiverId: string) => {
+    const response = await api.delete(`/match/request/${receiverId}`);
+    return response.data;
+  },
+
   getIncomingRequests: async () => {
     const response = await api.get('/match/requests/incoming');
     return response.data;
@@ -51,6 +56,11 @@ export const matchService = {
 
   dismissRecommendation: async (userId: string) => {
     const response = await api.post(`/match/recommendations/${userId}/dismiss`);
+    return response.data;
+  },
+
+  restoreRecommendation: async (userId: string) => {
+    const response = await api.delete(`/match/recommendations/${userId}/dismiss`);
     return response.data;
   },
 

@@ -1,6 +1,6 @@
 import type { MatchRequest } from "./match.types";
 
-export type ChatMessageType = "TEXT" | "STORY_REPLY" | "IMAGE" | "VIDEO" | "AUDIO";
+export type ChatMessageType = "TEXT" | "STORY_REPLY" | "IMAGE" | "VIDEO" | "AUDIO" | "POST";
 export type ChatStatus = "REQUESTED" | "ACTIVE" | "REJECTED";
 
 export type ChatParticipant = {
@@ -46,6 +46,10 @@ export type ChatMessage = {
   storyPreviewMediaUrl?: string | null;
   storyPreviewCaption?: string | null;
   storyAuthorId?: string | null;
+  postId?: string | null;
+  postPreviewMediaUrl?: string | null;
+  postPreviewCaption?: string | null;
+  postAuthorName?: string | null;
   clientId?: string;
   reactions?: ChatMessageReaction[];
 };

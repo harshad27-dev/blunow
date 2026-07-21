@@ -8,7 +8,10 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  Share,
   ScrollView,
+  TextInput,
+  ActivityIndicator,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
@@ -16,13 +19,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  useChatConversationsQuery,
+  useSharePostMutation,
+} from "@/hooks/useChat";
+import { useAuthStore } from "@/store/authStore";
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
   Easing,
-  runOnJS,
 } from "react-native-reanimated";
 
 const { width } = Dimensions.get("window");
@@ -150,17 +156,30 @@ export default function FeedCard({
 }: FeedCardProps) {
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
+  const [shareSheetVisible, setShareSheetVisible] = useState(false);
+  const [selectedShareChatIds, setSelectedShareChatIds] = useState<string[]>([]);
+  const [shareSearch, setShareSearch] = useState("");
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
   const [mediaAspectRatios, setMediaAspectRatios] = useState<
     Record<string, number>
   >({});
 
   const lastTap = useRef(0);
-  const tapTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const actionSheetProgress = useRef(new Animated.Value(0)).current;
+  const shareSheetProgress = useRef(new Animated.Value(0)).current;
+
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const {
+    data: shareConversations = [],
+    isLoading: shareConversationsLoading,
+    isError: shareConversationsError,
+    refetch: refetchShareConversations,
+  } = useChatConversationsQuery(shareSheetVisible);
+  const sharePostMutation = useSharePostMutation();
 
   const hasImage = Boolean(post.mediaUrls?.length);
 
@@ -178,7 +197,38 @@ export default function FeedCard({
     `https://i.pravatar.cc/100?img=${getStableImageNumber(post.id, 34)}`,
   ];
 
+  const shareRecipients = shareConversations
+    .filter((conversation) => conversation.status === "ACTIVE")
+    .map((conversation) => {
+      const participant =
+        conversation.user1Id === currentUserId
+          ? conversation.user2
+          : conversation.user1;
+      const name =
+        participant?.profile?.username || participant?.username || "Datebl user";
+
+      return {
+        chatId: conversation.id,
+        userId: participant?.id,
+        name,
+        avatarUrl: participant?.profile?.avatarUrl || null,
+      };
+    });
+
+  const normalizedShareSearch = shareSearch.trim().toLowerCase();
+  const visibleShareRecipients = normalizedShareSearch
+    ? shareRecipients.filter((recipient) =>
+        recipient.name.toLowerCase().includes(normalizedShareSearch),
+      )
+    : shareRecipients;
+  const selectedShareRecipients = shareRecipients.filter((recipient) =>
+    selectedShareChatIds.includes(recipient.chatId),
+  );
+
   const activeMediaUrl = post.mediaUrls?.[activeMediaIndex];
+  const postUrl = `https://datebl.app/posts/${post.id}`;
+  const shareTitle = `${displayName} on Datebl`;
+  const shareMessage = `${displayName} shared a post on Datebl.` + "\n" + postUrl;
 
   const activeAspectRatio = activeMediaUrl
     ? mediaAspectRatios[activeMediaUrl]
@@ -339,6 +389,16 @@ export default function FeedCard({
     outputRange: [380, 0],
   });
 
+  const shareSheetOpacity = shareSheetProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.62],
+  });
+
+  const shareSheetTranslateY = shareSheetProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [420, 0],
+  });
+
   const handleOpenPostActions = () => {
     setActionSheetVisible(true);
     actionSheetProgress.setValue(0);
@@ -363,7 +423,111 @@ export default function FeedCard({
     });
   };
 
+  const handleOpenShareSheet = () => {
+    setSelectedShareChatIds([]);
+    setShareSearch("");
+    setShareFeedback(null);
+    setShareSheetVisible(true);
+    shareSheetProgress.setValue(0);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Animated.timing(shareSheetProgress, {
+      toValue: 1,
+      duration: 250,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleCloseShareSheet = () => {
+    Animated.timing(shareSheetProgress, {
+      toValue: 0,
+      duration: 180,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setShareSheetVisible(false);
+      }
+    });
+  };
+
+  const handleNativeShare = async () => {
+    try {
+      await Share.share({
+        title: shareTitle,
+        message: shareMessage,
+        url: postUrl,
+      });
+    } catch {
+      // The native share dialog can fail or be dismissed without app-side recovery.
+    }
+  };
+
+  const handleRecipientPress = (chatId: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setShareFeedback(null);
+    setSelectedShareChatIds((currentIds) => {
+      if (currentIds.includes(chatId)) {
+        return currentIds.filter((currentId) => currentId !== chatId);
+      }
+      return currentIds.length >= 10 ? currentIds : [...currentIds, chatId];
+    });
+  };
+
+  const handleSendToRecipients = async () => {
+    if (selectedShareChatIds.length === 0) {
+      handleNativeShare();
+      return;
+    }
+
+    setShareFeedback(null);
+    try {
+      const result = await sharePostMutation.mutateAsync({
+        postId: post.id,
+        chatIds: selectedShareChatIds,
+      });
+
+      if (result.sharedCount > 0) {
+        Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        ).catch(() => {});
+        onMoreAction?.(post.id, "share");
+      }
+
+      if (result.failedCount === 0) {
+        setShareFeedback(
+          result.sharedCount === 1
+            ? "Post sent"
+            : `Post sent to ${result.sharedCount} chats`,
+        );
+        setTimeout(handleCloseShareSheet, 650);
+        return;
+      }
+
+      const failedChatIds = result.results
+        .filter((item) => !item.success)
+        .map((item) => item.chatId);
+      setSelectedShareChatIds(failedChatIds);
+      setShareFeedback(
+        result.sharedCount > 0
+          ? `Sent to ${result.sharedCount}; ${result.failedCount} failed`
+          : "Could not send this post. Try again.",
+      );
+    } catch (error) {
+      setShareFeedback(
+        error instanceof Error ? error.message : "Unable to share post",
+      );
+    }
+  };
+
   const handlePostActionPress = (action: FeedPostAction) => {
+    if (action === "share") {
+      onMoreAction?.(post.id, action);
+      handleClosePostActions();
+      setTimeout(handleOpenShareSheet, 210);
+      return;
+    }
+
     onMoreAction?.(post.id, action);
     handleClosePostActions();
   };
@@ -635,6 +799,7 @@ export default function FeedCard({
         <View className="flex-row items-center">
           <TouchableOpacity
             activeOpacity={0.75}
+            onPress={handleOpenShareSheet}
             className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-elevated"
           >
             <Ionicons
@@ -779,6 +944,272 @@ export default function FeedCard({
                 </TouchableOpacity>
               ))}
             </View>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={shareSheetVisible}
+        transparent
+        animationType="none"
+        onRequestClose={handleCloseShareSheet}
+      >
+        <View className="flex-1 justify-end">
+          <Animated.View
+            pointerEvents="none"
+            className="absolute inset-0 bg-black"
+            style={{ opacity: shareSheetOpacity }}
+          />
+
+          <Pressable
+            className="absolute inset-0"
+            onPress={handleCloseShareSheet}
+          />
+
+          <Animated.View
+            className="rounded-t-[32px] border border-border bg-bg-card px-4 pb-8 pt-3"
+            style={{ transform: [{ translateY: shareSheetTranslateY }] }}
+          >
+            <View className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border" />
+
+            <View className="mb-5 flex-row items-center">
+              <View className="mr-3 h-14 w-14 overflow-hidden rounded-[18px] border border-border bg-bg-elevated">
+                {activeMediaUrl ? (
+                  <Image
+                    source={{ uri: activeMediaUrl }}
+                    className="h-full w-full"
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View className="h-full w-full items-center justify-center">
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={22}
+                      color={Colors.textSecondary}
+                    />
+                  </View>
+                )}
+              </View>
+
+              <View className="min-w-0 flex-1">
+                <Text
+                  className="text-base font-extrabold text-text-primary"
+                  numberOfLines={1}
+                >
+                  Share post
+                </Text>
+                <Text
+                  className="mt-0.5 text-xs font-medium text-text-secondary"
+                  numberOfLines={1}
+                >
+                  {shareTitle}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.76}
+                onPress={handleCloseShareSheet}
+                className="h-10 w-10 items-center justify-center rounded-full bg-bg-elevated"
+              >
+                <Ionicons name="close" size={20} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View className="mb-4 h-12 flex-row items-center rounded-2xl border border-border bg-bg-input px-3.5">
+              <Ionicons name="search" size={18} color={Colors.textMuted} />
+              <TextInput
+                value={shareSearch}
+                onChangeText={setShareSearch}
+                placeholder="Search chats"
+                placeholderTextColor={Colors.textMuted}
+                className="ml-2 min-w-0 flex-1 text-sm font-semibold text-text-primary"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {shareSearch.length > 0 ? (
+                <TouchableOpacity
+                  onPress={() => setShareSearch("")}
+                  className="h-8 w-8 items-center justify-center rounded-full"
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={18}
+                    color={Colors.textMuted}
+                  />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <View className="mb-3 flex-row items-center justify-between">
+              <Text className="text-sm font-extrabold text-text-primary">
+                {normalizedShareSearch ? "Search results" : "Recent chats"}
+              </Text>
+              {selectedShareChatIds.length > 0 ? (
+                <Text className="text-xs font-bold text-primary">
+                  {selectedShareChatIds.length} selected
+                </Text>
+              ) : null}
+            </View>
+
+            {shareConversationsLoading ? (
+              <View className="mb-5 h-[86px] items-center justify-center">
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : shareConversationsError ? (
+              <TouchableOpacity
+                activeOpacity={0.78}
+                onPress={() => refetchShareConversations()}
+                className="mb-5 h-[86px] items-center justify-center rounded-2xl border border-border bg-bg-elevated px-4"
+              >
+                <Ionicons
+                  name="refresh-outline"
+                  size={20}
+                  color={Colors.textSecondary}
+                />
+                <Text className="mt-1 text-xs font-bold text-text-secondary">
+                  Could not load chats. Tap to retry.
+                </Text>
+              </TouchableOpacity>
+            ) : visibleShareRecipients.length === 0 ? (
+              <View className="mb-5 h-[86px] items-center justify-center rounded-2xl border border-border bg-bg-elevated px-4">
+                <Text className="text-sm font-bold text-text-primary">
+                  {normalizedShareSearch ? "No chats found" : "No active chats yet"}
+                </Text>
+                <Text className="mt-1 text-center text-xs font-medium text-text-secondary">
+                  {normalizedShareSearch
+                    ? "Try a different name"
+                    : "Start a conversation to share posts here"}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="-mx-4 mb-5"
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
+              >
+                {visibleShareRecipients.map((recipient) => {
+                  const isSelected = selectedShareChatIds.includes(
+                    recipient.chatId,
+                  );
+
+                  return (
+                    <TouchableOpacity
+                      key={recipient.chatId}
+                      activeOpacity={0.8}
+                      onPress={() => handleRecipientPress(recipient.chatId)}
+                      className="w-[68px] items-center"
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: isSelected }}
+                      accessibilityLabel={`Share with ${recipient.name}`}
+                    >
+                      <View
+                        className={`h-[58px] w-[58px] items-center justify-center rounded-full border-2 p-0.5 ${
+                          isSelected ? "border-primary" : "border-border"
+                        }`}
+                      >
+                        {recipient.avatarUrl ? (
+                          <Image
+                            source={{ uri: recipient.avatarUrl }}
+                            className="h-full w-full rounded-full bg-bg-elevated"
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View className="h-full w-full items-center justify-center rounded-full bg-bg-elevated">
+                            <Ionicons
+                              name="person"
+                              size={21}
+                              color={Colors.textSecondary}
+                            />
+                          </View>
+                        )}
+
+                        {isSelected ? (
+                          <View className="absolute -bottom-0.5 -right-0.5 h-5 w-5 items-center justify-center rounded-full border-2 border-bg-card bg-primary">
+                            <Ionicons
+                              name="checkmark"
+                              size={11}
+                              color={Colors.textInverse}
+                            />
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <Text
+                        className={`mt-2 w-full text-center text-xs ${
+                          isSelected
+                            ? "font-extrabold text-text-primary"
+                            : "font-semibold text-text-secondary"
+                        }`}
+                        numberOfLines={1}
+                      >
+                        {recipient.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            {shareFeedback ? (
+              <View className="mb-4 flex-row items-center rounded-xl bg-bg-elevated px-3 py-2.5">
+                <Ionicons
+                  name={
+                    shareFeedback.startsWith("Post sent")
+                      ? "checkmark-circle"
+                      : "alert-circle-outline"
+                  }
+                  size={17}
+                  color={
+                    shareFeedback.startsWith("Post sent")
+                      ? Colors.success
+                      : Colors.error
+                  }
+                />
+                <Text className="ml-2 min-w-0 flex-1 text-xs font-bold text-text-secondary">
+                  {shareFeedback}
+                </Text>
+              </View>
+            ) : null}
+            <TouchableOpacity
+              activeOpacity={0.82}
+              onPress={handleSendToRecipients}
+              disabled={sharePostMutation.isPending}
+              className={`h-12 flex-row items-center justify-center rounded-full px-5 ${
+                sharePostMutation.isPending ? "bg-bg-elevated" : "bg-primary"
+              }`}
+            >
+              {sharePostMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.textSecondary} />
+              ) : (
+                <Ionicons
+                  name={
+                    selectedShareChatIds.length > 0
+                      ? "paper-plane"
+                      : "share-social-outline"
+                  }
+                  size={18}
+                  color={Colors.textInverse}
+                />
+              )}
+              <Text
+                className={`ml-2 text-sm font-extrabold ${
+                  sharePostMutation.isPending
+                    ? "text-text-secondary"
+                    : "text-text-inverse"
+                }`}
+              >
+                {sharePostMutation.isPending
+                  ? "Sending..."
+                  : selectedShareChatIds.length === 1
+                    ? `Send to ${selectedShareRecipients[0]?.name}`
+                    : selectedShareChatIds.length > 1
+                      ? `Send to ${selectedShareChatIds.length} chats`
+                      : "Share another way"}
+              </Text>
+            </TouchableOpacity>
           </Animated.View>
         </View>
       </Modal>

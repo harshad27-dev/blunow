@@ -59,6 +59,7 @@ export type MatchRecommendation = {
   distance: string;
   occupation: string;
   online: boolean;
+  lastActiveAt?: string | null;
   verified: boolean;
   quote: string;
   imageUrl: string;
@@ -94,6 +95,7 @@ export type DiscoverProfile = {
   quote: string;
   interests: string[];
   online: boolean;
+  lastActiveAt?: string | null;
   verified: boolean;
   matchScore: number;
   isConnected?: boolean;

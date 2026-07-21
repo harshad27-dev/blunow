@@ -77,6 +77,29 @@ export class ChatController {
     }
   };
 
+  sharePost = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const { postId, chatIds } = req.body;
+      if (typeof postId !== "string" || !Array.isArray(chatIds)) {
+        res.status(400).json({
+          success: false,
+          message: "postId and chatIds are required",
+        });
+        return;
+      }
+
+      const result = await this.messageService.sharePost(
+        postId,
+        chatIds.filter((chatId): chatId is string => typeof chatId === "string"),
+        req.user!.id,
+      );
+      res.status(201).json({ success: true, data: result });
+    } catch (error: any) {
+      res
+        .status(error.statusCode ?? 400)
+        .json({ success: false, message: error.message });
+    }
+  };
   deleteChat = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       await this.chatService.deleteChat(req.params.chatId, req.user!.id);

@@ -362,6 +362,10 @@ model Message {
   storyPreviewMediaUrl String?
   storyPreviewCaption  String?
   storyAuthorId        String?
+  postId               String?
+  postPreviewMediaUrl  String?
+  postPreviewCaption   String?
+  postAuthorName       String?
   readReceipts         MessageReadReceipt[]
   chat                 Chat                 @relation(fields: [chatId], references: [id], onDelete: Cascade)
   sender               User                 @relation(fields: [senderId], references: [id], onDelete: Cascade)
@@ -369,6 +373,7 @@ model Message {
   replies              Message[]            @relation("MessageReplies")
 
   @@index([replyToMessageId])
+  @@index([postId])
   @@map("messages")
 }
 
@@ -599,6 +604,7 @@ enum MessageType {
   VIDEO
   AUDIO
   GIF
+  POST
 }
 
 enum RoomType {

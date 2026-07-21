@@ -1,4 +1,5 @@
 import { prisma } from '../../../prisma/prisma';
+import { RealtimeRepository } from '../../chat/models/realtime.repository';
 
 export type MatchRecommendationFilters = {
   minAge?: number;
@@ -12,6 +13,8 @@ export type MatchRecommendationFilters = {
 };
 
 export class MatchRepository {
+  private realtimeRepository = new RealtimeRepository();
+
   async createRequest(data: { senderId: string; receiverId: string; message?: string }) {
     return prisma.matchRequest.create({
       data,
@@ -51,6 +54,25 @@ export class MatchRepository {
 
   async updateRequestStatus(id: string, status: any) {
     return prisma.matchRequest.update({ where: { id }, data: { status } });
+  }
+
+  async cancelPendingRequest(senderId: string, receiverId: string) {
+    const request = await prisma.matchRequest.findUnique({
+      where: { senderId_receiverId: { senderId, receiverId } },
+      include: { chat: true },
+    });
+
+    if (!request || request.status !== 'PENDING') return null;
+
+    await prisma.$transaction([
+      prisma.chat.updateMany({
+        where: { requestId: request.id, status: 'REQUESTED' },
+        data: { status: 'REJECTED', deletedBy1: true, deletedBy2: true },
+      }),
+      prisma.matchRequest.delete({ where: { id: request.id } }),
+    ]);
+
+    return request;
   }
 
   async createMatch(user1Id: string, user2Id: string) {
@@ -203,6 +225,13 @@ export class MatchRepository {
     const currentInterests = currentUser?.profile?.interests ?? [];
     const incomingSenderIds = new Set(incomingRequests.map((request) => request.senderId));
 
+    const presenceStatuses = await this.realtimeRepository.getBatchOnlineStatus(
+      users.map((user) => user.id),
+    );
+    const presenceByUserId = new Map(
+      presenceStatuses.map((status) => [status.userId, status]),
+    );
+
     const recommendations = users.map((user) => {
       const interests = user.profile?.interests ?? [];
       const sharedInterestCount = interests.filter((interest) =>
@@ -215,7 +244,9 @@ export class MatchRepository {
         user.profile?.latitude,
         user.profile?.longitude,
       );
-      const online = user.updatedAt >= new Date(Date.now() - 15 * 60 * 1000);
+      const presence = presenceByUserId.get(user.id);
+      const online = Boolean(presence?.isOnline);
+      const lastActiveAt = presence?.lastSeenAt ?? user.updatedAt.toISOString();
 
       const profileWithPhotos = user.profile as (typeof user.profile & { profilePhotoUrls?: string[] }) | null;
       const profilePhotoUrls = profileWithPhotos?.profilePhotoUrls ?? [];
@@ -232,6 +263,7 @@ export class MatchRepository {
             : 'Nearby',
         occupation: user.profile?.relationship ?? 'Blunow member',
         online,
+        lastActiveAt,
         verified: user.verification?.status === 'VERIFIED' || user.isVerified,
         quote: user.profile?.bio ?? 'No bio provided yet.',
         imageUrl: profilePhotoUrls[0] || user.profile?.avatarUrl || '',
@@ -268,6 +300,12 @@ export class MatchRepository {
       where: { userId_dismissedUserId: { userId, dismissedUserId } },
       update: {},
       create: { userId, dismissedUserId },
+    });
+  }
+
+  async restoreDismissedRecommendation(userId: string, dismissedUserId: string) {
+    return prisma.matchDismissal.deleteMany({
+      where: { userId, dismissedUserId },
     });
   }
 

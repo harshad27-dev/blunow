@@ -26,6 +26,14 @@ export class MatchService {
     await this.matchRepository.dismissRecommendation(userId, dismissedUserId);
   }
 
+  async restoreDismissedRecommendation(userId: string, dismissedUserId: string) {
+    if (userId === dismissedUserId) {
+      throw new AppError('Cannot restore your own profile', 400);
+    }
+
+    await this.matchRepository.restoreDismissedRecommendation(userId, dismissedUserId);
+  }
+
   async unmatch(matchId: string, userId: string) {
     const match = await this.matchRepository.findMatchById(matchId);
     if (!match) throw new AppError('Match not found', 404);

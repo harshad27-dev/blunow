@@ -1,8 +1,10 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   Image,
+  PanResponder,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,7 +17,10 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -24,11 +29,12 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useColorScheme } from "nativewind";
 
-import { Toast } from "@/components/common/Toast";
 import { Colors } from "@/constants/colors";
+import { FontFamily, FontSize } from "@/constants/typography";
 import { useUpdateProfileMutation } from "@/hooks/queries";
 import { postService } from "@/services/post.service";
 import { useAuthStore } from "@/store/authStore";
+import { showToast } from "@/utils/toast";
 
 const GENDER_OPTIONS = ["MALE", "FEMALE", "NON_BINARY", "OTHER"];
 const INTERESTED_IN_OPTIONS = ["Men", "Women", "Non-binary", "Everyone"];
@@ -72,8 +78,9 @@ const ZODIAC_OPTIONS = [
   "Aquarius",
   "Pisces",
 ];
-const MIN_AGE_OPTIONS = ["18", "21", "24", "27", "30", "35"];
-const MAX_AGE_OPTIONS = ["25", "30", "35", "40", "50", "60"];
+const AGE_RANGE_MIN = 18;
+const AGE_RANGE_MAX = 60;
+const AGE_MIN_GAP = 1;
 const DISTANCE_OPTIONS = ["10", "25", "50", "100", "250", "500"];
 
 type SheetField =
@@ -84,8 +91,7 @@ type SheetField =
   | "interests"
   | "lookingFor"
   | "relationship"
-  | "minAge"
-  | "maxAge"
+  | "ageRange"
   | "maxDistance"
   | "zodiac";
 
@@ -148,11 +154,7 @@ export default function EditProfileScreen() {
     String(profile?.maxDistance || 50),
   );
   const [zodiac, setZodiac] = useState(profile?.zodiac || "Cancer");
-  const [toast, setToast] = useState<{
-    visible: boolean;
-    message: string;
-    type: "success" | "error" | "info";
-  }>({ visible: false, message: "", type: "info" });
+  const isSaving = isUploading || updateProfileMutation.isPending;
 
   const completion = useMemo(
     () =>
@@ -223,16 +225,10 @@ export default function EditProfileScreen() {
         icon: "moon-outline",
       },
       {
-        key: "minAge",
-        title: "Minimum Age",
-        value: minAge,
-        icon: "remove-circle-outline",
-      },
-      {
-        key: "maxAge",
-        title: "Maximum Age",
-        value: maxAge,
-        icon: "add-circle-outline",
+        key: "ageRange",
+        title: "Age range",
+        value: `${minAge} - ${maxAge}`,
+        icon: "options-outline",
       },
       {
         key: "maxDistance",
@@ -265,14 +261,12 @@ export default function EditProfileScreen() {
   };
 
   const handlePickPhoto = async () => {
-    setIsPhotoActionsVisible(false);
     await pickPhoto();
   };
 
   const handleRemovePhoto = () => {
     setAvatarUri(null);
     setAvatarMimeType(null);
-    setIsPhotoActionsVisible(false);
   };
 
   const saveProfile = async () => {
@@ -318,19 +312,11 @@ export default function EditProfileScreen() {
         avatarUrl: finalAvatarUrl ?? null,
       });
       await refreshUser();
-
-      setToast({
-        visible: true,
-        message: "Profile updated successfully",
-        type: "success",
-      });
+      showToast("Profile updated successfully", "Profile saved");
     } catch (error: unknown) {
-      setToast({
-        visible: true,
-        message:
-          error instanceof Error ? error.message : "Failed to update profile",
-        type: "error",
-      });
+      const message =
+        error instanceof Error ? error.message : "Failed to update profile";
+      showToast(message, "Profile not saved");
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -343,45 +329,65 @@ export default function EditProfileScreen() {
       style={styles.screen}
       edges={["top", "left", "right"]}
     >
-      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} backgroundColor={Colors.bg} />
-      {/* Header Banner */}
+      <StatusBar
+        style={colorScheme === "dark" ? "light" : "dark"}
+        backgroundColor={Colors.bg}
+      />
+
+      {/* ── Simplified header ── */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.headerIcon}
+          style={styles.headerBackBtn}
           onPress={() => router.back()}
           activeOpacity={0.78}
         >
           <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>Edit profile</Text>
-        </View>
-        <View style={styles.headerProgressPill}>
-          <Text style={styles.headerProgressText}>{completion}%</Text>
-        </View>
+        <Text style={styles.headerTitle}>Edit profile</Text>
+        <TouchableOpacity
+          style={[styles.headerSaveBtn, isSaving && styles.saveBtnDisabled]}
+          onPress={saveProfile}
+          disabled={isSaving}
+          activeOpacity={0.82}
+          accessibilityRole="button"
+          accessibilityLabel="Save profile changes"
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color={Colors.textInverse} />
+          ) : (
+            <Ionicons name="checkmark" size={20} color={Colors.textInverse} />
+          )}
+        </TouchableOpacity>
       </View>
+
       <ScrollView
         className="flex-1"
         contentContainerStyle={[
-          styles.content,
+          styles.scrollContent,
           { paddingBottom: Math.max(insets.bottom + 104, 132) },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile photo */}
-        <LinearGradient colors={Colors.gradientCard} style={styles.mediaPanel}>
+        {/* ── Centered hero card ── */}
+        <LinearGradient colors={Colors.gradientCard} style={styles.heroCard}>
           <View style={styles.heroEyebrow}>
-            <Ionicons name="sparkles" size={14} color={Colors.textSecondary} />
+            <Ionicons name="sparkles" size={13} color={Colors.textSecondary} />
             <Text style={styles.heroEyebrowText}>YOUR FIRST IMPRESSION</Text>
           </View>
-          <View style={styles.profileStrip}>
-            {/* Double Border Avatar ring */}
-            <TouchableOpacity
-              style={styles.avatarButton}
-              onPress={openPhotoActions}
-              activeOpacity={0.88}
+
+          {/* Centered avatar with gradient ring */}
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            onPress={openPhotoActions}
+            activeOpacity={0.88}
+          >
+            <LinearGradient
+              colors={Colors.gradientPrimary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarRing}
             >
-              <View style={styles.avatarInnerBorder}>
+              <View style={styles.avatarInner}>
                 {avatarUri ? (
                   <Image
                     source={{ uri: avatarUri }}
@@ -399,29 +405,57 @@ export default function EditProfileScreen() {
                   </LinearGradient>
                 )}
               </View>
-              <View style={styles.avatarEditBadge}>
-                <Ionicons name="camera" size={15} color={Colors.textInverse} />
-              </View>
-            </TouchableOpacity>
+            </LinearGradient>
+            <View style={styles.avatarBadge}>
+              <Ionicons name="camera" size={14} color={Colors.textInverse} />
+            </View>
+          </TouchableOpacity>
 
-            <View style={styles.profileCopy}>
-              <Text style={styles.profileName} numberOfLines={1}>
-                {username || "Your profile"}
-              </Text>
-              <Text style={styles.profileMeta} numberOfLines={2}>
-                {bio ||
-                  "Add a short bio so people know what kind of connection you are here for."}
+          <Text style={styles.heroName} numberOfLines={1}>
+            {username || "Your profile"}
+          </Text>
+          <Text style={styles.heroBio} numberOfLines={2}>
+            {bio ||
+              "Add a short bio so people know what kind of connection you're here for."}
+          </Text>
+
+          {/* Integrated completion bar */}
+          <View style={styles.heroCompletion}>
+            <View style={styles.heroCompletionRow}>
+              <View style={styles.heroCompletionLabelWrap}>
+                <Ionicons
+                  name="sparkles"
+                  size={12}
+                  color={Colors.primaryLight}
+                />
+                <Text style={styles.heroCompletionLabel}>
+                  {completion}% complete
+                </Text>
+              </View>
+              <Text style={styles.heroCompletionHint} numberOfLines={1}>
+                {getCompletionHint(completion)}
               </Text>
             </View>
+            <View style={styles.heroCompletionTrack}>
+              <LinearGradient
+                colors={Colors.gradientPrimary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[
+                  styles.heroCompletionFill,
+                  { width: `${Math.max(completion, 4)}%` },
+                ]}
+              />
+            </View>
+            {isUploading ? (
+              <Text style={styles.heroUploadText}>
+                Uploading… {uploadProgress}%
+              </Text>
+            ) : null}
           </View>
         </LinearGradient>
-        {/* Profile Completion Indicator */}
-        <CompletionPanel
-          completion={completion}
-          isUploading={isUploading}
-          uploadProgress={uploadProgress}
-        />
-        {/* Form fields sections */}
+
+        {/* ── Profile details section ── */}
         <SectionTitle title="Profile details" />
         <View style={styles.sectionCard}>
           {profileItems.map((item, index) => (
@@ -433,6 +467,8 @@ export default function EditProfileScreen() {
             />
           ))}
         </View>
+
+        {/* ── Dating preferences section ── */}
         <SectionTitle title="Dating preferences" />
         <View style={styles.sectionCard}>
           {datingItems.map((item, index) => (
@@ -445,6 +481,8 @@ export default function EditProfileScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* ── Sticky save bar ── */}
       <View
         style={[
           styles.bottomBar,
@@ -452,22 +490,32 @@ export default function EditProfileScreen() {
         ]}
       >
         <TouchableOpacity
-          style={[
-            styles.saveButton,
-            (isUploading || updateProfileMutation.isPending) &&
-              styles.saveButtonDisabled,
-          ]}
+          style={[styles.saveButton, isSaving && styles.saveBtnDisabled]}
           onPress={saveProfile}
-          disabled={isUploading || updateProfileMutation.isPending}
+          disabled={isSaving}
           activeOpacity={0.84}
           accessibilityRole="button"
           accessibilityLabel="Save profile changes"
         >
-          {isUploading || updateProfileMutation.isPending ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
-          ) : (
-            <Text style={styles.saveButtonText}>Save changes</Text>
-          )}
+          <LinearGradient
+            colors={Colors.gradientPrimary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.saveButtonGradient}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={Colors.textInverse} />
+            ) : (
+              <>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={19}
+                  color={Colors.textInverse}
+                />
+                <Text style={styles.saveButtonText}>Save changes</Text>
+              </>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -478,7 +526,7 @@ export default function EditProfileScreen() {
         onRemove={handleRemovePhoto}
         onClose={() => setIsPhotoActionsVisible(false)}
       />
-      {/* Premium Custom Animated Bottom Sheet */}
+
       <EditDrawer
         activeSheet={activeSheet}
         onClose={() => setActiveSheet(null)}
@@ -509,52 +557,16 @@ export default function EditProfileScreen() {
           setZodiac,
         }}
       />
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onHide={() => setToast({ ...toast, visible: false })}
-      />
     </SafeAreaView>
   );
 }
 
-// Sub-components
+// ─────────────────────────────────────────────
+//  Sub-components
+// ─────────────────────────────────────────────
 
 const SectionTitle = ({ title }: { title: string }) => (
   <Text style={styles.sectionTitle}>{title}</Text>
-);
-
-const CompletionPanel = ({
-  completion,
-  isUploading,
-  uploadProgress,
-}: {
-  completion: number;
-  isUploading: boolean;
-  uploadProgress: number;
-}) => (
-  <View style={styles.completionCard}>
-    <View style={styles.completionIcon}>
-      <Ionicons name="sparkles" size={24} color={Colors.primaryLight} />
-    </View>
-    <View style={styles.completionCopy}>
-      <View style={styles.completionRow}>
-        <Text style={styles.completionTitle}>{completion}% completed</Text>
-        <Text style={styles.completionHint} numberOfLines={1}>
-          {getCompletionHint(completion)}
-        </Text>
-      </View>
-      <View style={styles.completionTrack}>
-        <View style={[styles.completionFill, { width: `${completion}%` }]} />
-      </View>
-      {isUploading ? (
-        <Text style={styles.uploadText}>
-          Uploading photos... {uploadProgress}%
-        </Text>
-      ) : null}
-    </View>
-  </View>
 );
 
 const SettingRow = ({
@@ -567,26 +579,30 @@ const SettingRow = ({
   onPress: () => void;
 }) => (
   <TouchableOpacity
-    style={[styles.settingRow, !isLast && styles.rowBorder]}
+    style={styles.settingRow}
     onPress={onPress}
-    activeOpacity={0.78}
+    activeOpacity={0.72}
     accessibilityRole="button"
     accessibilityLabel={`Edit ${item.title}`}
   >
     <View style={styles.rowIconBox}>
-      <Ionicons name={item.icon} size={18} color={Colors.textSecondary} />
+      <Ionicons name={item.icon} size={19} color={Colors.primary} />
     </View>
-    <View style={styles.rowCopy}>
-      <Text style={styles.rowTitle}>{item.title}</Text>
-      <Text style={styles.rowValue} numberOfLines={1}>
-        {item.value}
-      </Text>
-    </View>
-    <View style={styles.rowChevron}>
+    <View style={[styles.rowContent, !isLast && styles.rowDivider]}>
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowTitle}>{item.title}</Text>
+        <Text style={styles.rowValue} numberOfLines={1}>
+          {item.value}
+        </Text>
+      </View>
       <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
     </View>
   </TouchableOpacity>
 );
+
+// ─────────────────────────────────────────────
+//  Avatar Photo Sheet
+// ─────────────────────────────────────────────
 
 const AvatarPhotoSheet = ({
   visible,
@@ -602,33 +618,123 @@ const AvatarPhotoSheet = ({
   onClose: () => void;
 }) => {
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const closedY = height * 0.46;
+  const [mounted, setMounted] = useState(visible);
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = useRef(new Animated.Value(closedY)).current;
+  const sheetScale = sheetTranslateY.interpolate({
+    inputRange: [0, closedY],
+    outputRange: [1, 0.97],
+    extrapolate: "clamp",
+  });
+
+  React.useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 240,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(sheetTranslateY, {
+          toValue: 0,
+          damping: 22,
+          stiffness: 200,
+          mass: 0.85,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else if (mounted) {
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheetTranslateY, {
+          toValue: closedY,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => setMounted(false));
+    }
+  }, [backdropOpacity, closedY, mounted, sheetTranslateY, visible]);
+
+  const dismissWith = (afterClose?: () => void) => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: closedY,
+        duration: 220,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setMounted(false);
+      onClose();
+      afterClose?.();
+    });
+  };
+
+  if (!mounted) return null;
 
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
-      animationType="slide"
+      animationType="none"
       statusBarTranslucent
       accessibilityViewIsModal
-      onRequestClose={onClose}
+      onRequestClose={() => dismissWith()}
     >
-      <View style={styles.photoSheetBackdrop}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close photo options"
-          style={StyleSheet.absoluteFill}
-          onPress={onClose}
-        />
-        <View
+      <View style={styles.sheetBackdrop}>
+        <Animated.View
+          style={[StyleSheet.absoluteFillObject, { opacity: backdropOpacity }]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close photo options"
+            style={styles.sheetDimLayer}
+            onPress={() => dismissWith()}
+          >
+            <LinearGradient
+              colors={["rgba(0,0,0,0.08)", "rgba(0,0,0,0.72)"]}
+              style={StyleSheet.absoluteFill}
+            />
+          </Pressable>
+        </Animated.View>
+        <Animated.View
           style={[
             styles.photoSheet,
             { paddingBottom: Math.max(insets.bottom + 16, 28) },
+            {
+              transform: [
+                { translateY: sheetTranslateY },
+                { scale: sheetScale },
+              ],
+            },
           ]}
         >
-          <View style={styles.drawerHandle} />
+          <View style={styles.sheetHandle} />
+
+          {/* Header with icon + copy */}
           <View style={styles.photoSheetHeader}>
-            <View style={styles.photoSheetIcon}>
-              <Ionicons name="camera-outline" size={22} color={Colors.primary} />
+            <View style={styles.photoSheetIconWrap}>
+              <Ionicons
+                name="camera-outline"
+                size={22}
+                color={Colors.primary}
+              />
             </View>
             <View style={styles.photoSheetCopy}>
               <Text style={styles.photoSheetTitle}>Avatar photo</Text>
@@ -642,12 +748,23 @@ const AvatarPhotoSheet = ({
             style={styles.photoSheetAction}
             activeOpacity={0.82}
             accessibilityRole="button"
-            onPress={onAddOrChange}
+            onPress={() => dismissWith(onAddOrChange)}
           >
-            <Ionicons name="image-outline" size={20} color={Colors.textPrimary} />
+            <View style={styles.photoSheetActionIcon}>
+              <Ionicons
+                name="image-outline"
+                size={18}
+                color={Colors.textPrimary}
+              />
+            </View>
             <Text style={styles.photoSheetActionText}>
               {hasPhoto ? "Change photo" : "Add photo"}
             </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={Colors.textMuted}
+            />
           </TouchableOpacity>
 
           {hasPhoto ? (
@@ -655,10 +772,22 @@ const AvatarPhotoSheet = ({
               style={[styles.photoSheetAction, styles.photoSheetDangerAction]}
               activeOpacity={0.82}
               accessibilityRole="button"
-              onPress={onRemove}
+              onPress={() => dismissWith(onRemove)}
             >
-              <Ionicons name="trash-outline" size={20} color={Colors.error} />
-              <Text style={[styles.photoSheetActionText, styles.photoSheetDangerText]}>
+              <View
+                style={[
+                  styles.photoSheetActionIcon,
+                  styles.photoSheetDangerIcon,
+                ]}
+              >
+                <Ionicons name="trash-outline" size={18} color={Colors.error} />
+              </View>
+              <Text
+                style={[
+                  styles.photoSheetActionText,
+                  styles.photoSheetDangerText,
+                ]}
+              >
                 Remove photo
               </Text>
             </TouchableOpacity>
@@ -668,17 +797,19 @@ const AvatarPhotoSheet = ({
             style={styles.photoSheetCancel}
             activeOpacity={0.82}
             accessibilityRole="button"
-            onPress={onClose}
+            onPress={() => dismissWith()}
           >
             <Text style={styles.photoSheetCancelText}>Cancel</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
 };
 
-// Animated edit sheet drawer
+// ─────────────────────────────────────────────
+//  Animated edit-field drawer
+// ─────────────────────────────────────────────
 
 const EditDrawer = ({
   activeSheet,
@@ -721,6 +852,11 @@ const EditDrawer = ({
   const closedY = height * 0.82;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(closedY)).current;
+  const sheetScale = sheetTranslateY.interpolate({
+    inputRange: [0, closedY],
+    outputRange: [1, 0.965],
+    extrapolate: "clamp",
+  });
 
   // Sync animation triggers with activeSheet state changes
   React.useEffect(() => {
@@ -729,13 +865,15 @@ const EditDrawer = ({
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 1,
-          duration: 260,
+          duration: 240,
+          easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.spring(sheetTranslateY, {
           toValue: 0,
-          tension: 65,
-          friction: 10,
+          damping: 22,
+          stiffness: 200,
+          mass: 0.85,
           useNativeDriver: true,
         }),
       ]).start();
@@ -743,12 +881,14 @@ const EditDrawer = ({
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 0,
-          duration: 220,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(sheetTranslateY, {
           toValue: closedY,
-          duration: 220,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -763,12 +903,14 @@ const EditDrawer = ({
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         toValue: 0,
-        duration: 220,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(sheetTranslateY, {
         toValue: closedY,
-        duration: 220,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -792,34 +934,47 @@ const EditDrawer = ({
         <Animated.View
           style={[StyleSheet.absoluteFillObject, { opacity: backdropOpacity }]}
         >
-          <Pressable style={styles.drawerBackdrop} onPress={handleDismiss} />
+          <Pressable style={styles.drawerBackdrop} onPress={handleDismiss}>
+            <LinearGradient
+              colors={["rgba(0,0,0,0.08)", "rgba(0,0,0,0.72)"]}
+              style={StyleSheet.absoluteFill}
+            />
+          </Pressable>
         </Animated.View>
 
-        {/* Animated content sheet drawer */}
+        {/* Animated content drawer */}
         <Animated.View
           style={[
             styles.drawer,
             {
               maxHeight: height * 0.84,
               paddingBottom: Math.max(insets.bottom, 8),
-              transform: [{ translateY: sheetTranslateY }],
+              transform: [
+                { translateY: sheetTranslateY },
+                { scale: sheetScale },
+              ],
             },
           ]}
         >
-          <View style={styles.drawerHandle} />
+          <View style={styles.sheetHandle} />
 
           <View style={styles.drawerHeader}>
             <TouchableOpacity
-              style={styles.iconButton}
+              style={styles.drawerCloseBtn}
               onPress={handleDismiss}
               activeOpacity={0.82}
             >
               <Ionicons name="close" size={20} color={Colors.textPrimary} />
             </TouchableOpacity>
 
-            <Text style={styles.drawerTitleText}>
-              {getSheetTitle(activeSheet)}
-            </Text>
+            <View style={styles.drawerTitleWrap}>
+              <Text style={styles.drawerTitleText}>
+                {getSheetTitle(activeSheet)}
+              </Text>
+              <Text style={styles.drawerSubtitle}>
+                {getSheetSubtitle(activeSheet)}
+              </Text>
+            </View>
 
             <TouchableOpacity
               style={styles.doneButton}
@@ -890,18 +1045,12 @@ const EditDrawer = ({
                 onSelect={setters.setRelationship}
               />
             )}
-            {activeSheet === "minAge" && (
-              <ListSelector
-                options={MIN_AGE_OPTIONS}
-                selected={values.minAge}
-                onSelect={setters.setMinAge}
-              />
-            )}
-            {activeSheet === "maxAge" && (
-              <ListSelector
-                options={MAX_AGE_OPTIONS}
-                selected={values.maxAge}
-                onSelect={setters.setMaxAge}
+            {activeSheet === "ageRange" && (
+              <AgeRangeSlider
+                minAge={values.minAge}
+                maxAge={values.maxAge}
+                onMinAgeChange={setters.setMinAge}
+                onMaxAgeChange={setters.setMaxAge}
               />
             )}
             {activeSheet === "maxDistance" && (
@@ -926,6 +1075,10 @@ const EditDrawer = ({
   );
 };
 
+// ─────────────────────────────────────────────
+//  Form widgets
+// ─────────────────────────────────────────────
+
 const ProfileInput = ({
   value,
   onChangeText,
@@ -946,10 +1099,7 @@ const ProfileInput = ({
     placeholderTextColor={Colors.textMuted}
     multiline={multiline}
     autoCapitalize={autoCapitalize}
-    className={`rounded-[22px] border px-5 py-4 text-base font-semibold ${
-      multiline ? "min-h-[140px]" : "h-[58px]"
-    }`}
-    style={styles.profileInput}
+    style={[styles.profileInput, multiline && styles.profileInputMultiline]}
     textAlignVertical={multiline ? "top" : "center"}
   />
 );
@@ -969,10 +1119,18 @@ const ChipGrid = ({
       return (
         <TouchableOpacity
           key={option}
-          style={[styles.chipButton, active && styles.chipButtonActive]}
+          style={[styles.chip, active && styles.chipActive]}
           onPress={() => onToggle(option)}
           activeOpacity={0.78}
         >
+          {active && (
+            <Ionicons
+              name="checkmark-circle"
+              size={15}
+              color={Colors.textInverse}
+              style={styles.chipCheckIcon}
+            />
+          )}
           <Text style={[styles.chipText, active && styles.chipTextActive]}>
             {option}
           </Text>
@@ -981,6 +1139,160 @@ const ChipGrid = ({
     })}
   </View>
 );
+
+const clampAge = (value: number) =>
+  Math.min(AGE_RANGE_MAX, Math.max(AGE_RANGE_MIN, value));
+
+const ageToPosition = (age: number, width: number) =>
+  ((clampAge(age) - AGE_RANGE_MIN) / (AGE_RANGE_MAX - AGE_RANGE_MIN)) * width;
+
+const positionToAge = (position: number, width: number) => {
+  if (!width) return AGE_RANGE_MIN;
+  const ratio = Math.min(1, Math.max(0, position / width));
+  return Math.round(AGE_RANGE_MIN + ratio * (AGE_RANGE_MAX - AGE_RANGE_MIN));
+};
+
+const AgeRangeSlider = ({
+  minAge,
+  maxAge,
+  onMinAgeChange,
+  onMaxAgeChange,
+}: {
+  minAge: string;
+  maxAge: string;
+  onMinAgeChange: (value: string) => void;
+  onMaxAgeChange: (value: string) => void;
+}) => {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const currentMinAge = clampAge(Number(minAge) || AGE_RANGE_MIN);
+  const currentMaxAge = clampAge(Number(maxAge) || AGE_RANGE_MAX);
+  const minStartAge = useRef(currentMinAge);
+  const maxStartAge = useRef(currentMaxAge);
+
+  const updateMinAge = useCallback(
+    (value: number) => {
+      onMinAgeChange(
+        String(Math.min(clampAge(value), currentMaxAge - AGE_MIN_GAP)),
+      );
+    },
+    [currentMaxAge, onMinAgeChange],
+  );
+
+  const updateMaxAge = useCallback(
+    (value: number) => {
+      onMaxAgeChange(
+        String(Math.max(clampAge(value), currentMinAge + AGE_MIN_GAP)),
+      );
+    },
+    [currentMinAge, onMaxAgeChange],
+  );
+
+  const minPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          minStartAge.current = currentMinAge;
+        },
+        onPanResponderMove: (_event, gesture) => {
+          if (!trackWidth) return;
+          const startX = ageToPosition(minStartAge.current, trackWidth);
+          updateMinAge(positionToAge(startX + gesture.dx, trackWidth));
+        },
+      }),
+    [currentMinAge, trackWidth, updateMinAge],
+  );
+
+  const maxPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          maxStartAge.current = currentMaxAge;
+        },
+        onPanResponderMove: (_event, gesture) => {
+          if (!trackWidth) return;
+          const startX = ageToPosition(maxStartAge.current, trackWidth);
+          updateMaxAge(positionToAge(startX + gesture.dx, trackWidth));
+        },
+      }),
+    [currentMaxAge, trackWidth, updateMaxAge],
+  );
+
+  const minPosition = ageToPosition(currentMinAge, trackWidth);
+  const maxPosition = ageToPosition(currentMaxAge, trackWidth);
+
+  return (
+    <View style={styles.ageRangeCard}>
+      <View style={styles.ageRangeHeader}>
+        <View style={styles.ageRangeValuePill}>
+          <Text style={styles.ageRangeLabel}>Min</Text>
+          <Text style={styles.ageRangeValue}>{currentMinAge}</Text>
+        </View>
+        <View style={styles.ageRangeCenterCopy}>
+          <Text style={styles.ageRangeTitle}>
+            {currentMinAge} - {currentMaxAge}
+          </Text>
+          <Text style={styles.ageRangeSubtitle}>Preferred match ages</Text>
+        </View>
+        <View style={styles.ageRangeValuePill}>
+          <Text style={styles.ageRangeLabel}>Max</Text>
+          <Text style={styles.ageRangeValue}>{currentMaxAge}</Text>
+        </View>
+      </View>
+
+      <View
+        style={styles.ageRangeTrackWrap}
+        onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
+      >
+        <View style={styles.ageRangeTrack} />
+        {trackWidth > 0 ? (
+          <>
+            <LinearGradient
+              colors={Colors.gradientPrimary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[
+                styles.ageRangeFill,
+                {
+                  left: minPosition,
+                  width: Math.max(maxPosition - minPosition, 0),
+                },
+              ]}
+            />
+            <Animated.View
+              style={[styles.ageRangeThumb, { left: minPosition - 16 }]}
+              {...minPanResponder.panHandlers}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={14}
+                color={Colors.textInverse}
+              />
+            </Animated.View>
+            <Animated.View
+              style={[styles.ageRangeThumb, { left: maxPosition - 16 }]}
+              {...maxPanResponder.panHandlers}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={Colors.textInverse}
+              />
+            </Animated.View>
+          </>
+        ) : null}
+      </View>
+
+      <View style={styles.ageRangeBoundsRow}>
+        <Text style={styles.ageRangeBoundText}>{AGE_RANGE_MIN}</Text>
+        <Text style={styles.ageRangeBoundText}>{AGE_RANGE_MAX}+</Text>
+      </View>
+    </View>
+  );
+};
 
 const ListSelector = ({
   options,
@@ -999,7 +1311,7 @@ const ListSelector = ({
       return (
         <TouchableOpacity
           key={option}
-          style={[styles.selectorButton, active && styles.selectorButtonActive]}
+          style={[styles.selectorRow, active && styles.selectorRowActive]}
           onPress={() => onSelect(option)}
           activeOpacity={0.78}
         >
@@ -1008,18 +1320,18 @@ const ListSelector = ({
           >
             {formatLabel(option)}
           </Text>
-          {active ? (
-            <Ionicons
-              name="checkmark-circle"
-              size={21}
-              color={Colors.primary}
-            />
-          ) : null}
+          <View style={[styles.radioOuter, active && styles.radioOuterActive]}>
+            {active && <View style={styles.radioInner} />}
+          </View>
         </TouchableOpacity>
       );
     })}
   </View>
 );
+
+// ─────────────────────────────────────────────
+//  Helpers (unchanged business logic)
+// ─────────────────────────────────────────────
 
 const getSheetTitle = (field: SheetField | null) => {
   switch (field) {
@@ -1037,14 +1349,39 @@ const getSheetTitle = (field: SheetField | null) => {
       return "Looking for";
     case "relationship":
       return "Relationship";
-    case "minAge":
-      return "Minimum Age";
-    case "maxAge":
-      return "Maximum Age";
+    case "ageRange":
+      return "Age range";
     case "maxDistance":
       return "Max Distance";
     case "zodiac":
       return "Zodiac";
+    default:
+      return "";
+  }
+};
+
+const getSheetSubtitle = (field: SheetField | null) => {
+  switch (field) {
+    case "username":
+      return "Choose a unique name others will see";
+    case "bio":
+      return "Tell people a bit about yourself";
+    case "gender":
+      return "How do you identify?";
+    case "interestedIn":
+      return "Who are you looking to meet?";
+    case "interests":
+      return "Pick what you're into";
+    case "lookingFor":
+      return "What brings you here?";
+    case "relationship":
+      return "What's your vibe?";
+    case "ageRange":
+      return "Drag the ends to set your preferred match ages";
+    case "maxDistance":
+      return "How far are you willing to go?";
+    case "zodiac":
+      return "What's your sign?";
     default:
       return "";
   }
@@ -1092,8 +1429,8 @@ const getProfileCompletion = ({
 
 const getCompletionHint = (completion: number) =>
   completion >= 100
-    ? "Looking sharp"
-    : "Add avatar, bio, interests, location, looking for";
+    ? "Looking sharp ✨"
+    : "Add avatar, bio, interests, location";
 
 const getInitials = (value?: string | null) => {
   const fallback = "ME";
@@ -1109,44 +1446,12 @@ const getInitials = (value?: string | null) => {
   return initials || fallback;
 };
 
-// Styles
+// ─────────────────────────────────────────────
+//  Styles
+// ─────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  headerProgressPill: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 999,
-    height: 36,
-    justifyContent: "center",
-    minWidth: 58,
-    paddingHorizontal: 12,
-  },
-  headerProgressText: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  heroEyebrow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 7,
-    paddingHorizontal: 22,
-    paddingTop: 20,
-  },
-  heroEyebrowText: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.3,
-  },
-  bottomBar: {
-    backgroundColor: Colors.bgCard,
-    borderTopColor: Colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    paddingTop: 12,
-  },
+  /* ── Screen & header ── */
   screen: {
     backgroundColor: Colors.bg,
   },
@@ -1156,244 +1461,201 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 12,
+    justifyContent: "space-between",
     paddingBottom: 12,
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  headerIcon: {
+  headerBackBtn: {
     alignItems: "center",
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
-    borderRadius: 16,
+    borderRadius: 25,
     borderWidth: 1,
     height: 44,
     justifyContent: "center",
     width: 44,
   },
-  headerCopy: {
-    flex: 1,
-  },
   headerTitle: {
     color: Colors.textPrimary,
-    fontSize: 20,
-    fontWeight: "800",
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.lg,
   },
-  headerSubtitle: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  saveButton: {
+  headerSaveBtn: {
     alignItems: "center",
     backgroundColor: Colors.primary,
-    borderRadius: 16,
-    flexDirection: "row",
-    gap: 6,
+    borderRadius: 26,
     height: 44,
     justifyContent: "center",
-    flex: 1,
-    paddingHorizontal: 20,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    width: 44,
+    elevation: 6,
   },
-  saveButtonDisabled: {
+  saveBtnDisabled: {
     opacity: 0.72,
   },
-  saveButtonText: {
-    color: Colors.textInverse,
-    fontSize: 14,
-    fontWeight: "900",
+
+  /* ── Scroll ── */
+  scrollContent: {
+    paddingTop: 4,
   },
-  content: {
-    paddingTop: 2,
-  },
-  mediaPanel: {
+
+  /* ── Hero card ── */
+  heroCard: {
+    alignItems: "center",
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
     borderRadius: 28,
     borderWidth: 1,
     marginHorizontal: 16,
-    marginTop: 8,
+    marginTop: 10,
     overflow: "hidden",
-  },
-  profileStrip: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    paddingHorizontal: 20,
     paddingBottom: 24,
-    paddingTop: 14,
   },
-  avatarButton: {
-    backgroundColor: Colors.bg,
-    borderColor: Colors.primaryLight,
-    borderRadius: 30,
-    borderWidth: 2,
-    height: 104,
-    marginTop: 0,
-    padding: 3,
-    width: 104,
+  heroEyebrow: {
+    alignItems: "center",
+    alignSelf: "center",
+    flexDirection: "row",
+    gap: 6,
+    paddingTop: 22,
+  },
+  heroEyebrowText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.bold,
+    fontSize: 10,
+    letterSpacing: 1.4,
+  },
+  avatarContainer: {
+    marginTop: 20,
     position: "relative",
-    zIndex: 10,
   },
-  avatarInnerBorder: {
-    flex: 1,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: Colors.bg,
+  avatarRing: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 124,
+    justifyContent: "center",
+    padding: 3,
+    width: 124,
+  },
+  avatarInner: {
+    backgroundColor: Colors.bg,
+    borderRadius: 999,
+    height: "100%",
     overflow: "hidden",
+    padding: 3,
+    width: "100%",
   },
   avatarImage: {
+    borderRadius: 999,
     height: "100%",
     width: "100%",
   },
   avatarPlaceholder: {
     alignItems: "center",
+    borderRadius: 999,
     height: "100%",
     justifyContent: "center",
     width: "100%",
   },
   initialsText: {
     color: Colors.textPrimary,
-    fontSize: 30,
-    fontWeight: "900",
+    fontFamily: FontFamily.bold,
+    fontSize: 32,
   },
-  avatarEditBadge: {
+  avatarBadge: {
     alignItems: "center",
     backgroundColor: Colors.primary,
     borderColor: Colors.bg,
-    borderRadius: 15,
-    borderWidth: 2,
-    bottom: -2,
-    right: -2,
-    height: 30,
-    width: 30,
+    borderRadius: 16,
+    borderWidth: 2.5,
+    bottom: 2,
+    height: 32,
     justifyContent: "center",
     position: "absolute",
-    zIndex: 11,
+    right: 2,
+    width: 32,
+    zIndex: 1,
   },
-  profileCopy: {
-    flex: 1,
-    paddingBottom: 14,
-    paddingLeft: 14,
-    paddingTop: 12,
-  },
-  profileName: {
+  heroName: {
     color: Colors.textPrimary,
-    fontSize: 24,
-    fontWeight: "900",
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xl,
+    marginTop: 14,
+    textAlign: "center",
   },
-  profileMeta: {
+  heroBio: {
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 18,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.sm,
+    lineHeight: 19,
     marginTop: 4,
+    paddingHorizontal: 32,
+    textAlign: "center",
   },
-  quickStats: {
-    flexDirection: "row",
-    gap: 10,
-    marginHorizontal: 16,
-    marginTop: 14,
+
+  /* ── Integrated completion bar ── */
+  heroCompletion: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    width: "100%",
   },
-  quickStatCard: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: 22,
-    borderWidth: 1,
-    flex: 1,
-    minHeight: 106,
-    padding: 12,
-  },
-  quickStatIcon: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 14,
-    height: 34,
-    justifyContent: "center",
-    marginBottom: 10,
-    width: 34,
-  },
-  quickStatValue: {
-    color: Colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  quickStatLabel: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 2,
-    textTransform: "uppercase",
-  },
-  completionCard: {
-    alignItems: "center",
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: 24,
-    borderWidth: 1,
-    flexDirection: "row",
-    marginHorizontal: 20,
-    marginTop: 14,
-    padding: 16,
-  },
-  completionIcon: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 18,
-    height: 48,
-    justifyContent: "center",
-    marginRight: 14,
-    width: 48,
-  },
-  completionCopy: {
-    flex: 1,
-  },
-  completionRow: {
+  heroCompletionRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 12,
     justifyContent: "space-between",
+    marginBottom: 8,
   },
-  completionTitle: {
+  heroCompletionLabelWrap: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 5,
+  },
+  heroCompletionLabel: {
     color: Colors.textPrimary,
-    fontSize: 15,
-    fontWeight: "800",
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
   },
-  completionHint: {
-    color: Colors.textSecondary,
+  heroCompletionHint: {
+    color: Colors.textMuted,
     flex: 1,
-    fontSize: 12,
-    fontWeight: "700",
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.xs,
     textAlign: "right",
   },
-  completionTrack: {
+  heroCompletionTrack: {
     backgroundColor: Colors.bgElevated,
     borderRadius: 999,
-    height: 8,
-    marginTop: 10,
+    height: 6,
     overflow: "hidden",
+    width: "100%",
   },
-  completionFill: {
-    backgroundColor: Colors.primaryLight,
+  heroCompletionFill: {
     borderRadius: 999,
     height: "100%",
   },
-  uploadText: {
+  heroUploadText: {
     color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 8,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.xs,
+    marginTop: 6,
   },
+
+  /* ── Section title ── */
   sectionTitle: {
     color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "900",
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xs,
     letterSpacing: 1,
     marginBottom: 10,
     marginHorizontal: 22,
-    marginTop: 26,
+    marginTop: 28,
     textTransform: "uppercase",
   },
+
+  /* ── Section card ── */
   sectionCard: {
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
@@ -1402,55 +1664,109 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     overflow: "hidden",
   },
+
+  /* ── Setting row (inset-divider layout) ── */
   settingRow: {
     alignItems: "center",
     flexDirection: "row",
-    minHeight: 74,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  rowBorder: {
-    borderBottomColor: Colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingLeft: 14,
+    paddingVertical: 4,
   },
   rowIconBox: {
     alignItems: "center",
     backgroundColor: Colors.bgElevated,
-    borderRadius: 16,
-    height: 42,
+    borderRadius: 18,
+    height: 44,
     justifyContent: "center",
-    marginRight: 14,
-    width: 42,
+    width: 44,
+  },
+  rowContent: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    minHeight: 72,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  rowDivider: {
+    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowCopy: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: 8,
   },
   rowTitle: {
     color: Colors.textPrimary,
-    fontSize: 15,
-    fontWeight: "800",
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.base,
   },
   rowValue: {
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
-    marginTop: 3,
-  },
-  rowChevron: {
-    alignItems: "center",
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 13,
-    height: 30,
-    justifyContent: "center",
-    width: 30,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
+    marginTop: 2,
   },
 
-  photoSheetBackdrop: {
-    backgroundColor: "rgba(0,0,0,0.56)",
+  /* ── Bottom bar ── */
+  bottomBar: {
+    backgroundColor: `${Colors.bgCard}F2`,
+    borderTopColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    elevation: 18,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+  },
+  saveButton: {
+    borderRadius: 22,
+    elevation: 10,
+    flex: 1,
+    height: 54,
+    overflow: "hidden",
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+  },
+  saveButtonGradient: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  saveButtonText: {
+    color: Colors.textInverse,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
+  },
+
+  /* ── Shared sheet primitives ── */
+  sheetBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
   },
+  sheetDimLayer: {
+    backgroundColor: "rgba(0,0,0,0.62)",
+    flex: 1,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 3,
+    height: 5,
+    marginBottom: 16,
+    opacity: 0.35,
+    width: 48,
+  },
+
+  /* ── Photo sheet ── */
   photoSheet: {
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
@@ -1458,15 +1774,15 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 32,
     borderTopWidth: 1,
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 10,
   },
   photoSheetHeader: {
     alignItems: "center",
     flexDirection: "row",
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 18,
   },
-  photoSheetIcon: {
+  photoSheetIconWrap: {
     alignItems: "center",
     backgroundColor: Colors.bgElevated,
     borderRadius: 18,
@@ -1479,13 +1795,13 @@ const styles = StyleSheet.create({
   },
   photoSheetTitle: {
     color: Colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "900",
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.md,
   },
   photoSheetSubtitle: {
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.sm,
     lineHeight: 18,
     marginTop: 2,
   },
@@ -1497,163 +1813,320 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 12,
-    minHeight: 56,
-    paddingHorizontal: 16,
+    marginBottom: 0,
+    minHeight: 58,
+    paddingHorizontal: 14,
+  },
+  photoSheetActionIcon: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderRadius: 14,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
   },
   photoSheetDangerAction: {
     backgroundColor: `${Colors.error}0D`,
     borderColor: `${Colors.error}2E`,
     marginTop: 10,
   },
+  photoSheetDangerIcon: {
+    backgroundColor: `${Colors.error}14`,
+  },
   photoSheetActionText: {
     color: Colors.textPrimary,
     flex: 1,
-    fontSize: 15,
-    fontWeight: "800",
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.base,
   },
   photoSheetDangerText: {
     color: Colors.error,
   },
   photoSheetCancel: {
     alignItems: "center",
-    minHeight: 52,
     justifyContent: "center",
+    minHeight: 52,
     marginTop: 8,
   },
   photoSheetCancelText: {
     color: Colors.textSecondary,
-    fontSize: 15,
-    fontWeight: "800",
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.base,
   },
-  // Animated Sheet drawer styles
+
+  /* ── Edit drawer ── */
   drawerBackdrop: {
-    flex: 1,
     backgroundColor: "rgba(0,0,0,0.56)",
+    flex: 1,
   },
   drawer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: "76%",
     backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     borderWidth: 1,
-    borderColor: Colors.border,
+    bottom: 0,
+    elevation: 20,
+    left: 0,
+    maxHeight: "76%",
+    paddingTop: 10,
+    position: "absolute",
+    right: 0,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.1,
     shadowRadius: 18,
-    elevation: 20,
-    paddingTop: 8,
-  },
-  drawerHandle: {
-    alignSelf: "center",
-    width: 40,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: Colors.border,
-    marginBottom: 16,
   },
   drawerHeader: {
+    alignItems: "flex-start",
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
+    gap: 12,
     paddingBottom: 16,
+    paddingHorizontal: 20,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
+  drawerCloseBtn: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bgElevated,
-    alignItems: "center",
+    height: 40,
     justifyContent: "center",
+    marginTop: 2,
+    width: 40,
+  },
+  drawerTitleWrap: {
+    flex: 1,
+    paddingTop: 2,
   },
   drawerTitleText: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "800",
     color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.md,
+  },
+  drawerSubtitle: {
+    color: Colors.textMuted,
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.xs,
+    marginTop: 2,
   },
   doneButton: {
-    minWidth: 62,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: Colors.primary,
     alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    height: 40,
     justifyContent: "center",
+    marginTop: 2,
+    minWidth: 64,
     paddingHorizontal: 16,
   },
   doneButtonText: {
-    fontSize: 13,
-    fontWeight: "800",
     color: Colors.textInverse,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.sm,
   },
   drawerScrollContent: {
-    paddingHorizontal: 20,
     paddingBottom: 40,
+    paddingHorizontal: 20,
     paddingTop: 4,
   },
+
+  /* ── Profile input ── */
   profileInput: {
     backgroundColor: Colors.bgInput,
     borderColor: Colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
     color: Colors.textPrimary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.base,
+    height: 58,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
+  profileInputMultiline: {
+    height: undefined,
+    minHeight: 140,
+    textAlignVertical: "top",
+  },
+
+  /* ── Chip grid (pill-shaped) ── */
   chipGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
-  chipButton: {
-    backgroundColor: Colors.bgCard,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 44,
-    paddingHorizontal: 16,
-  },
-  chipButtonActive: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.primary,
-  },
-  chipText: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  chipTextActive: {
-    color: Colors.textPrimary,
-  },
-  selectorList: {
-    gap: 10,
-  },
-  selectorButton: {
+  chip: {
     alignItems: "center",
     backgroundColor: Colors.bgCard,
     borderColor: Colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    minHeight: 46,
+    paddingHorizontal: 20,
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  chipCheckIcon: {
+    marginRight: 6,
+  },
+  chipText: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.sm,
+  },
+  chipTextActive: {
+    color: Colors.textInverse,
+  },
+
+  /* ── List selector (radio-dot) ── */
+  /* Age range dragger */
+  ageRangeCard: {
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 18,
+  },
+  ageRangeHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+    marginBottom: 28,
+  },
+  ageRangeValuePill: {
+    alignItems: "center",
+    backgroundColor: Colors.bgElevated,
+    borderColor: Colors.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    minWidth: 68,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  ageRangeLabel: {
+    color: Colors.textMuted,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.xs,
+    textTransform: "uppercase",
+  },
+  ageRangeValue: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.lg,
+    marginTop: 1,
+  },
+  ageRangeCenterCopy: {
+    alignItems: "center",
+    flex: 1,
+  },
+  ageRangeTitle: {
+    color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+    fontSize: FontSize.xl,
+  },
+  ageRangeSubtitle: {
+    color: Colors.textSecondary,
+    fontFamily: FontFamily.medium,
+    fontSize: FontSize.xs,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  ageRangeTrackWrap: {
+    height: 44,
+    justifyContent: "center",
+    marginHorizontal: 12,
+  },
+  ageRangeTrack: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 999,
+    height: 8,
+    width: "100%",
+  },
+  ageRangeFill: {
+    borderRadius: 999,
+    height: 8,
+    position: "absolute",
+  },
+  ageRangeThumb: {
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+    borderColor: Colors.bgCard,
+    borderRadius: 16,
+    borderWidth: 3,
+    elevation: 8,
+    height: 32,
+    justifyContent: "center",
+    position: "absolute",
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    width: 32,
+  },
+  ageRangeBoundsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginHorizontal: 12,
+    marginTop: 2,
+  },
+  ageRangeBoundText: {
+    color: Colors.textMuted,
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.xs,
+  },
+
+  selectorList: {
+    gap: 10,
+  },
+  selectorRow: {
+    alignItems: "center",
+    backgroundColor: Colors.bgCard,
+    borderColor: Colors.border,
+    borderLeftWidth: 3,
     borderRadius: 20,
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
     minHeight: 58,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
   },
-  selectorButtonActive: {
+  selectorRowActive: {
     backgroundColor: Colors.bgElevated,
     borderColor: Colors.primary,
+    borderLeftColor: Colors.primary,
+    borderLeftWidth: 3,
   },
   selectorText: {
     color: Colors.textSecondary,
-    fontSize: 15,
-    fontWeight: "700",
+    fontFamily: FontFamily.semiBold,
+    fontSize: FontSize.base,
   },
   selectorTextActive: {
     color: Colors.textPrimary,
+    fontFamily: FontFamily.bold,
+  },
+  radioOuter: {
+    alignItems: "center",
+    borderColor: Colors.border,
+    borderRadius: 11,
+    borderWidth: 2,
+    height: 22,
+    justifyContent: "center",
+    width: 22,
+  },
+  radioOuterActive: {
+    borderColor: Colors.primary,
+  },
+  radioInner: {
+    backgroundColor: Colors.primary,
+    borderRadius: 6,
+    height: 12,
+    width: 12,
   },
 });

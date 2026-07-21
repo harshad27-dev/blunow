@@ -34,6 +34,15 @@ export class MatchController {
     }
   };
 
+  cancelPendingRequest = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const result = await this.matchRequestService.cancelPending(req.user!.id, req.params.receiverId);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
   respondToRequest = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const result = await this.matchRequestService.respond(req.params.id, req.user!.id, req.body.status);
@@ -75,6 +84,15 @@ export class MatchController {
     try {
       await this.matchService.dismissRecommendation(req.user!.id, req.params.userId);
       res.status(200).json({ success: true, message: 'Recommendation dismissed' });
+    } catch (error: any) {
+      res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
+    }
+  };
+
+  restoreDismissedRecommendation = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      await this.matchService.restoreDismissedRecommendation(req.user!.id, req.params.userId);
+      res.status(200).json({ success: true, message: 'Recommendation restored' });
     } catch (error: any) {
       res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
     }

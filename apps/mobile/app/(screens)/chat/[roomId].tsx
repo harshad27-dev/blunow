@@ -58,6 +58,8 @@ import { moderationService } from "@/services/moderation.service";
 import { userService } from "@/services/user.service";
 import { useQueryClient } from "@tanstack/react-query";
 
+type ComposerMessageType = Exclude<ChatMessageType, "POST">;
+
 type PendingMessage = ChatMessage & {
   isPending?: boolean;
   sendStatus?: MessageDeliveryStatus;
@@ -515,7 +517,7 @@ export default function ChatRoomScreen() {
       );
       socket.emit("chat:message", {
         chatId: roomId,
-        type: message.type,
+        type: message.type as ComposerMessageType,
         content: message.content || undefined,
         mediaUrl: message.mediaUrl || undefined,
         replyToMessageId: message.replyToMessageId || undefined,
@@ -534,7 +536,7 @@ export default function ChatRoomScreen() {
   );
 
   const sendMessage = useCallback(
-    (content: string, type: ChatMessageType = "TEXT", mediaUrl?: string) => {
+    (content: string, type: ComposerMessageType = "TEXT", mediaUrl?: string) => {
       const clientId = createClientId(roomId);
       const replyPreview = replyTarget
         ? {

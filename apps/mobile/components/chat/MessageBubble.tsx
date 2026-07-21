@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Extrapolation,
@@ -170,6 +171,7 @@ export const MessageBubble = ({
   onRetry,
   onReactionPress,
 }: MessageBubbleProps) => {
+  const router = useRouter();
   const translateX = useSharedValue(0);
   const avatarUrl = message.sender?.profile?.avatarUrl || fallbackAvatarUrl;
   const status = deliveryStatus || message.sendStatus;
@@ -177,6 +179,8 @@ export const MessageBubble = ({
   const hasStoryPreview = Boolean(
     message.storyPreviewMediaUrl || message.storyPreviewCaption || message.storyId,
   );
+  const hasPostPreview =
+    !message.isDeleted && message.type === "POST" && Boolean(message.postId);
   const storyLabel =
     message.storyAuthorId && message.storyAuthorId === message.senderId
       ? "Replied to their story"
@@ -424,6 +428,71 @@ export const MessageBubble = ({
                 </View>
               ) : null}
 
+              {hasPostPreview ? (
+                <Pressable
+                  className={`mb-2 w-56 overflow-hidden rounded-[18px] border ${
+                    isMine
+                      ? "border-white/20 bg-white/12"
+                      : "border-border bg-bg-elevated"
+                  }`}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(screens)/post/[postId]",
+                      params: { postId: message.postId as string },
+                    })
+                  }
+                >
+                  {message.postPreviewMediaUrl ? (
+                    <Image
+                      source={{ uri: message.postPreviewMediaUrl }}
+                      className="h-32 w-full bg-bg-elevated"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View className="h-24 w-full items-center justify-center bg-bg-elevated">
+                      <Ionicons
+                        name="newspaper-outline"
+                        size={26}
+                        color={Colors.textSecondary}
+                      />
+                    </View>
+                  )}
+                  <View className="px-3 py-2.5">
+                    <View className="flex-row items-center">
+                      <Ionicons
+                        name="paper-plane-outline"
+                        size={13}
+                        color={isMine ? Colors.textInverse : Colors.textSecondary}
+                      />
+                      <Text
+                        className={`ml-1.5 flex-1 text-[11px] font-extrabold ${
+                          isMine ? "text-inverse/80" : "text-text-secondary"
+                        }`}
+                        numberOfLines={1}
+                      >
+                        {message.postAuthorName || "Shared post"}
+                      </Text>
+                    </View>
+                    {message.postPreviewCaption ? (
+                      <Text
+                        className={`mt-1.5 text-[13px] font-semibold leading-5 ${
+                          isMine ? "text-inverse" : "text-text-primary"
+                        }`}
+                        numberOfLines={2}
+                      >
+                        {message.postPreviewCaption}
+                      </Text>
+                    ) : null}
+                    <Text
+                      className={`mt-2 text-[11px] font-extrabold ${
+                        isMine ? "text-inverse/75" : "text-primary"
+                      }`}
+                    >
+                      View post
+                    </Text>
+                  </View>
+                </Pressable>
+              ) : null}
               {message.mediaUrl ? (
                 <Image
                   source={{ uri: message.mediaUrl }}

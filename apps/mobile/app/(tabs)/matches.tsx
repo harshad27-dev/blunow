@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   ActivityIndicator,
@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useColorScheme } from "nativewind";
@@ -30,7 +31,10 @@ import { RangeSlider } from "@/components/common/RangeSlider";
 import {
   useMatchRecommendationsQuery,
   useIncomingMatchRequestsQuery,
+  useCancelPendingMatchRequestMutation,
+  useDismissRecommendationMutation,
   useRespondMatchRequestMutation,
+  useRestoreRecommendationMutation,
   useSendMatchRequestMutation,
 } from "@/hooks/queries";
 import type {
@@ -39,9 +43,7 @@ import type {
   MatchRequest,
 } from "@/types/match.types";
 import { showToast } from "@/utils/toast";
-import Reanimated from "react-native-reanimated";
 
-const bottomActionHeight = 100;
 const SWIPE_THRESHOLD = 90;
 const INTEREST_OPTIONS = [
   "Music",
@@ -152,6 +154,11 @@ const DUMMY_PROFILES: MatchRecommendation[] = [
 ];
 
 type PendingAction = "pass" | "chat" | "like" | "boost" | null;
+type UndoDeckAction = {
+  action: "pass" | "like";
+  profile: MatchRecommendation;
+  remoteAction?: "dismiss" | "pending-like";
+};
 
 export default function MatchesScreen() {
   const insets = useSafeAreaInsets();
@@ -159,6 +166,36 @@ export default function MatchesScreen() {
   const statusBarStyle = colorScheme === "dark" ? "light" : "dark";
   const theme = getThemeColors(colorScheme === "light" ? "light" : "dark");
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isCompactScreen = screenWidth < 380 || screenHeight < 720;
+  const isTabletScreen = screenWidth >= 768;
+  const responsive = useMemo(() => {
+    const actionBarHeight = isCompactScreen ? 78 : isTabletScreen ? 96 : 90;
+    const actionCircleSize = isCompactScreen ? 44 : isTabletScreen ? 54 : 50;
+    const heartSize = isCompactScreen ? 62 : isTabletScreen ? 80 : 72;
+    const actionHorizontalPadding = isTabletScreen
+      ? Math.max((screenWidth - 460) / 2, 24)
+      : isCompactScreen
+        ? 12
+        : 18;
+    const bottomContentPadding = Math.max(
+      insets.bottom + actionBarHeight + (isCompactScreen ? 20 : 28),
+      isCompactScreen ? 108 : 128,
+    );
+
+    return {
+      actionBarHeight,
+      actionCircleSize,
+      actionHorizontalPadding,
+      actionIconSize: isCompactScreen ? 20 : 22,
+      bottomContentPadding,
+      heartIconSize: isCompactScreen ? 32 : isTabletScreen ? 40 : 36,
+      heartSize,
+      nameFontSize: isCompactScreen ? 48 : isTabletScreen ? 70 : 62,
+      nameLineHeight: isCompactScreen ? 54 : isTabletScreen ? 78 : 70,
+      profileHorizontalPadding: isTabletScreen ? Math.max((screenWidth - 560) / 2, 24) : 20,
+      viewProfileHeight: isCompactScreen ? 44 : 48,
+    };
+  }, [insets.bottom, isCompactScreen, isTabletScreen, screenWidth]);
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const [matchBanner, setMatchBanner] = useState<{
@@ -175,6 +212,9 @@ export default function MatchesScreen() {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [displayedProfileImage, setDisplayedProfileImage] = useState<string | undefined>();
+  const [isProfileImageLoading, setIsProfileImageLoading] = useState(false);
+  const [undoAction, setUndoAction] = useState<UndoDeckAction | null>(null);
   const [pendingRequestAction, setPendingRequestAction] = useState<{
     requestId: string;
     status: "ACCEPTED" | "REJECTED";
@@ -182,6 +222,8 @@ export default function MatchesScreen() {
 
   const fade = useRef(new Animated.Value(1)).current;
   const heartScale = useRef(new Animated.Value(1)).current;
+  const photoFade = useRef(new Animated.Value(1)).current;
+  const undoToastProgress = useRef(new Animated.Value(0)).current;
   const pan = useMemo(() => new Animated.ValueXY(), []);
   const viewedProfileIds = useRef(new Set<string>()).current;
   const committedInteractionProfileIds = useRef(new Set<string>()).current;
@@ -189,6 +231,12 @@ export default function MatchesScreen() {
     new Map<string, MatchRecommendation[]>(),
   ).current;
   const swipeEnabledRef = useRef(true);
+  const pendingDismissRequests = useRef(new Map<string, Promise<unknown>>()).current;
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reduceMotionRef = useRef(reduceMotion);
+  const displayedProfileImageRef = useRef<string | undefined>(undefined);
+  const swipeThresholdHapticRef = useRef<"like" | "pass" | null>(null);
+  reduceMotionRef.current = reduceMotion;
 
   // Derived interpolations for swipe tilt + overlays based on horizontal swipe (pan.x)
   const cardRotation = pan.x.interpolate({
@@ -208,6 +256,21 @@ export default function MatchesScreen() {
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
+  const nextCardOpacity = pan.x.interpolate({
+    inputRange: [-36, 0, 36],
+    outputRange: [1, 0, 1],
+    extrapolate: "clamp",
+  });
+  const undoToastTranslateY = undoToastProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [12, 0],
+    extrapolate: "clamp",
+  });
+  const undoToastScale = undoToastProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.98, 1],
+    extrapolate: "clamp",
+  });
 
   const panResponder = useRef(
     PanResponder.create({
@@ -219,11 +282,26 @@ export default function MatchesScreen() {
         swipeEnabledRef.current &&
         Math.abs(dx) > 8 &&
         Math.abs(dx) > Math.abs(dy),
-      onPanResponderMove: Animated.event(
-        [null, { dx: pan.x, dy: pan.y }],
-        { useNativeDriver: false },
-      ),
+      onPanResponderGrant: () => {
+        swipeThresholdHapticRef.current = null;
+      },
+      onPanResponderMove: (_, { dx, dy }) => {
+        pan.setValue({ x: dx, y: dy });
+        const direction =
+          dx > SWIPE_THRESHOLD ? "like" : dx < -SWIPE_THRESHOLD ? "pass" : null;
+
+        if (!direction) {
+          swipeThresholdHapticRef.current = null;
+          return;
+        }
+
+        if (swipeThresholdHapticRef.current !== direction && !reduceMotionRef.current) {
+          swipeThresholdHapticRef.current = direction;
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+        }
+      },
       onPanResponderRelease: (_, { dx }) => {
+        swipeThresholdHapticRef.current = null;
         if (dx > SWIPE_THRESHOLD) {
           // Right is LIKE (X goes positive)
           Animated.timing(pan, {
@@ -278,6 +356,9 @@ export default function MatchesScreen() {
   } = useMatchRecommendationsQuery(filters);
   const { data: incomingRequests = [] } = useIncomingMatchRequestsQuery();
   const sendMatchRequest = useSendMatchRequestMutation();
+  const dismissRecommendation = useDismissRecommendationMutation();
+  const restoreRecommendation = useRestoreRecommendationMutation();
+  const cancelPendingMatchRequest = useCancelPendingMatchRequestMutation();
   const respondMatchRequest = useRespondMatchRequestMutation();
 
   const filterKey = useMemo(() => JSON.stringify(filters), [filters]);
@@ -427,6 +508,102 @@ export default function MatchesScreen() {
     }).start();
   };
 
+  const restoreProfileToDeck = (profileToRestore: MatchRecommendation) => {
+    viewedProfileIds.delete(profileToRestore.id);
+    committedInteractionProfileIds.delete(profileToRestore.id);
+    setCompletedSingleDeckKey(null);
+    setActiveIndex(0);
+    setActivePhotoIndex(0);
+    pan.setValue({ x: 0, y: 0 });
+    fade.setValue(1);
+    setDeck((current) => {
+      const existingProfiles = current.filterKey === filterKey ? current.profiles : [];
+      const withoutProfile = existingProfiles.filter((item) => item.id !== profileToRestore.id);
+      return { filterKey, profiles: [profileToRestore, ...withoutProfile] };
+    });
+  };
+
+  const clearUndoTimer = () => {
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+  };
+
+  const hideUndoAction = (action?: UndoDeckAction) => {
+    Animated.timing(undoToastProgress, {
+      toValue: 0,
+      duration: reduceMotionRef.current ? 0 : 180,
+      easing: Easing.in(Easing.quad),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+
+      setUndoAction((current) => {
+        if (!action) return null;
+
+        return current?.profile.id === action.profile.id && current.action === action.action
+          ? null
+          : current;
+      });
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      clearUndoTimer();
+      undoToastProgress.stopAnimation();
+    };
+  }, [undoToastProgress]);
+
+  const showUndoAction = (action: UndoDeckAction) => {
+    clearUndoTimer();
+    undoToastProgress.stopAnimation();
+    undoToastProgress.setValue(0);
+    setUndoAction(action);
+
+    Animated.timing(undoToastProgress, {
+      toValue: 1,
+      duration: reduceMotionRef.current ? 0 : 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+    undoTimerRef.current = setTimeout(() => {
+      undoTimerRef.current = null;
+      hideUndoAction(action);
+    }, 5000);
+  };
+
+  const handleUndoDeckAction = () => {
+    if (!undoAction) return;
+
+    const actionToUndo = undoAction;
+    clearUndoTimer();
+    setUndoAction(null);
+    restoreProfileToDeck(actionToUndo.profile);
+
+    if (actionToUndo.remoteAction === "dismiss") {
+      const pendingDismiss = pendingDismissRequests.get(actionToUndo.profile.id);
+      const restoreDismissal = () => {
+        restoreRecommendation.mutate(actionToUndo.profile.id, {
+          onError: () => showToast("Profile restored here, but it may disappear after refresh.", "Undo partially saved"),
+        });
+      };
+
+      if (pendingDismiss) {
+        pendingDismiss.finally(restoreDismissal);
+      } else {
+        restoreDismissal();
+      }
+    }
+
+    if (actionToUndo.remoteAction === "pending-like") {
+      cancelPendingMatchRequest.mutate(actionToUndo.profile.id, {
+        onError: () => showToast("Profile restored here, but the request may still be pending.", "Undo partially saved"),
+      });
+    }
+  };
 
   const moveToNextCard = (profileId: string) => {
     if (profiles.length === 0) return;
@@ -467,6 +644,9 @@ export default function MatchesScreen() {
 
     if (profile.id.startsWith("dummy-")) {
       committedInteractionProfileIds.add(profile.id);
+      if (!profile.alreadyLikedMe) {
+        showUndoAction({ action: "like", profile });
+      }
       if (profile.alreadyLikedMe) {
         setMatchBanner({
           name: `${profile.name} ${profile.lastName}`,
@@ -506,6 +686,7 @@ export default function MatchesScreen() {
       {
         onSuccess: () => {
           committedInteractionProfileIds.add(profile.id);
+          showUndoAction({ action: "like", profile, remoteAction: "pending-like" });
           moveToNextCard(profile.id);
         },
         onError: restoreCurrentCard,
@@ -573,8 +754,21 @@ export default function MatchesScreen() {
 
   const handleSkip = () => {
     if (!profile || isDeckActionPending) return;
+    const skippedProfile = profile;
     setPendingAction("pass");
-    moveToNextCard(profile.id);
+    showUndoAction({ action: "pass", profile: skippedProfile, remoteAction: skippedProfile.id.startsWith("dummy-") ? undefined : "dismiss" });
+    if (!skippedProfile.id.startsWith("dummy-")) {
+      const dismissRequest = dismissRecommendation
+        .mutateAsync(skippedProfile.id)
+        .catch(() => {
+          showToast("Unable to save this pass right now.", "Pass not saved");
+        })
+        .finally(() => {
+          pendingDismissRequests.delete(skippedProfile.id);
+        });
+      pendingDismissRequests.set(skippedProfile.id, dismissRequest);
+    }
+    moveToNextCard(skippedProfile.id);
     setTimeout(() => setPendingAction(null), reduceMotion ? 0 : 420);
   };
 
@@ -586,8 +780,23 @@ export default function MatchesScreen() {
     if (!profile) return;
     router.push({
       pathname: "/match-detail/[profileId]",
-      params: { profileId: profile.id },
+      params: {
+        profileId: profile.id,
+        initialPhotoIndex: String(activePhotoIndex),
+      },
     });
+  };
+
+  const showNextProfilePhoto = () => {
+    if (profileImages.length <= 1) return;
+    setActivePhotoIndex((index) => (index + 1) % profileImages.length);
+  };
+
+  const showPreviousProfilePhoto = () => {
+    if (profileImages.length <= 1) return;
+    setActivePhotoIndex((index) =>
+      index === 0 ? profileImages.length - 1 : index - 1,
+    );
   };
 
   const openChat = (selectedProfile: MatchRecommendation, chatId: string) => {
@@ -685,6 +894,72 @@ export default function MatchesScreen() {
   };
 
   // ── Loading state ──────────────────────────────────────────────────────────
+
+  const profileImages = profile ? getProfileImages(profile) : [];
+  const profileImage = profileImages[activePhotoIndex] || profileImages[0];
+  const profileInterests = (profile?.interests ?? []).slice(0, 5);
+  const profileInitial = profile?.name?.charAt(0)?.toUpperCase() ?? "?";
+  const nextProfile = profiles[activeIndex + 1] as MatchRecommendation | undefined;
+  const nextProfileImages = nextProfile ? getProfileImages(nextProfile) : [];
+  const nextProfileImage = nextProfileImages[0];
+  const nextProfileInitial = nextProfile?.name?.charAt(0)?.toUpperCase() ?? "?";
+  const preloadPhotoKey = [...profileImages, ...nextProfileImages].join("|");
+
+  React.useEffect(() => {
+    if (!profileImage) {
+      displayedProfileImageRef.current = undefined;
+      setDisplayedProfileImage(undefined);
+      setIsProfileImageLoading(false);
+      photoFade.setValue(1);
+      return;
+    }
+
+    if (displayedProfileImageRef.current === profileImage) return;
+
+    let cancelled = false;
+    const isFirstImage = !displayedProfileImageRef.current;
+
+    if (isFirstImage) {
+      displayedProfileImageRef.current = profileImage;
+      setDisplayedProfileImage(profileImage);
+      photoFade.setValue(1);
+    } else {
+      setIsProfileImageLoading(true);
+    }
+
+    Image.prefetch(profileImage)
+      .catch(() => undefined)
+      .finally(() => {
+        if (cancelled) return;
+
+        displayedProfileImageRef.current = profileImage;
+        setDisplayedProfileImage(profileImage);
+        photoFade.setValue(isFirstImage ? 1 : 0);
+        Animated.timing(photoFade, {
+          toValue: 1,
+          duration: reduceMotion ? 0 : 180,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start(() => {
+          if (!cancelled) setIsProfileImageLoading(false);
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profileImage, photoFade, reduceMotion]);
+
+  React.useEffect(() => {
+    if (!preloadPhotoKey) return;
+    preloadPhotoKey
+      .split("|")
+      .filter(Boolean)
+      .forEach((uri) => {
+        Image.prefetch(uri).catch(() => undefined);
+      });
+  }, [preloadPhotoKey]);
+
   if (isLoading) {
     return (
       <View style={[styles.screen, styles.centerContent]}>
@@ -893,16 +1168,104 @@ export default function MatchesScreen() {
   }
 
   // ── Main card ──────────────────────────────────────────────────────────────
-  const profileImages = getProfileImages(profile);
-  const profileImage = profileImages[activePhotoIndex] || profileImages[0];
-  const profileInterests = (profile.interests ?? []).slice(0, 5);
-  const profileInitial = profile.name?.charAt(0)?.toUpperCase() ?? "?";
-
-
-
   return (
     <View style={styles.screen} {...panResponder.panHandlers}>
       <StatusBar style={statusBarStyle} translucent backgroundColor="transparent" />
+
+      {nextProfile ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.nextCardPreview, { opacity: nextCardOpacity }]}
+        >
+          {nextProfileImage ? (
+            <Image
+              source={{ uri: nextProfileImage }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+            />
+          ) : (
+            <ProfileImageFallback initial={nextProfileInitial} />
+          )}
+
+          <LinearGradient
+            colors={["rgba(0,0,0,0.42)", "rgba(0,0,0,0.08)", "transparent"]}
+            locations={[0, 0.28, 0.56]}
+            style={styles.topGradient}
+          />
+          <LinearGradient
+            colors={[
+              "transparent",
+              "rgba(18,14,10,0.42)",
+              "rgba(18,14,10,0.82)",
+              "rgba(18,14,10,0.97)",
+            ]}
+            locations={[0.1, 0.46, 0.74, 1]}
+            style={styles.bottomGradient}
+          />
+
+          <SafeAreaView
+            style={styles.nextCardContentLayer}
+            edges={["top", "left", "right"]}
+            pointerEvents="none"
+          >
+            <View
+              style={[
+                styles.bottomContent,
+                {
+                  paddingBottom: responsive.bottomContentPadding,
+                  paddingHorizontal: responsive.profileHorizontalPadding,
+                },
+              ]}
+            >
+              <View style={styles.pillRow}>
+                <StatusPill online={nextProfile.online} lastActiveAt={nextProfile.lastActiveAt} />
+                <ScorePill score={nextProfile.matchScore} />
+              </View>
+
+              <View style={styles.nameRow}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  style={[
+                    styles.nameText,
+                    {
+                      fontFamily: FontFamily.darleston,
+                      fontSize: responsive.nameFontSize,
+                      lineHeight: responsive.nameLineHeight,
+                    },
+                  ]}
+                >
+                  {nextProfile.name}
+                </Text>
+                <View style={styles.agePill}>
+                  <Text style={styles.agePillText}>{nextProfile.age}</Text>
+                  {nextProfile.verified ? (
+                    <View style={styles.verifiedDot}>
+                      <Ionicons name="checkmark" size={10} color="#fff" />
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+
+              <View style={styles.locationRow}>
+                <Ionicons name="location" size={13} color="rgba(255,255,255,0.65)" />
+                <Text style={styles.locationText} numberOfLines={1}>
+                  {nextProfile.city}
+                </Text>
+                {nextProfile.distance ? (
+                  <>
+                    <View style={styles.locationDot} />
+                    <Ionicons name="navigate" size={13} color="rgba(255,255,255,0.65)" />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {nextProfile.distance}
+                    </Text>
+                  </>
+                ) : null}
+              </View>
+            </View>
+          </SafeAreaView>
+        </Animated.View>
+      ) : null}
 
       {/* Full-screen photo or gradient fallback */}
       <Animated.View
@@ -926,17 +1289,16 @@ export default function MatchesScreen() {
             },
           ]}
         >
-          {profileImage ? (
-            <Reanimated.Image
-              key={`${profile.id}-${activePhotoIndex}`}
-              {...({ sharedTransitionTag: `profile-photo-${profile.id}` } as any)}
-              source={{ uri: profileImage }}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
+          {displayedProfileImage || profileImage ? (
+            <Animated.Image
+              source={{ uri: displayedProfileImage || profileImage }}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 24, opacity: photoFade }]}
               resizeMode="cover"
             />
           ) : (
             <ProfileImageFallback initial={profileInitial} />
           )}
+          {isProfileImageLoading ? <PhotoImageSkeleton /> : null}
 
           {/* Indicator dots */}
           {profileImages.length > 1 && (
@@ -962,24 +1324,23 @@ export default function MatchesScreen() {
           {/* Transparent tap zones over photo */}
           <View style={styles.photoTapZoneContainer} pointerEvents="box-none">
             <TouchableOpacity
-              style={styles.photoTapZoneHalf}
+              style={styles.photoTapZoneEdge}
               activeOpacity={1}
-              onPress={() => {
-                if (profileImages.length > 1) {
-                  setActivePhotoIndex((i) => Math.max(0, i - 1));
-                }
-              }}
+              onPress={showPreviousProfilePhoto}
               accessibilityRole="button"
               accessibilityLabel="Previous profile photo"
             />
             <TouchableOpacity
-              style={styles.photoTapZoneHalf}
+              style={styles.photoTapZoneCenter}
               activeOpacity={1}
-              onPress={() => {
-                if (profileImages.length > 1) {
-                  setActivePhotoIndex((i) => Math.min(profileImages.length - 1, i + 1));
-                }
-              }}
+              onPress={showNextProfilePhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Next profile photo"
+            />
+            <TouchableOpacity
+              style={styles.photoTapZoneEdge}
+              activeOpacity={1}
+              onPress={showNextProfilePhoto}
               accessibilityRole="button"
               accessibilityLabel="Next profile photo"
             />
@@ -1103,14 +1464,17 @@ export default function MatchesScreen() {
               pointerEvents="box-none"
               style={[
                 styles.bottomContent,
-                { paddingBottom: Math.max(insets.bottom + bottomActionHeight + 20, 130) },
+                {
+                  paddingBottom: responsive.bottomContentPadding,
+                  paddingHorizontal: responsive.profileHorizontalPadding,
+                },
               ]}
             >
               <Animated.View pointerEvents="box-none" style={{ opacity: fade, width: "100%" }}>
 
                 {/* Status + score */}
                 <View style={styles.pillRow}>
-                  <StatusPill online={profile.online} />
+                  <StatusPill online={profile.online} lastActiveAt={profile.lastActiveAt} />
                   <ScorePill score={profile.matchScore} />
                 </View>
 
@@ -1119,7 +1483,14 @@ export default function MatchesScreen() {
                   <Text
                     numberOfLines={1}
                     adjustsFontSizeToFit
-                    style={[styles.nameText, { fontFamily: FontFamily.darleston }]}
+                    style={[
+                    styles.nameText,
+                    {
+                      fontFamily: FontFamily.darleston,
+                      fontSize: responsive.nameFontSize,
+                      lineHeight: responsive.nameLineHeight,
+                    },
+                  ]}
                   >
                     {profile.name}
                   </Text>
@@ -1168,7 +1539,13 @@ export default function MatchesScreen() {
 
                 {/* View profile CTA */}
                 <TouchableOpacity
-                  style={[styles.viewProfileBtn, { backgroundColor: theme.primary }]}
+                  style={[
+                    styles.viewProfileBtn,
+                    {
+                      backgroundColor: theme.primary,
+                      height: responsive.viewProfileHeight,
+                    },
+                  ]}
                   onPress={openProfileDetail}
                   activeOpacity={0.84}
                 >
@@ -1178,68 +1555,139 @@ export default function MatchesScreen() {
               </Animated.View>
             </View>
 
-            {/* ── Action bar ── */}
-            <View
-              style={[
-                styles.actionBar,
-                { bottom: Math.max(insets.bottom + 14, 26) },
-              ]}
-            >
-              {/* Pass */}
-              <ActionButton
-                accessibilityLabel="Pass on this profile"
-                icon="close"
-                iconColor="rgba(255,255,255,0.82)"
-                bgStyle={styles.actionCircleMuted}
-                onPress={handleSkip}
-                disabled={isDeckActionPending}
-                loading={pendingAction === "pass"}
-              />
-
-              {/* Chat */}
-              <ActionButton
-                accessibilityLabel="Send chat request"
-                icon="chatbubble-ellipses"
-                iconColor={Colors.primaryLight}
-                bgStyle={styles.actionCircleChat}
-                badge={profile.chatRequests}
-                onPress={handleChatRequest}
-                disabled={isDeckActionPending}
-                loading={pendingAction === "chat"}
-              />
-
-              {/* Like — large heart */}
-              <HeartAction
-                onPress={handleLike}
-                disabled={isDeckActionPending}
-                loading={pendingAction === "like"}
-              />
-
-              {/* Boost */}
-              <ActionButton
-                accessibilityLabel="Send priority match request"
-                icon="flash"
-                iconColor={Colors.warning}
-                bgStyle={styles.actionCircleBoost}
-                onPress={handleMatchRequest}
-                disabled={isDeckActionPending}
-                loading={pendingAction === "boost"}
-              />
-
-              {/* Profile detail shortcut */}
-              <ActionButton
-                accessibilityLabel="Open full profile"
-                icon="person"
-                iconColor="rgba(255,255,255,0.82)"
-                bgStyle={styles.actionCircleMuted}
-                onPress={openProfileDetail}
-                disabled={false}
-                loading={false}
-              />
-            </View>
           </SafeAreaView>
         </Animated.View>
       </Animated.View>
+
+      <SafeAreaView
+        edges={["bottom"]}
+        pointerEvents="box-none"
+        style={[
+          styles.fixedActionSafeArea,
+          { paddingHorizontal: responsive.actionHorizontalPadding },
+        ]}
+      >
+        {undoAction ? (
+          <Animated.View
+            style={[
+              styles.undoBar,
+              {
+                opacity: undoToastProgress,
+                transform: [
+                  { translateY: undoToastTranslateY },
+                  { scale: undoToastScale },
+                ],
+              },
+            ]}
+            pointerEvents="auto"
+          >
+            <View
+              style={[
+                styles.undoIconWrap,
+                undoAction.action === "like" ? styles.undoIconLike : styles.undoIconPass,
+              ]}
+            >
+              <Ionicons
+                name={undoAction.action === "like" ? "heart" : "close"}
+                size={16}
+                color="#FFFFFF"
+              />
+            </View>
+
+            <View style={styles.undoMessageWrap}>
+              <Text style={styles.undoText} numberOfLines={1}>
+                {undoAction.action === "like" ? "Like sent" : "Profile passed"}
+              </Text>
+              <Text style={styles.undoSubtext} numberOfLines={1}>
+                Bring this profile back to your deck
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleUndoDeckAction}
+              activeOpacity={0.84}
+              style={styles.undoButton}
+              accessibilityRole="button"
+              accessibilityLabel="Undo last match action"
+            >
+              <Ionicons name="refresh" size={13} color="#241C18" />
+              <Text style={styles.undoButtonText}>Undo</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        ) : null}
+
+        <View
+          style={[
+            styles.actionBar,
+            {
+              height: responsive.actionBarHeight,
+              borderRadius: responsive.actionBarHeight / 3,
+            },
+          ]}
+        >
+          {/* Pass */}
+          <ActionButton
+            accessibilityLabel="Pass on this profile"
+            icon="close"
+            iconColor="#FF7F93"
+            bgStyle={styles.actionCirclePass}
+            onPress={handleSkip}
+            disabled={isDeckActionPending}
+            loading={pendingAction === "pass"}
+            size={responsive.actionCircleSize}
+            iconSize={responsive.actionIconSize}
+          />
+
+          {/* Chat */}
+          <ActionButton
+            accessibilityLabel="Send chat request"
+            icon="chatbubble-ellipses"
+            iconColor="#70D6FF"
+            bgStyle={styles.actionCircleChat}
+            badge={profile.chatRequests}
+            onPress={handleChatRequest}
+            disabled={isDeckActionPending}
+            loading={pendingAction === "chat"}
+            size={responsive.actionCircleSize}
+            iconSize={responsive.actionIconSize}
+          />
+
+          {/* Like - large heart */}
+          <HeartAction
+            onPress={handleLike}
+            disabled={isDeckActionPending}
+            loading={pendingAction === "like"}
+            size={responsive.heartSize}
+            iconSize={responsive.heartIconSize}
+          />
+
+          {/* Boost */}
+          <ActionButton
+            accessibilityLabel="Send priority match request"
+            icon="flash"
+            iconColor="#FFD166"
+            bgStyle={styles.actionCircleBoost}
+            onPress={handleMatchRequest}
+            disabled={isDeckActionPending}
+            loading={pendingAction === "boost"}
+            size={responsive.actionCircleSize}
+            iconSize={responsive.actionIconSize}
+          />
+
+          {/* Profile detail shortcut */}
+          <ActionButton
+            accessibilityLabel="Open full profile"
+            icon="person"
+            iconColor="#D8C8BA"
+            bgStyle={styles.actionCircleProfile}
+            onPress={openProfileDetail}
+            disabled={false}
+            loading={false}
+            size={responsive.actionCircleSize}
+            iconSize={responsive.actionIconSize}
+          />
+        </View>
+      </SafeAreaView>
 
       {/* ── Modals ── */}
       <FilterModal
@@ -1318,7 +1766,13 @@ export default function MatchesScreen() {
   );
 }
 
-const StatusPill = ({ online }: { online: boolean }) => {
+const StatusPill = ({
+  online,
+  lastActiveAt,
+}: {
+  online: boolean;
+  lastActiveAt?: string | null;
+}) => {
   const { colorScheme } = useColorScheme();
   const theme = getThemeColors(colorScheme === "light" ? "light" : "dark");
   const isDark = colorScheme === "dark";
@@ -1344,13 +1798,12 @@ const StatusPill = ({ online }: { online: boolean }) => {
           },
         ]}
       />
-      <Text style={[styles.statusPillText, { color: theme.textPrimary }]}>
-        {online ? "Online now" : "Away"}
+      <Text style={[styles.statusPillText, { color: theme.textPrimary }]} numberOfLines={1}>
+        {formatActivityLabel(online, lastActiveAt)}
       </Text>
     </View>
   );
 };
-
 const ScorePill = ({ score }: { score: number }) => {
   const { colorScheme } = useColorScheme();
   const theme = getThemeColors(colorScheme === "light" ? "light" : "dark");
@@ -1375,6 +1828,8 @@ const ActionButton = ({
   badge,
   disabled,
   loading,
+  size = 52,
+  iconSize = 22,
 }: {
   accessibilityLabel: string;
   icon: keyof typeof Ionicons.glyphMap;
@@ -1384,9 +1839,15 @@ const ActionButton = ({
   badge?: number;
   disabled?: boolean;
   loading?: boolean;
+  size?: number;
+  iconSize?: number;
 }) => (
   <TouchableOpacity
-    style={[styles.actionBtnWrap, disabled && styles.disabledAction]}
+    style={[
+      styles.actionBtnWrap,
+      { minWidth: size, minHeight: size },
+      disabled && styles.disabledAction,
+    ]}
     onPress={onPress}
     disabled={disabled}
     activeOpacity={0.8}
@@ -1394,11 +1855,21 @@ const ActionButton = ({
     accessibilityLabel={accessibilityLabel}
     accessibilityState={{ disabled: Boolean(disabled), busy: Boolean(loading) }}
   >
-    <View style={[styles.actionCircle, bgStyle]}>
+    <View
+      style={[
+        styles.actionCircle,
+        bgStyle,
+        {
+          borderRadius: size / 2,
+          height: size,
+          width: size,
+        },
+      ]}
+    >
       {loading ? (
         <ActivityIndicator color={iconColor} size="small" />
       ) : (
-        <Ionicons name={icon} size={22} color={iconColor} />
+        <Ionicons name={icon} size={iconSize} color={iconColor} />
       )}
       {badge ? (
         <View style={styles.actionBadge}>
@@ -1413,10 +1884,14 @@ const HeartAction = ({
   onPress,
   disabled,
   loading,
+  size = 80,
+  iconSize = 38,
 }: {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
+  size?: number;
+  iconSize?: number;
 }) => (
   <TouchableOpacity
     style={[styles.heartBtnWrap, disabled && styles.disabledAction]}
@@ -1428,15 +1903,22 @@ const HeartAction = ({
     accessibilityState={{ disabled: Boolean(disabled), busy: Boolean(loading) }}
   >
     <LinearGradient
-      colors={[Colors.bgCard, Colors.bgElevated]}
+      colors={["#FF4D6D", "#E11D48", "#9F1239"]}
       start={{ x: 0.1, y: 0.1 }}
       end={{ x: 0.9, y: 0.9 }}
-      style={styles.heartCircle}
+      style={[
+        styles.heartCircle,
+        {
+          borderRadius: size / 2,
+          height: size,
+          width: size,
+        },
+      ]}
     >
       {loading ? (
-        <ActivityIndicator color={Colors.primary} size="large" />
+        <ActivityIndicator color="#FFFFFF" size={size < 70 ? "small" : "large"} />
       ) : (
-        <Ionicons name="heart" size={38} color={Colors.primary} />
+        <Ionicons name="heart" size={iconSize} color="#FFFFFF" />
       )}
     </LinearGradient>
   </TouchableOpacity>
@@ -1844,6 +2326,17 @@ const SwitchRow = ({
 
 // ─── Profile image fallback ───────────────────────────────────────────────────
 
+const PhotoImageSkeleton = () => (
+  <View style={styles.photoSkeleton} pointerEvents="none">
+    <LinearGradient
+      colors={["rgba(255,255,255,0.06)", "rgba(255,255,255,0.18)", "rgba(255,255,255,0.06)"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={StyleSheet.absoluteFillObject}
+    />
+    <ActivityIndicator color="#FFFFFF" size="small" />
+  </View>
+);
 const ProfileImageFallback = ({ initial, small }: { initial: string; small?: boolean }) => (
   <LinearGradient
     colors={[Colors.bgElevated, Colors.bgCard]}
@@ -1881,6 +2374,26 @@ const mergeRecommendations = (recommendations: MatchRecommendation[]) => {
   return Array.from(merged.values());
 };
 
+const formatActivityLabel = (online: boolean, lastActiveAt?: string | null) => {
+  if (online) return "Online now";
+  if (!lastActiveAt) return "Recently active";
+
+  const timestamp = new Date(lastActiveAt).getTime();
+  if (!Number.isFinite(timestamp)) return "Recently active";
+
+  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+  if (minutes < 1) return "Active just now";
+  if (minutes < 60) return `Active ${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Active ${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `Active ${days}d ago`;
+
+  return "Active recently";
+};
+
 const getActiveFilterCount = (filters: MatchRecommendationFilters) => {
   let count = 0;
   if (filters.minAge !== defaultFilters.minAge) count += 1;
@@ -1900,6 +2413,17 @@ const styles = StyleSheet.create({
   // Layout
   screen: { flex: 1, backgroundColor: Colors.bg },
   centerContent: { alignItems: "center", justifyContent: "center" },
+
+  nextCardPreview: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  nextCardContentLayer: {
+    flex: 1,
+    justifyContent: "flex-end",
+    zIndex: 3,
+  },
 
   // Gradients
   topGradient: {
@@ -1924,8 +2448,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     zIndex: 2,
   },
-  photoTapZoneHalf: {
-    flex: 1,
+  photoTapZoneEdge: {
+    flex: 0.34,
+    height: "100%",
+  },
+  photoTapZoneCenter: {
+    flex: 0.32,
     height: "100%",
   },
   controlsLayer: { flex: 1, zIndex: 6, elevation: 6 },
@@ -2117,7 +2645,7 @@ const styles = StyleSheet.create({
     width: 42,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: 20,
     backgroundColor: "rgba(0,0,0,0.38)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
@@ -2403,23 +2931,112 @@ const styles = StyleSheet.create({
   },
   viewProfileText: { fontSize: 14, fontWeight: "800" },
 
+  photoSkeleton: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(16,12,10,0.24)",
+    borderRadius: 24,
+    zIndex: 1,
+  },
   // Action bar
-  actionBar: {
+  fixedActionSafeArea: {
     position: "absolute",
-    left: 18,
-    right: 18,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
+    elevation: 30,
+    paddingHorizontal: 18,
+    paddingTop: 8,
+  },
+  undoBar: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 420,
+    minHeight: 56,
+    marginBottom: 9,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(28,23,22,0.94)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  undoIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  undoIconLike: {
+    backgroundColor: "rgba(255,77,109,0.92)",
+  },
+  undoIconPass: {
+    backgroundColor: "rgba(255,127,147,0.72)",
+  },
+  undoMessageWrap: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 10,
+  },
+  undoText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  undoSubtext: {
+    marginTop: 2,
+    color: "rgba(255,255,255,0.64)",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  undoButton: {
+    minHeight: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#FFFFFF",
+  },
+  undoButtonText: {
+    color: "#241C18",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  actionBar: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 420,
     height: 100,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 12,
     borderRadius: 32,
-    backgroundColor: "rgba(18,14,10,0.86)",
+    backgroundColor: "rgba(36,28,24,0.72)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    zIndex: 10,
+    borderColor: "rgba(255,255,255,0.2)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
   },
-  actionBtnWrap: { alignItems: "center", justifyContent: "center", minWidth: 52 },
+  actionBtnWrap: { alignItems: "center", justifyContent: "center", minWidth: 44 },
   actionCircle: {
     width: 52,
     height: 52,
@@ -2428,17 +3045,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
   },
-  actionCircleMuted: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderColor: "rgba(255,255,255,0.15)",
+  actionCirclePass: {
+    backgroundColor: "rgba(255,127,147,0.16)",
+    borderColor: "rgba(255,127,147,0.42)",
   },
   actionCircleChat: {
-    backgroundColor: `${Colors.primaryLight}22`,
-    borderColor: `${Colors.primaryLight}44`,
+    backgroundColor: "rgba(112,214,255,0.16)",
+    borderColor: "rgba(112,214,255,0.42)",
   },
   actionCircleBoost: {
-    backgroundColor: `${Colors.warning}1A`,
-    borderColor: `${Colors.warning}44`,
+    backgroundColor: "rgba(255,209,102,0.16)",
+    borderColor: "rgba(255,209,102,0.42)",
+  },
+  actionCircleProfile: {
+    backgroundColor: "rgba(216,200,186,0.15)",
+    borderColor: "rgba(216,200,186,0.34)",
   },
   actionBadge: {
     position: "absolute",
@@ -2460,6 +3081,11 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#E11D48",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 8,
   },
   disabledAction: { opacity: 0.5 },
 

@@ -124,7 +124,7 @@ export default function RootLayout() {
               <Stack.Screen
                 name="match-detail/[profileId]"
                 options={{
-                  animation: "default",
+                  animation: "none",
                 }}
               />
             </Stack>

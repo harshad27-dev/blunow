@@ -353,6 +353,30 @@ export const useDismissRecommendationMutation = () => {
   });
 };
 
+export const useRestoreRecommendationMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (userId: string) => matchService.restoreRecommendation(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["match-recommendations"] });
+    },
+  });
+};
+
+export const useCancelPendingMatchRequestMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (receiverId: string) => matchService.cancelPendingRequest(receiverId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["match-recommendations"] });
+      queryClient.invalidateQueries({ queryKey: ["match-requests-outgoing"] });
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+    },
+  });
+};
+
 export const useDiscoverPeopleQuery = (category = "For you") => {
   return useInfiniteQuery({
     queryKey: ["discover-people", category],

@@ -52,9 +52,13 @@ export class MessageService {
       content?: string;
       mediaUrl?: string;
       replyToMessageId?: string;
+      postId?: string;
+      postPreviewMediaUrl?: string;
+      postPreviewCaption?: string;
+      postAuthorName?: string;
     },
   ) {
-    if (!data.content?.trim() && !data.mediaUrl) {
+    if (!data.content?.trim() && !data.mediaUrl && !data.postId) {
       throw new AppError("Message content or media is required", 400);
     }
     if (data.content && data.content.trim().length > 4000) {
@@ -111,6 +115,65 @@ export class MessageService {
     return message;
   }
 
+  async sharePost(postId: string, chatIds: string[], senderId: string) {
+    const uniqueChatIds = [...new Set(chatIds)].slice(0, 10);
+    if (uniqueChatIds.length === 0) {
+      throw new AppError("Select at least one conversation", 400);
+    }
+
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        isDeleted: false,
+        OR: [{ isPublic: true }, { authorId: senderId }],
+      },
+      select: {
+        id: true,
+        caption: true,
+        mediaUrls: true,
+        isAnonymous: true,
+        author: {
+          select: {
+            profile: { select: { username: true } },
+          },
+        },
+      },
+    });
+
+    if (!post) throw new AppError("Post not found", 404);
+
+    const postAuthorName = post.isAnonymous
+      ? "Anonymous"
+      : post.author.profile?.username || "Datebl user";
+
+    const results = await Promise.all(
+      uniqueChatIds.map(async (chatId) => {
+        try {
+          const message = await this.sendMessage(chatId, senderId, {
+            type: "POST",
+            postId: post.id,
+            postPreviewMediaUrl: post.mediaUrls[0],
+            postPreviewCaption: post.caption?.trim().slice(0, 280),
+            postAuthorName,
+          });
+          return { chatId, success: true as const, messageId: message.id };
+        } catch (error) {
+          return {
+            chatId,
+            success: false as const,
+            message:
+              error instanceof Error ? error.message : "Unable to share post",
+          };
+        }
+      }),
+    );
+
+    return {
+      sharedCount: results.filter((result) => result.success).length,
+      failedCount: results.filter((result) => !result.success).length,
+      results,
+    };
+  }
   async markAsRead(chatId: string, userId: string) {
     const chat = await this.chatRepository.findById(chatId);
     if (!chat) throw new AppError("Chat not found", 404);

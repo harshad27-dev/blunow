@@ -82,6 +82,23 @@ export class MatchRequestService {
     return this.matchRepository.findOutgoingRequests(userId);
   }
 
+  async cancelPending(senderId: string, receiverId: string) {
+    if (senderId === receiverId) {
+      throw new AppError('Cannot cancel your own match request', 400);
+    }
+
+    const cancelled = await this.matchRepository.cancelPendingRequest(senderId, receiverId);
+    if (!cancelled) throw new AppError('Pending request not found', 404);
+
+    eventBus.emit(EVENTS.MATCH.REQUEST_REJECTED, {
+      requestId: cancelled.id,
+      senderId,
+      receiverId,
+    });
+
+    return { status: 'CANCELLED' };
+  }
+
   async respond(requestId: string, userId: string, status: 'ACCEPTED' | 'REJECTED') {
     const request = await this.matchRepository.findRequestById(requestId);
     if (!request) throw new AppError('Request not found', 404);

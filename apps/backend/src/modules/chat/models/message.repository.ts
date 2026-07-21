@@ -40,6 +40,10 @@ export class MessageRepository {
     content?: string;
     mediaUrl?: string;
     replyToMessageId?: string;
+    postId?: string;
+    postPreviewMediaUrl?: string;
+    postPreviewCaption?: string;
+    postAuthorName?: string;
   }) {
     const createMessage = (includeReply: boolean) =>
       prisma.$transaction(async (tx) => {
@@ -50,6 +54,10 @@ export class MessageRepository {
           content: data.content?.trim(),
           mediaUrl: data.mediaUrl,
           deliveredAt: new Date(),
+          postId: data.postId,
+          postPreviewMediaUrl: data.postPreviewMediaUrl,
+          postPreviewCaption: data.postPreviewCaption,
+          postAuthorName: data.postAuthorName,
         };
 
         if (includeReply && data.replyToMessageId) {
@@ -68,7 +76,9 @@ export class MessageRepository {
             deletedBy2: false,
             lastMessageAt: message.createdAt,
             lastMessageContent:
-              data.content || (data.mediaUrl ? "Shared media" : null),
+              data.type === "POST"
+                ? "Shared a post"
+                : data.content || (data.mediaUrl ? "Shared media" : null),
             lastMessageId: message.id,
             unreadCount: { increment: 1 },
           },
