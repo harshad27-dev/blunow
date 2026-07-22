@@ -20,6 +20,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
+import * as Location from "expo-location";
 import { useColorScheme } from "nativewind";
 import { useCreatePostMutation, useCreateStoryMutation } from "@/hooks/queries";
 import { getThemeColors, Colors } from "@/constants/colors";
@@ -39,6 +40,60 @@ const GRID_GAP = 3;
 const GALLERY_PAGE_SIZE = 48;
 
 const { width } = Dimensions.get("window");
+
+type PhotonFeature = {
+  properties?: {
+    name?: string;
+    city?: string;
+    district?: string;
+    state?: string;
+    country?: string;
+  };
+};
+
+type LocationCoords = {
+  latitude: number;
+  longitude: number;
+};
+
+const NEARBY_HYDERABAD_LOCATIONS = [
+  "Madhapur, Hyderabad",
+  "HITEC City, Hyderabad",
+  "Gachibowli, Hyderabad",
+  "Kondapur, Hyderabad",
+  "Kukatpally, Hyderabad",
+  "Jubilee Hills, Hyderabad",
+  "Banjara Hills, Hyderabad",
+  "Manikonda, Hyderabad",
+  "Raidurg, Hyderabad",
+  "Financial District, Hyderabad",
+  "Kokapet, Hyderabad",
+  "Begumpet, Hyderabad",
+];
+
+const formatPhotonFeature = (feature: PhotonFeature) => {
+  const properties = feature.properties || {};
+  const name = properties.name?.trim();
+  const area = properties.district?.trim();
+  const city = properties.city?.trim();
+  const state = properties.state?.trim();
+  const country = properties.country?.trim();
+  const parts = [name, area, city, state || country]
+    .filter(Boolean)
+    .filter((part, index, allParts) => allParts.indexOf(part) === index);
+
+  return parts.slice(0, 3).join(", ");
+};
+
+const uniqueLocations = (locations: string[]) =>
+  Array.from(
+    new Map(
+      locations
+        .map((location) => location.trim())
+        .filter(Boolean)
+        .map((location) => [location.toLowerCase(), location]),
+    ).values(),
+  );
 
 type GridItem =
   | { type: "camera"; id: "camera" }
@@ -76,6 +131,10 @@ export default function CreateScreen() {
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [locationSearch, setLocationSearch] = useState("");
+  const [locationCoords, setLocationCoords] = useState<LocationCoords | null>(null);
+  const [locationSearchResults, setLocationSearchResults] = useState<string[]>([]);
+  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
+  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
 
   // Story Poll states
   const [pollSticker, setPollSticker] = useState<{ question: string } | null>(null);
@@ -94,27 +153,25 @@ export default function CreateScreen() {
   const [filterToast, setFilterToast] = useState<string | null>(null);
   const filterToastOpacity = useSharedValue(0);
 
-  const POPULAR_LOCATIONS = [
-    "New York, NY",
-    "Los Angeles, CA",
-    "San Francisco, CA",
-    "London, UK",
-    "Tokyo, Japan",
-    "Mumbai, India",
-    "Paris, France",
-  ];
-
   const locationSuggestions = useMemo(() => {
     const search = locationSearch.trim().toLowerCase();
-    if (!search) return POPULAR_LOCATIONS;
-    const filtered = POPULAR_LOCATIONS.filter((loc) =>
-      loc.toLowerCase().includes(search)
+
+    if (!search) return NEARBY_HYDERABAD_LOCATIONS;
+
+    const localMatches = NEARBY_HYDERABAD_LOCATIONS.filter((location) =>
+      location.toLowerCase().includes(search),
     );
-    if (!filtered.some((loc) => loc.toLowerCase() === search)) {
-      return [...filtered, `Add custom: "${locationSearch.trim()}"`];
+    const suggestions = uniqueLocations([
+      ...locationSearchResults,
+      ...localMatches,
+    ]);
+
+    if (!suggestions.some((location) => location.toLowerCase() === search)) {
+      return [...suggestions, `Add custom: "${locationSearch.trim()}"`];
     }
-    return filtered;
-  }, [locationSearch]);
+
+    return suggestions;
+  }, [locationSearch, locationSearchResults]);
 
   const filterToastAnimatedStyle = useAnimatedStyle(() => ({
     opacity: filterToastOpacity.value,
@@ -201,7 +258,95 @@ export default function CreateScreen() {
   useEffect(() => {
     loadGallery();
   }, [loadGallery]);
+  useEffect(() => {
+    if (!locationModalVisible) return;
 
+    let cancelled = false;
+
+    const loadCurrentLocation = async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== "granted") {
+          if (!cancelled) setLocationPermissionDenied(true);
+          return;
+        }
+
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        if (!cancelled) {
+          setLocationPermissionDenied(false);
+          setLocationCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        }
+      } catch {
+        if (!cancelled) setLocationPermissionDenied(true);
+      }
+    };
+
+    loadCurrentLocation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locationModalVisible]);
+
+  useEffect(() => {
+    const search = locationSearch.trim();
+    if (!locationModalVisible || search.length < 2) {
+      setLocationSearchResults([]);
+      setLocationSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(async () => {
+      setLocationSearchLoading(true);
+
+      try {
+        const params = new URLSearchParams({ q: search, limit: "10" });
+        if (locationCoords) {
+          params.set("lat", String(locationCoords.latitude));
+          params.set("lon", String(locationCoords.longitude));
+        }
+
+        const response = await fetch(
+          `https://photon.komoot.io/api/?${params.toString()}`,
+          { signal: controller.signal },
+        );
+        const data = await response.json();
+        const results = uniqueLocations(
+          ((data.features || []) as PhotonFeature[])
+            .map(formatPhotonFeature)
+            .filter(Boolean),
+        );
+
+        setLocationSearchResults(results);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setLocationSearchResults([]);
+        }
+      } finally {
+        setLocationSearchLoading(false);
+      }
+    }, 450);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [locationCoords, locationModalVisible, locationSearch]);
+
+
+  const handleSelectLocation = (location: string) => {
+    setSelectedLocation(location.trim());
+    setLocationModalVisible(false);
+    setLocationSearch("");
+    setLocationSearchResults([]);
+  };
   const handlePickImage = async () => {
     if (selectedAssets.length >= 5) {
       Alert.alert("Limit Reached", "You can only select up to 5 images.");
@@ -961,7 +1106,29 @@ export default function CreateScreen() {
               autoFocus
             />
 
+            <View style={styles.modalMetaRow}>
+              <Ionicons
+                name={locationPermissionDenied ? "alert-circle-outline" : "navigate-outline"}
+                size={15}
+                color={themeColors.textMuted}
+              />
+              <Text style={styles.modalMetaText}>
+                {locationPermissionDenied
+                  ? "Search still works. Enable location for nearer results."
+                  : locationCoords
+                    ? "Showing places near you first"
+                    : "Finding nearby places..."}
+              </Text>
+            </View>
+
             <ScrollView style={styles.modalList} keyboardShouldPersistTaps="handled">
+              {locationSearchLoading ? (
+                <View style={styles.modalLoadingRow}>
+                  <ActivityIndicator size="small" color={Colors.primaryLight} />
+                  <Text style={styles.modalLoadingText}>Searching places...</Text>
+                </View>
+              ) : null}
+
               {locationSuggestions.map((item) => {
                 const isCustom = item.startsWith("Add custom:");
                 const displayName = isCustom
@@ -972,13 +1139,11 @@ export default function CreateScreen() {
                     key={item}
                     style={styles.modalListItem}
                     onPress={() => {
-                      setSelectedLocation(displayName);
-                      setLocationModalVisible(false);
-                      setLocationSearch("");
+                      handleSelectLocation(displayName);
                     }}
                   >
                     <Ionicons
-                      name="location-outline"
+                      name={isCustom ? "add-circle-outline" : "location-outline"}
                       size={18}
                       color={themeColors.textSecondary}
                       style={{ marginRight: 12 }}
@@ -1569,7 +1734,29 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: Spacing.sm,
       marginBottom: Spacing.md,
     },
-    modalList: {
+    modalMetaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: Spacing.sm,
+    },
+    modalMetaText: {
+      color: colors.textMuted,
+      fontFamily: FontFamily.medium,
+      fontSize: 12,
+      marginLeft: 7,
+      flex: 1,
+    },
+    modalLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+    },
+    modalLoadingText: {
+      color: colors.textSecondary,
+      fontFamily: FontFamily.semiBold,
+      fontSize: 13,
+      marginLeft: 10,
+    },    modalList: {
       flex: 1,
     },
     modalListItem: {

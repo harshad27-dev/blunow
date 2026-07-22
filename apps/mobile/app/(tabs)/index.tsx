@@ -8,29 +8,38 @@ import {
   Image,
   ScrollView,
   Alert,
+  Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import Header from "@/components/Header";
-import FeedCard from "@/components/FeedCard";
+import ChatSwipePreview from "@/components/chat/ChatSwipePreview";
+import FeedCard, { type FeedPostAction } from "@/components/FeedCard";
 import { Screen } from "@/components/common/Screen";
 import { ScreenSpacing } from "@/constants/screen";
 import { postService } from "@/services/post.service";
+import { userService } from "@/services/user.service";
 import { useAuthStore } from "@/store/authStore";
 import { useFeedQuery, useStoriesQuery } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Colors } from "@/constants/colors";
 import CommentsDrawer from "@/components/feed/CommentsDrawer";
+import { showToast } from "@/utils/toast";
 import Animated, {
   Extrapolation,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+
+const { width: screenWidth } = Dimensions.get("window");
+const CHAT_PEEK_WIDTH = screenWidth * 0.2;
 
 type StoryItem = {
   id: string;
@@ -44,6 +53,7 @@ type StoryItem = {
 
 type FeedPost = {
   id: string;
+  authorId?: string | null;
   author: {
     username: string;
     avatarUrl?: string;
@@ -55,6 +65,7 @@ type FeedPost = {
   isLiked: boolean;
   isSaved: boolean;
   isAnonymous: boolean;
+  isOwnPost: boolean;
   timeAgo: string;
 };
 
@@ -84,13 +95,14 @@ const getTimeLeft = (expiresAt?: string) => {
   const minutes = Math.max(1, Math.floor(remainingMs / (1000 * 60)));
   return `${minutes}m left`;
 };
-
 export default function FeedScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const scrollY = useSharedValue(0);
+  const chatSwipeX = useSharedValue(0);
+  const chatSwipeStartX = useSharedValue(0);
   const {
     data: feedData,
     isLoading,
@@ -108,21 +120,29 @@ export default function FeedScreen() {
   const { user } = useAuthStore();
 
   const posts: FeedPost[] =
-    feedData?.pages.flatMap((page: any) => page.feed).map((p: any) => ({
-      id: p.postId,
-      author: {
-        username: p.author?.username || "user",
-        avatarUrl: p.author?.avatarUrl || undefined,
-      },
-      caption: p.caption,
-      mediaUrls: p.mediaUrls || [],
-      likesCount: p.likesCount || 0,
-      commentsCount: p.commentsCount || 0,
-      isLiked: Boolean(p.isLiked),
-      isSaved: Boolean(p.isSaved),
-      isAnonymous: Boolean(p.isAnonymous),
-      timeAgo: p.createdAt ? getTimeAgo(p.createdAt) : "just now",
-    })) || [];
+    feedData?.pages
+      .flatMap((page: any) => page.feed)
+      .map((p: any) => ({
+        id: p.postId,
+        authorId: p.author?.userId || p.authorId || null,
+        author: {
+          username: p.author?.username || "user",
+          avatarUrl: p.author?.avatarUrl || undefined,
+        },
+        caption: p.caption,
+        mediaUrls: p.mediaUrls || [],
+        likesCount: p.likesCount || 0,
+        commentsCount: p.commentsCount || 0,
+        isLiked: Boolean(p.isLiked),
+        isSaved: Boolean(p.isSaved),
+        isAnonymous: Boolean(p.isAnonymous),
+        isOwnPost: Boolean(
+          p.isOwnPost ||
+          (user?.id &&
+            (p.author?.userId === user.id || p.authorId === user.id)),
+        ),
+        timeAgo: p.createdAt ? getTimeAgo(p.createdAt) : "just now",
+      })) || [];
 
   const currentUserStory = (storiesData || []).find(
     (story: StoryItem) => story.authorId === user?.id,
@@ -133,9 +153,11 @@ export default function FeedScreen() {
 
   const currentUserName =
     user?.profile?.username || user?.username || "Your story";
-  const currentUserAvatar = currentUserStory?.mediaUrl || user?.profile?.avatarUrl;
+  const currentUserAvatar =
+    currentUserStory?.mediaUrl || user?.profile?.avatarUrl;
 
-  const openCreateStory = () => router.push({ pathname: "/(screens)/create", params: { type: "story" } });
+  const openCreateStory = () =>
+    router.push({ pathname: "/(screens)/create", params: { type: "story" } });
   const openCurrentUserStory = () => {
     if (currentUserStory?.id) {
       openStory(currentUserStory.id);
@@ -153,15 +175,26 @@ export default function FeedScreen() {
 
   const openComments = (postId: string) => setCommentPostId(postId);
 
+  const openPreviewChat = (target: {
+    roomId: string;
+    name: string;
+    avatarUrl?: string;
+  }) =>
+    router.push({
+      pathname: "/(screens)/chat/[roomId]",
+      params: {
+        roomId: target.roomId,
+        name: target.name,
+        avatarUrl: target.avatarUrl || "",
+      },
+    });
+
   const onRefresh = () => {
     refetch();
     refetchStories();
   };
 
-  const updateFeedPost = (
-    postId: string,
-    updater: (post: any) => any,
-  ) => {
+  const updateFeedPost = (postId: string, updater: (post: any) => any) => {
     queryClient.setQueryData(["feed"], (current: any) => {
       if (!current) return current;
 
@@ -176,9 +209,7 @@ export default function FeedScreen() {
         pages: current.pages.map((page: any) => ({
           ...page,
           feed: page.feed.map((post: any) =>
-            post.postId === postId || post.id === postId
-              ? updater(post)
-              : post,
+            post.postId === postId || post.id === postId ? updater(post) : post,
           ),
         })),
       };
@@ -233,6 +264,62 @@ export default function FeedScreen() {
     }
   };
 
+  const updateFeedAuthorFollow = (authorId: string, isFollowing: boolean) => {
+    queryClient.setQueryData(["feed"], (current: any) => {
+      if (!current) return current;
+
+      const updatePost = (post: any) => {
+        const postAuthorId = post.author?.userId || post.authorId;
+        return postAuthorId === authorId ? { ...post, isFollowing } : post;
+      };
+
+      if (Array.isArray(current)) return current.map(updatePost);
+
+      return {
+        ...current,
+        pages: current.pages.map((page: any) => ({
+          ...page,
+          feed: page.feed.map(updatePost),
+        })),
+      };
+    });
+  };
+
+  const handleFeedAction = async (postId: string, action: FeedPostAction) => {
+    if (action !== "follow" && action !== "unfollow") return;
+
+    const targetPost = posts.find((post) => post.id === postId);
+    const authorId = targetPost?.authorId;
+    if (!authorId || targetPost?.isAnonymous || targetPost?.isOwnPost) return;
+
+    const nextFollowing = action === "follow";
+    const previousFeed = queryClient.getQueryData(["feed"]);
+    updateFeedAuthorFollow(authorId, nextFollowing);
+
+    try {
+      if (nextFollowing) {
+        await userService.followUser(authorId);
+      } else {
+        await userService.unfollowUser(authorId);
+      }
+
+      showToast(
+        nextFollowing
+          ? `Following ${targetPost.author.username}`
+          : `Unfollowed ${targetPost.author.username}`,
+      );
+      queryClient.invalidateQueries({ queryKey: ["user-profile", authorId] });
+      queryClient.invalidateQueries({ queryKey: ["user-stats", authorId] });
+      queryClient.invalidateQueries({ queryKey: ["feed"] });
+    } catch (error: any) {
+      queryClient.setQueryData(["feed"], previousFeed);
+      showToast(
+        error?.response?.data?.message || "Unable to update follow.",
+        "Follow failed",
+      );
+    }
+  };
+
   const renderHeader = () => (
     <View className="border-b border-border bg-bg py-4">
       <ScrollView
@@ -247,7 +334,9 @@ export default function FeedScreen() {
         >
           <View
             className={`h-[68px] w-[68px] items-center justify-center rounded-[24px] bg-bg-card ${
-              currentUserStory ? "border-2 border-primary-light" : "border border-border"
+              currentUserStory
+                ? "border-2 border-primary-light"
+                : "border border-border"
             }`}
           >
             {currentUserAvatar ? (
@@ -329,7 +418,11 @@ export default function FeedScreen() {
                         className="h-full w-full"
                       />
                     ) : (
-                      <Ionicons name="person" size={24} color={Colors.textMuted} />
+                      <Ionicons
+                        name="person"
+                        size={24}
+                        color={Colors.textMuted}
+                      />
                     )}
                   </View>
                   <View
@@ -391,67 +484,115 @@ export default function FeedScreen() {
     scrollY.value = event.nativeEvent.contentOffset.y;
   };
 
+  const chatSwipeGesture = Gesture.Pan()
+    .activeOffsetX([-28, 28])
+    .failOffsetY([-18, 18])
+    .onBegin(() => {
+      chatSwipeStartX.value = chatSwipeX.value;
+    })
+    .onUpdate((event) => {
+      chatSwipeX.value = Math.max(
+        -CHAT_PEEK_WIDTH,
+        Math.min(0, chatSwipeStartX.value + event.translationX),
+      );
+    })
+    .onEnd((event) => {
+      const isClosing = chatSwipeStartX.value < 0 && event.translationX > 0;
+      const target = isClosing
+        ? 0
+        : chatSwipeX.value < -CHAT_PEEK_WIDTH * 0.35 || event.velocityX < -360
+          ? -CHAT_PEEK_WIDTH
+          : 0;
+
+      chatSwipeX.value = withSpring(target, {
+        damping: 22,
+        stiffness: 190,
+        mass: 0.85,
+      });
+    });
+
+  const chatSwipeAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: chatSwipeX.value }],
+  }));
+
   return (
     <Screen edges={["left", "right"]}>
-      <View
-        pointerEvents="none"
-        className="absolute left-0 right-0 top-0 z-30 bg-bg"
-        style={{ height: insets.top }}
-      />
-      <Animated.View
-        className="absolute left-0 right-0 top-0 z-20"
-        style={headerAnimatedStyle}
-      >
-        <Header />
-      </Animated.View>
-      {isLoading ? (
-        <View className="flex-1 justify-center items-center pt-24">
-          <ActivityIndicator color={Colors.primary} size="large" />
-        </View>
-      ) : posts.length === 0 ? (
-        <View className="flex-1 pt-24">
-          {renderHeader()}
-          <View className="flex-1 justify-center items-center px-6">
-            <Text className="text-text-primary font-medium text-lg text-center">
-              No posts to show.
-            </Text>
-            <Text className="text-text-secondary text-center mt-2">
-              Create a post or follow more people to get started.
-            </Text>
+      <GestureDetector gesture={chatSwipeGesture}>
+        <Animated.View
+          className="flex-1 flex-row"
+          style={[{ width: screenWidth * 2 }, chatSwipeAnimatedStyle]}
+        >
+          <View className="flex-1 bg-bg" style={{ width: screenWidth }}>
+            <View
+              pointerEvents="none"
+              className="absolute left-0 right-0 top-0 z-30 bg-bg"
+              style={{ height: insets.top }}
+            />
+            <Animated.View
+              className="absolute left-0 right-0 top-0 z-20"
+              style={headerAnimatedStyle}
+            >
+              <Header />
+            </Animated.View>
+            {isLoading ? (
+              <View className="flex-1 justify-center items-center pt-24">
+                <ActivityIndicator color={Colors.primary} size="large" />
+              </View>
+            ) : posts.length === 0 ? (
+              <View className="flex-1 pt-24">
+                {renderHeader()}
+                <View className="flex-1 justify-center items-center px-6">
+                  <Text className="text-text-primary font-medium text-lg text-center">
+                    No posts to show.
+                  </Text>
+                  <Text className="text-text-secondary text-center mt-2">
+                    Create a post or follow more people to get started.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <FlatList
+                data={posts}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <FeedCard
+                    post={item}
+                    onLikePress={handleLikePost}
+                    onCommentPress={openComments}
+                    onSavePress={handleSavePost}
+                    onMoreAction={handleFeedAction}
+                  />
+                )}
+                ListHeaderComponent={renderHeader}
+                ListFooterComponent={renderFooter}
+                showsVerticalScrollIndicator={false}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                onEndReached={handleEndReached}
+                onEndReachedThreshold={0.7}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isFetching}
+                    onRefresh={onRefresh}
+                    tintColor={Colors.primary}
+                  />
+                }
+                contentContainerStyle={{
+                  paddingBottom: ScreenSpacing.bottomTab,
+                  paddingTop: 96,
+                }}
+              />
+            )}
           </View>
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <FeedCard
-              post={item}
-              onLikePress={handleLikePost}
-              onCommentPress={openComments}
-              onSavePress={handleSavePost}
+
+          <View className="flex-1 bg-bg" style={{ width: screenWidth }}>
+            <ChatSwipePreview
+              currentUserId={user?.id}
+              onOpenChat={openPreviewChat}
             />
-          )}
-          ListHeaderComponent={renderHeader}
-          ListFooterComponent={renderFooter}
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          onEndReached={handleEndReached}
-          onEndReachedThreshold={0.7}
-          refreshControl={
-            <RefreshControl
-              refreshing={isFetching}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-            />
-          }
-          contentContainerStyle={{
-            paddingBottom: ScreenSpacing.bottomTab,
-            paddingTop: 96,
-          }}
-        />
-      )}
+          </View>
+        </Animated.View>
+      </GestureDetector>
       <CommentsDrawer
         visible={Boolean(commentPostId)}
         postId={commentPostId}

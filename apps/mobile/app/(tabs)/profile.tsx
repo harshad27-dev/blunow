@@ -2,19 +2,22 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  Modal,
   RefreshControl,
   ScrollView,
   Text,
   Pressable,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/colors";
 import { CustomDialog } from "@/components/common/Modal";
+import { DraggableBottomSheet } from "@/components/common/DraggableBottomSheet";
 import { ProfilePostGrid } from "@/components/profile/ProfilePostGrid";
 import {
   ProfileCompletionCard,
@@ -73,7 +76,7 @@ export default function ProfileScreen() {
       { requestId: request.id, status: "ACCEPTED" },
       {
         onSettled: () => setPendingRequestAction(null),
-      }
+      },
     );
   };
 
@@ -83,13 +86,14 @@ export default function ProfileScreen() {
       { requestId: request.id, status: "REJECTED" },
       {
         onSettled: () => setPendingRequestAction(null),
-      }
+      },
     );
   };
 
   const currentUser = liveUser || user;
   const profile = currentUser?.profile;
-  const displayName = profile?.name || profile?.username || currentUser?.username || "Your Name";
+  const displayName =
+    profile?.name || profile?.username || currentUser?.username || "Your Name";
   const handle = currentUser?.username || profile?.username || "username";
   const city = profile?.location || "Add your city";
   const age = calculateAge(profile?.birthDate);
@@ -127,8 +131,7 @@ export default function ProfileScreen() {
       params: { storyId },
     });
   const openMatch = (match: Match) => {
-    const matchedUser =
-      match.user1Id === user?.id ? match.user2 : match.user1;
+    const matchedUser = match.user1Id === user?.id ? match.user2 : match.user1;
 
     if (match.chat?.id) {
       router.push({
@@ -137,9 +140,7 @@ export default function ProfileScreen() {
           roomId: match.chat.id,
           userId: matchedUser?.id || "",
           name:
-            matchedUser?.profile?.username ||
-            matchedUser?.username ||
-            "Match",
+            matchedUser?.profile?.username || matchedUser?.username || "Match",
           avatarUrl: matchedUser?.profile?.avatarUrl || "",
         },
       });
@@ -173,7 +174,9 @@ export default function ProfileScreen() {
     <SafeAreaView edges={["top", "left", "right"]} className="flex-1 bg-bg">
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 72, 96) }}
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom + 72, 96),
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -214,7 +217,10 @@ export default function ProfileScreen() {
           onRequestsPress={() => setIsRequestsModalVisible(true)}
         />
 
-        <ProfileCompletionCard completion={completion} onPress={openCompletionDialog} />
+        <ProfileCompletionCard
+          completion={completion}
+          onPress={openCompletionDialog}
+        />
         <ProfileTabs
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -322,70 +328,83 @@ const RequestsModal = ({
   const insets = useSafeAreaInsets();
 
   return (
-  <Modal
-    visible={visible}
-    transparent
-    animationType="slide"
-    statusBarTranslucent
-    accessibilityViewIsModal
-    onRequestClose={onClose}
-  >
-    <View className="flex-1 justify-end" style={{ backgroundColor: Colors.overlayDark }}>
-      <View
-        className="max-h-[84%] rounded-t-[32px] border-t border-border bg-bg-card px-5 pt-2"
-        style={{ paddingBottom: Math.max(insets.bottom + 16, 32) }}
-      >
-        {/* Handle */}
-        <View className="mb-5 mt-1 h-1 w-10 self-center rounded-full bg-border" />
+    <DraggableBottomSheet
+      visible={visible}
+      onClose={onClose}
+      sheetClassName="max-h-[84%] rounded-t-[32px] border-t border-border bg-bg-card px-5 pt-2"
+      sheetStyle={{ paddingBottom: Math.max(insets.bottom + 16, 32) }}
+    >
+      {/* Handle */}
+      <View className="mb-5 mt-1 h-1 w-10 self-center rounded-full bg-border" />
 
-        <View className="mb-5 flex-row items-start justify-between">
-          <View className="mr-4 flex-1">
-            <View className="flex-row items-center">
-              <View className="mr-2 h-9 w-9 items-center justify-center rounded-xl bg-bg-elevated">
-                <Ionicons name="people-outline" size={18} color={Colors.primary} />
-              </View>
-              <Text className="text-xl font-extrabold text-text-primary">Incoming requests</Text>
+      <View className="mb-5 flex-row items-start justify-between">
+        <View className="mr-4 flex-1">
+          <View className="flex-row items-center">
+            <View className="mr-2 h-9 w-9 items-center justify-center rounded-xl bg-bg-elevated">
+              <Ionicons
+                name="people-outline"
+                size={18}
+                color={Colors.primary}
+              />
             </View>
-            <Text className="ml-11 mt-1 text-xs leading-5 text-text-secondary">{requests.length} people want to connect</Text>
+            <Text className="text-xl font-extrabold text-text-primary">
+              Incoming requests
+            </Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close requests"
-            hitSlop={8}
-            className="h-12 w-12 items-center justify-center rounded-2xl bg-bg-elevated"
-            onPress={onClose}
-          >
-            <Ionicons name="close" size={20} color={Colors.textPrimary} />
-          </Pressable>
+          <Text className="ml-11 mt-1 text-xs leading-5 text-text-secondary">
+            {requests.length} people want to connect
+          </Text>
         </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          className="max-h-[72%]"
-          contentContainerClassName="pb-2"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close requests"
+          hitSlop={8}
+          className="h-12 w-12 items-center justify-center rounded-2xl bg-bg-elevated"
+          onPress={onClose}
         >
-          {requests.length === 0 ? (
-            <View className="items-center py-12">
-              <View className="mb-4 h-16 w-16 items-center justify-center rounded-[22px] bg-bg-elevated">
-                <Ionicons name="mail-open-outline" size={27} color={Colors.textSecondary} />
-              </View>
-              <Text className="text-base font-extrabold text-text-primary">All caught up</Text>
-              <Text className="mt-1.5 text-center text-xs text-text-secondary">New connection requests will appear here.</Text>
+          <Ionicons name="close" size={20} color={Colors.textPrimary} />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className="max-h-[72%]"
+        contentContainerClassName="pb-2"
+      >
+        {requests.length === 0 ? (
+          <View className="items-center py-12">
+            <View className="mb-4 h-16 w-16 items-center justify-center rounded-[22px] bg-bg-elevated">
+              <Ionicons
+                name="mail-open-outline"
+                size={27}
+                color={Colors.textSecondary}
+              />
             </View>
-          ) : requests.map((request) => (
+            <Text className="text-base font-extrabold text-text-primary">
+              All caught up
+            </Text>
+            <Text className="mt-1.5 text-center text-xs text-text-secondary">
+              New connection requests will appear here.
+            </Text>
+          </View>
+        ) : (
+          requests.map((request) => (
             <IncomingRequestRow
               key={request.id}
               request={request}
               disabled={Boolean(pendingAction)}
-              pendingStatus={pendingAction?.requestId === request.id ? pendingAction.status : null}
+              pendingStatus={
+                pendingAction?.requestId === request.id
+                  ? pendingAction.status
+                  : null
+              }
               onAccept={() => onAccept(request)}
               onReject={() => onReject(request)}
             />
-          ))}
-        </ScrollView>
-      </View>
-    </View>
-  </Modal>
+          ))
+        )}
+      </ScrollView>
+    </DraggableBottomSheet>
   );
 };
 
@@ -463,7 +482,10 @@ const IncomingRequestRow = ({
           accessibilityLabel={`Accept request from ${name}`}
           accessibilityState={{ disabled }}
           className="h-10 w-10 items-center justify-center rounded-[14px]"
-          style={{ backgroundColor: Colors.success, opacity: disabled ? 0.55 : 1 }}
+          style={{
+            backgroundColor: Colors.success,
+            opacity: disabled ? 0.55 : 1,
+          }}
           onPress={onAccept}
           disabled={disabled}
         >
@@ -527,14 +549,22 @@ const ProfileMatchList = ({
             </View>
           )}
           <View className="ml-4 flex-1">
-            <Text className="text-base font-bold text-text-primary">{name}</Text>
+            <Text className="text-base font-bold text-text-primary">
+              {name}
+            </Text>
             <View className="mt-1.5 flex-row items-center">
               <View className="mr-1.5 h-1.5 w-1.5 rounded-full bg-success" />
-              <Text className="text-xs font-medium text-text-secondary">Matched · Tap to chat</Text>
+              <Text className="text-xs font-medium text-text-secondary">
+                Matched · Tap to chat
+              </Text>
             </View>
           </View>
           <View className="h-10 w-10 items-center justify-center rounded-xl bg-bg-elevated">
-            <Ionicons name="chatbubble-outline" size={18} color={Colors.primary} />
+            <Ionicons
+              name="chatbubble-outline"
+              size={18}
+              color={Colors.primary}
+            />
           </View>
         </Pressable>
       );

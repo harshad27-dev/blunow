@@ -19,7 +19,7 @@ export class PostsService {
   ) {
     const post = await this.postsRepository.create({ ...data, authorId });
     eventBus.emit(EVENTS.POST.CREATED, { postId: post.id, authorId });
-    return maskAnonymousPost(post);
+    return maskAnonymousPost({ ...post, isOwnPost: true });
   }
 
   async getPostById(id: string, viewerId: string) {
@@ -32,7 +32,25 @@ export class PostsService {
     ) {
       throw new AppError("Post not found", 404);
     }
-    return maskAnonymousPost(post);
+    const isFollowing = viewerId
+      ? Boolean(
+          await prisma.userFollow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId: viewerId,
+                followingId: post.authorId,
+              },
+            },
+            select: { followerId: true },
+          }),
+        )
+      : false;
+
+    return maskAnonymousPost({
+      ...post,
+      isOwnPost: post.authorId === viewerId,
+      isFollowing,
+    });
   }
 
   async updatePost(id: string, userId: string, data: any) {
@@ -74,7 +92,9 @@ export class PostsService {
       userId,
       userId === viewerId,
     );
-    return posts.map(maskAnonymousPost);
+    return posts.map((post) =>
+      maskAnonymousPost({ ...post, isOwnPost: post.authorId === viewerId }),
+    );
   }
 
   private async canViewUserContent(viewerId: string, userId: string) {
@@ -109,7 +129,9 @@ export class PostsService {
 
   async getSavedPosts(userId: string) {
     const posts = await this.postsRepository.findSavedByUserId(userId);
-    return posts.map(maskAnonymousPost);
+    return posts.map((post) =>
+      maskAnonymousPost({ ...post, isOwnPost: post.authorId === userId }),
+    );
   }
 
   async getTrendingPosts(limit = 20) {

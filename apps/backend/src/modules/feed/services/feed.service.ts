@@ -28,25 +28,27 @@ export class FeedService {
     });
 
     const items = feed.items.map((p) => ({
-        postId: p.id,
-        caption: p.caption,
-        isAnonymous: Boolean(p.isAnonymous),
-        author: {
-          userId: p.isAnonymous ? null : p.authorId,
-          username: p.isAnonymous ? "Anonymous" : p.username,
-          avatarUrl: p.isAnonymous ? null : p.avatarUrl,
-          sexuality: p.isAnonymous ? null : p.sexuality,
-          distance: p.distance ? Math.round(p.distance) : null,
-        },
-        createdAt: p.createdAt,
-        mediaUrls: p.mediaUrls || [],
-        likesCount: p.likesCount || 0,
-        commentsCount: p.commentsCount || 0,
-        savesCount: p.savesCount || 0,
-        isLiked: Boolean(p.isLiked),
-        isSaved: Boolean(p.isSaved),
-        rankingScore: p.rankingScore,
-      }));
+      postId: p.id,
+      caption: p.caption,
+      isAnonymous: Boolean(p.isAnonymous),
+      author: {
+        userId: p.isAnonymous ? null : p.authorId,
+        username: p.isAnonymous ? "Anonymous" : p.username,
+        avatarUrl: p.isAnonymous ? null : p.avatarUrl,
+        sexuality: p.isAnonymous ? null : p.sexuality,
+        distance: p.distance ? Math.round(p.distance) : null,
+      },
+      isOwnPost: p.authorId === params.userId,
+      isFollowing: Boolean((p as any).isFollowing),
+      createdAt: p.createdAt,
+      mediaUrls: p.mediaUrls || [],
+      likesCount: p.likesCount || 0,
+      commentsCount: p.commentsCount || 0,
+      savesCount: p.savesCount || 0,
+      isLiked: Boolean(p.isLiked),
+      isSaved: Boolean(p.isSaved),
+      rankingScore: p.rankingScore,
+    }));
 
     return {
       items,

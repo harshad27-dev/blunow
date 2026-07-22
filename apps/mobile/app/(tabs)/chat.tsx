@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import {
   Alert,
+  ActivityIndicator,
   FlatList,
   Image,
   RefreshControl,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -22,11 +24,17 @@ import {
   useIncomingMatchRequestsQuery,
   useRespondMatchRequestMutation,
 } from "@/hooks/queries";
-import type { ChatConversation, ChatParticipant } from "@/types/chat.types";
+import type {
+  ChatConversation,
+  ChatParticipant,
+  ChatSettingsPayload,
+} from "@/types/chat.types";
 import type { MatchRequest } from "@/types/match.types";
 import { useAuthStore } from "@/store/authStore";
 import { Colors } from "@/constants/colors";
 import { useChatSocket } from "@/hooks/useSocket";
+import { showToast } from "@/utils/toast";
+import { DraggableBottomSheet } from "@/components/common/DraggableBottomSheet";
 
 type ConversationItem = {
   id: string;
@@ -37,7 +45,6 @@ type ConversationItem = {
   unreadCount: number;
   isMuted: boolean;
   isArchived: boolean;
-  messageCount: number;
   raw: ChatConversation;
 };
 
@@ -156,7 +163,6 @@ const normalizeConversation = (
     unreadCount: chat.unreadCount || 0,
     isMuted: Boolean(isMuted),
     isArchived: Boolean(isArchived),
-    messageCount: chat._count?.messages || 0,
     raw: chat,
   };
 };
@@ -200,7 +206,9 @@ const normalizeRequestConversation = (
       latest?.content ||
       chat.lastMessageContent ||
       (isIncoming ? "Wants to message you." : "Waiting for them to accept."),
-    timeLabel: getTimeLabel(chat.lastMessageAt || latest?.createdAt || chat.updatedAt),
+    timeLabel: getTimeLabel(
+      chat.lastMessageAt || latest?.createdAt || chat.updatedAt,
+    ),
     isIncoming,
     raw: chat,
   };
@@ -213,6 +221,10 @@ export default function ChatListScreen() {
   const [activeFilter, setActiveFilter] = useState<ChatFilter>("all");
   const [activeSegment, setActiveSegment] =
     useState<MessageSegment>("messages");
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+  const [chatSearch, setChatSearch] = useState("");
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [actionItem, setActionItem] = useState<ConversationItem | null>(null);
 
   const {
     data: conversations = [],
@@ -227,6 +239,9 @@ export default function ChatListScreen() {
   } = useIncomingMatchRequestsQuery();
   const deleteChatMutation = useDeleteChatMutation();
   const respondRequestMutation = useRespondMatchRequestMutation();
+  const actionSettingsMutation = useUpdateChatSettingsMutation(
+    actionItem?.id || "",
+  );
   const socket = useChatSocket();
 
   const activeConversations = useMemo(
@@ -238,7 +253,8 @@ export default function ChatListScreen() {
     [conversations],
   );
   const allItems = useMemo(
-    () => activeConversations.map((chat) => normalizeConversation(chat, user?.id)),
+    () =>
+      activeConversations.map((chat) => normalizeConversation(chat, user?.id)),
     [activeConversations, user?.id],
   );
 
@@ -255,15 +271,19 @@ export default function ChatListScreen() {
   );
 
   const requestItems = useMemo(() => {
-    const byId = new Map<string, RequestItem>();
+    const byKey = new Map<string, RequestItem>();
+
     requestConversations.forEach((chat) => {
       const item = normalizeRequestConversation(chat, user?.id);
-      byId.set(item.id, item);
+      byKey.set(item.chatId || item.requestId || item.id, item);
     });
+
     incomingRequests.map(normalizeLegacyRequest).forEach((item) => {
-      if (!item.chatId) byId.set(item.id, item);
+      const key = item.chatId || item.requestId || item.id;
+      if (!byKey.has(key)) byKey.set(key, item);
     });
-    return Array.from(byId.values());
+
+    return Array.from(byKey.values());
   }, [incomingRequests, requestConversations, user?.id]);
 
   const activeItems = allItems.filter((item) => !item.isArchived);
@@ -272,7 +292,15 @@ export default function ChatListScreen() {
     0,
   );
   const matchStories = activeItems.slice(0, 12);
-  const listData = activeSegment === "requests" ? requestItems : items;
+  const rawListData = activeSegment === "requests" ? requestItems : items;
+  const normalizedSearch = chatSearch.trim().toLowerCase();
+  const listData = normalizedSearch
+    ? rawListData.filter((item) =>
+        `${item.name} ${item.subtitle}`
+          .toLowerCase()
+          .includes(normalizedSearch),
+      )
+    : rawListData;
   const isRefreshing =
     activeSegment === "requests" ? isRequestsFetching : isFetching;
 
@@ -288,17 +316,26 @@ export default function ChatListScreen() {
   useEffect(() => {
     const refreshConversations = () => {
       refetch();
+      refetchRequests();
     };
+    const events = [
+      "chat:message:new",
+      "chat:read",
+      "chat:request:accepted",
+      "chat:request:updated",
+      "chat:conversation:updated",
+      "chat:conversation:deleted",
+      "chat:message:deleted",
+    ];
 
-    socket.on("chat:message:new", refreshConversations);
-    socket.on("chat:read", refreshConversations);
+    events.forEach((event) => (socket as any).on(event, refreshConversations));
 
     return () => {
-      socket.off("chat:message:new", refreshConversations);
-      socket.off("chat:read", refreshConversations);
+      events.forEach((event) =>
+        (socket as any).off(event, refreshConversations),
+      );
     };
-  }, [refetch, socket]);
-
+  }, [refetch, refetchRequests, socket]);
 
   const openConversation = (item: ConversationItem) => {
     router.push({
@@ -311,17 +348,32 @@ export default function ChatListScreen() {
     });
   };
 
-  const showFilters = () => {
-    Alert.alert("Filter messages", "Choose which conversations to show.", [
-      ...FILTERS.map((filter) => ({
-        text: filter.label,
-        onPress: () => {
-          setActiveFilter(filter.value);
-          setActiveSegment("messages");
-        },
-      })),
-      { text: "Cancel", style: "cancel" as const },
-    ]);
+  const showFilters = () => setFilterSheetVisible(true);
+
+  const applyFilter = (filter: ChatFilter) => {
+    setActiveFilter(filter);
+    setActiveSegment("messages");
+    setFilterSheetVisible(false);
+  };
+
+  const updateActionConversation = (
+    payload: ChatSettingsPayload,
+    successMessage: string,
+  ) => {
+    if (!actionItem) return;
+
+    actionSettingsMutation.mutate(payload, {
+      onSuccess: () => {
+        setActionItem(null);
+        showToast(successMessage);
+      },
+      onError: (error: any) => {
+        showToast(
+          error?.response?.data?.message || "Could not update conversation",
+          "Update failed",
+        );
+      },
+    });
   };
 
   const confirmDelete = (item: ConversationItem) => {
@@ -330,7 +382,19 @@ export default function ChatListScreen() {
       {
         text: "Delete",
         style: "destructive",
-        onPress: () => deleteChatMutation.mutate(item.id),
+        onPress: () =>
+          deleteChatMutation.mutate(item.id, {
+            onSuccess: () => {
+              setActionItem(null);
+              showToast("Conversation deleted");
+            },
+            onError: (error: any) => {
+              showToast(
+                error?.response?.data?.message || "Could not delete chat",
+                "Delete failed",
+              );
+            },
+          }),
       },
     ]);
   };
@@ -348,7 +412,11 @@ export default function ChatListScreen() {
               accessibilityRole="button"
               accessibilityLabel="Go back"
             >
-              <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+              <Ionicons
+                name="chevron-back"
+                size={24}
+                color={Colors.textPrimary}
+              />
             </TouchableOpacity>
           </View>
 
@@ -362,11 +430,11 @@ export default function ChatListScreen() {
           <View className="absolute right-0 flex-row items-center">
             <TouchableOpacity
               className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-card"
-              onPress={() => router.push("/(screens)/search")}
+              onPress={() => setSearchVisible((visible) => !visible)}
               activeOpacity={0.82}
               style={CARD_SHADOW}
               accessibilityRole="button"
-              accessibilityLabel="Search profiles"
+              accessibilityLabel="Search chats"
             >
               <Ionicons name="search" size={19} color={Colors.textPrimary} />
             </TouchableOpacity>
@@ -378,11 +446,39 @@ export default function ChatListScreen() {
               accessibilityRole="button"
               accessibilityLabel="Filter messages"
             >
-              <Ionicons name="options-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons
+                name="options-outline"
+                size={20}
+                color={Colors.textPrimary}
+              />
             </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      {searchVisible ? (
+        <View className="mx-5 mb-4 h-12 flex-row items-center rounded-2xl border border-border bg-bg-card px-4">
+          <Ionicons name="search" size={17} color={Colors.textSecondary} />
+          <TextInput
+            value={chatSearch}
+            onChangeText={setChatSearch}
+            placeholder="Search chats"
+            placeholderTextColor={Colors.textMuted}
+            className="ml-2 min-w-0 flex-1 text-sm font-semibold text-text-primary"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {chatSearch ? (
+            <TouchableOpacity onPress={() => setChatSearch("")}>
+              <Ionicons
+                name="close-circle"
+                size={18}
+                color={Colors.textMuted}
+              />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
 
       {isLoading ? (
         <ConversationSkeletonList />
@@ -420,6 +516,12 @@ export default function ChatListScreen() {
             <EmptyState
               segment={activeSegment}
               filter={activeSegment === "requests" ? "all" : activeFilter}
+              hasSearch={Boolean(normalizedSearch)}
+              onPrimaryPress={() =>
+                normalizedSearch
+                  ? setChatSearch("")
+                  : router.push("/(tabs)/discover")
+              }
             />
           }
           data={listData}
@@ -428,7 +530,13 @@ export default function ChatListScreen() {
             activeSegment === "requests" ? (
               <RequestRow
                 item={item as RequestItem}
-                disabled={respondRequestMutation.isPending}
+                pendingStatus={
+                  respondRequestMutation.isPending &&
+                  respondRequestMutation.variables?.requestId ===
+                    (item as RequestItem).requestId
+                    ? respondRequestMutation.variables.status
+                    : undefined
+                }
                 onPress={() => {
                   const requestItem = item as RequestItem;
                   if (!requestItem.chatId) return;
@@ -444,34 +552,217 @@ export default function ChatListScreen() {
                 onAccept={() => {
                   const requestId = (item as RequestItem).requestId;
                   if (!requestId) return;
-                  respondRequestMutation.mutate({
-                    requestId,
-                    status: "ACCEPTED",
-                  });
+                  respondRequestMutation.mutate(
+                    { requestId, status: "ACCEPTED" },
+                    {
+                      onSuccess: () => showToast("Request accepted"),
+                      onError: (error: any) =>
+                        showToast(
+                          error?.response?.data?.message ||
+                            "Could not accept request",
+                          "Request failed",
+                        ),
+                    },
+                  );
                 }}
                 onReject={() => {
                   const requestId = (item as RequestItem).requestId;
                   if (!requestId) return;
-                  respondRequestMutation.mutate({
-                    requestId,
-                    status: "REJECTED",
-                  });
+                  respondRequestMutation.mutate(
+                    { requestId, status: "REJECTED" },
+                    {
+                      onSuccess: () => showToast("Request rejected"),
+                      onError: (error: any) =>
+                        showToast(
+                          error?.response?.data?.message ||
+                            "Could not reject request",
+                          "Request failed",
+                        ),
+                    },
+                  );
                 }}
               />
             ) : (
               <ConversationRow
                 item={item as ConversationItem}
                 onPress={() => openConversation(item as ConversationItem)}
-                onDelete={() => confirmDelete(item as ConversationItem)}
+                onMore={() => setActionItem(item as ConversationItem)}
               />
             )
           }
         />
       )}
+
+      <FilterSheet
+        visible={filterSheetVisible}
+        activeFilter={activeFilter}
+        onApply={applyFilter}
+        onClose={() => setFilterSheetVisible(false)}
+      />
+
+      <ConversationActionSheet
+        item={actionItem}
+        isPending={
+          actionSettingsMutation.isPending || deleteChatMutation.isPending
+        }
+        onClose={() => setActionItem(null)}
+        onMuteToggle={() =>
+          actionItem &&
+          updateActionConversation(
+            { muted: !actionItem.isMuted },
+            actionItem.isMuted ? "Conversation unmuted" : "Conversation muted",
+          )
+        }
+        onArchiveToggle={() =>
+          actionItem &&
+          updateActionConversation(
+            { archived: !actionItem.isArchived },
+            actionItem.isArchived
+              ? "Conversation unarchived"
+              : "Conversation archived",
+          )
+        }
+        onDelete={() => actionItem && confirmDelete(actionItem)}
+      />
     </View>
   );
 }
 
+const FilterSheet = ({
+  visible,
+  activeFilter,
+  onApply,
+  onClose,
+}: {
+  visible: boolean;
+  activeFilter: ChatFilter;
+  onApply: (filter: ChatFilter) => void;
+  onClose: () => void;
+}) => (
+  <DraggableBottomSheet
+    visible={visible}
+    onClose={onClose}
+    sheetClassName="rounded-t-[30px] border border-border bg-bg-card px-5 pb-8 pt-3"
+  >
+    <View className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-border" />
+    <Text className="mb-4 text-xl font-extrabold text-text-primary">
+      Filter messages
+    </Text>
+    {FILTERS.map((filter) => {
+      const isSelected = activeFilter === filter.value;
+      return (
+        <TouchableOpacity
+          key={filter.value}
+          className="mb-2 flex-row items-center rounded-2xl border border-border bg-bg-elevated px-4 py-3.5"
+          onPress={() => onApply(filter.value)}
+          activeOpacity={0.82}
+        >
+          <Ionicons
+            name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+            size={20}
+            color={isSelected ? Colors.primaryLight : Colors.textSecondary}
+          />
+          <Text className="ml-3 flex-1 text-[15px] font-extrabold text-text-primary">
+            {filter.label}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+  </DraggableBottomSheet>
+);
+
+const ConversationActionSheet = ({
+  item,
+  isPending,
+  onClose,
+  onMuteToggle,
+  onArchiveToggle,
+  onDelete,
+}: {
+  item: ConversationItem | null;
+  isPending: boolean;
+  onClose: () => void;
+  onMuteToggle: () => void;
+  onArchiveToggle: () => void;
+  onDelete: () => void;
+}) => (
+  <DraggableBottomSheet
+    visible={Boolean(item)}
+    onClose={onClose}
+    sheetClassName="rounded-t-[30px] border border-border bg-bg-card px-5 pb-8 pt-3"
+  >
+    <View className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-border" />
+    <View className="mb-4 flex-row items-center justify-between">
+      <View className="min-w-0 flex-1">
+        <Text
+          className="text-xl font-extrabold text-text-primary"
+          numberOfLines={1}
+        >
+          {item?.name || "Conversation"}
+        </Text>
+        <Text className="mt-1 text-sm font-semibold text-text-secondary">
+          Conversation options
+        </Text>
+      </View>
+      {isPending ? <ActivityIndicator color={Colors.primaryLight} /> : null}
+    </View>
+
+    <SheetAction
+      icon={
+        item?.isMuted ? "notifications-outline" : "notifications-off-outline"
+      }
+      label={item?.isMuted ? "Unmute" : "Mute"}
+      onPress={onMuteToggle}
+      disabled={isPending}
+    />
+    <SheetAction
+      icon={item?.isArchived ? "archive-outline" : "file-tray-full-outline"}
+      label={item?.isArchived ? "Unarchive" : "Archive"}
+      onPress={onArchiveToggle}
+      disabled={isPending}
+    />
+    <SheetAction
+      icon="trash-outline"
+      label="Delete"
+      destructive
+      onPress={onDelete}
+      disabled={isPending}
+    />
+  </DraggableBottomSheet>
+);
+const SheetAction = ({
+  icon,
+  label,
+  destructive,
+  disabled,
+  onPress,
+}: {
+  icon: ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  destructive?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    className="mb-2 flex-row items-center rounded-2xl border border-border bg-bg-elevated px-4 py-3.5"
+    onPress={onPress}
+    disabled={disabled}
+    activeOpacity={0.82}
+  >
+    <Ionicons
+      name={icon}
+      size={20}
+      color={destructive ? Colors.error : Colors.textPrimary}
+    />
+    <Text
+      className={`ml-3 flex-1 text-[15px] font-extrabold ${
+        destructive ? "text-error" : "text-text-primary"
+      }`}
+    >
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
 const MatchStories = ({
   items,
   onPress,
@@ -580,7 +871,9 @@ const MessagesSectionHeader = ({
 }) => (
   <View className="pb-2">
     <View className="mb-4 flex-row items-center justify-between">
-      <Text className="text-2xl font-extrabold text-text-primary">Messages</Text>
+      <Text className="text-2xl font-extrabold text-text-primary">
+        Messages
+      </Text>
       <Text className="text-sm font-bold text-text-secondary">
         {unreadTotal > 0 ? `${unreadTotal} unread` : "All caught up"}
       </Text>
@@ -596,7 +889,9 @@ const MessagesSectionHeader = ({
       >
         <Text
           className={`text-center text-sm font-extrabold ${
-            activeSegment === "messages" ? "text-inverse" : "text-text-secondary"
+            activeSegment === "messages"
+              ? "text-inverse"
+              : "text-text-secondary"
           }`}
         >
           Messages
@@ -611,7 +906,9 @@ const MessagesSectionHeader = ({
       >
         <Text
           className={`text-center text-sm font-extrabold ${
-            activeSegment === "requests" ? "text-inverse" : "text-text-secondary"
+            activeSegment === "requests"
+              ? "text-inverse"
+              : "text-text-secondary"
           }`}
         >
           Requests{requestCount ? ` ${requestCount}` : ""}
@@ -624,11 +921,17 @@ const MessagesSectionHeader = ({
 const EmptyState = ({
   segment,
   filter,
+  hasSearch,
+  onPrimaryPress,
 }: {
   segment: MessageSegment;
   filter: ChatFilter;
+  hasSearch: boolean;
+  onPrimaryPress: () => void;
 }) => {
-  const title = segment === "requests"
+  const title = hasSearch
+    ? "No chats found"
+    : segment === "requests"
       ? "No requests"
       : filter === "unread"
         ? "You're all caught up"
@@ -638,7 +941,9 @@ const EmptyState = ({
             ? "No archived chats"
             : "No messages yet";
 
-  const description = segment === "requests"
+  const description = hasSearch
+    ? "Try another name or message."
+    : segment === "requests"
       ? "Message requests from new matches will appear here."
       : filter === "unread"
         ? "New messages will collect here when someone replies."
@@ -663,24 +968,37 @@ const EmptyState = ({
       <Text className="max-w-[310px] text-center text-sm font-medium leading-5 text-text-secondary">
         {description}
       </Text>
+      <TouchableOpacity
+        className="mt-6 rounded-full bg-primary px-5 py-3"
+        onPress={onPrimaryPress}
+        activeOpacity={0.84}
+      >
+        <Text className="text-sm font-extrabold text-text-inverse">
+          {hasSearch ? "Clear search" : "Go to Discover"}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 const RequestRow = ({
   item,
-  disabled,
+  pendingStatus,
   onPress,
   onAccept,
   onReject,
 }: {
   item: RequestItem;
-  disabled: boolean;
+  pendingStatus?: "ACCEPTED" | "REJECTED";
   onPress: () => void;
   onAccept: () => void;
   onReject: () => void;
 }) => (
-  <TouchableOpacity className="flex-row items-center py-3.5" onPress={onPress} activeOpacity={0.84}>
+  <TouchableOpacity
+    className="flex-row items-center py-3.5"
+    onPress={onPress}
+    activeOpacity={0.84}
+  >
     {item.avatarUrl ? (
       <Image
         source={{ uri: item.avatarUrl }}
@@ -720,23 +1038,33 @@ const RequestRow = ({
           <TouchableOpacity
             className="mr-2 h-10 w-10 items-center justify-center rounded-full bg-primary"
             onPress={onAccept}
-            disabled={disabled}
+            disabled={Boolean(pendingStatus)}
             activeOpacity={0.84}
           >
-            <Ionicons name="checkmark" size={20} color={Colors.textInverse} />
+            {pendingStatus === "ACCEPTED" ? (
+              <ActivityIndicator size="small" color={Colors.textInverse} />
+            ) : (
+              <Ionicons name="checkmark" size={20} color={Colors.textInverse} />
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             className="h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card"
             onPress={onReject}
-            disabled={disabled}
+            disabled={Boolean(pendingStatus)}
             activeOpacity={0.84}
           >
-            <Ionicons name="close" size={20} color={Colors.textPrimary} />
+            {pendingStatus === "REJECTED" ? (
+              <ActivityIndicator size="small" color={Colors.textPrimary} />
+            ) : (
+              <Ionicons name="close" size={20} color={Colors.textPrimary} />
+            )}
           </TouchableOpacity>
         </>
       ) : (
         <View className="rounded-full border border-border bg-bg-card px-3 py-2">
-          <Text className="text-xs font-extrabold text-text-secondary">Waiting</Text>
+          <Text className="text-xs font-extrabold text-text-secondary">
+            Waiting
+          </Text>
         </View>
       )}
     </View>
@@ -761,34 +1089,16 @@ const ConversationSkeletonList = () => (
 const ConversationRow = ({
   item,
   onPress,
-  onDelete,
+  onMore,
 }: {
   item: ConversationItem;
   onPress: () => void;
-  onDelete: () => void;
+  onMore: () => void;
 }) => {
-  const settingsMutation = useUpdateChatSettingsMutation(item.id);
-
-  const showActions = () => {
-    Alert.alert(item.name, "Conversation options", [
-      {
-        text: item.isMuted ? "Unmute" : "Mute",
-        onPress: () => settingsMutation.mutate({ muted: !item.isMuted }),
-      },
-      {
-        text: item.isArchived ? "Unarchive" : "Archive",
-        onPress: () => settingsMutation.mutate({ archived: !item.isArchived }),
-      },
-      { text: "Delete", style: "destructive", onPress: onDelete },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  };
-
   return (
     <TouchableOpacity
       className="flex-row items-center py-3.5"
       onPress={onPress}
-      onLongPress={showActions}
       activeOpacity={0.84}
     >
       <View className="relative">
@@ -846,6 +1156,19 @@ const ConversationRow = ({
           </Text>
         </View>
       </View>
+      <TouchableOpacity
+        className="ml-3 h-9 w-9 items-center justify-center rounded-full bg-bg-card"
+        onPress={onMore}
+        activeOpacity={0.78}
+        accessibilityRole="button"
+        accessibilityLabel={`Conversation options for ${item.name}`}
+      >
+        <Ionicons
+          name="ellipsis-horizontal"
+          size={18}
+          color={Colors.textSecondary}
+        />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 };

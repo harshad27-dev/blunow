@@ -13,9 +13,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import FeedCard from "@/components/FeedCard";
+import FeedCard, { type FeedPostAction } from "@/components/FeedCard";
 import CommentsDrawer from "@/components/feed/CommentsDrawer";
 import { postService } from "@/services/post.service";
+import { userService } from "@/services/user.service";
 import { moderationService } from "@/services/moderation.service";
 import { useAuthStore } from "@/store/authStore";
 import { showToast } from "@/utils/toast";
@@ -57,6 +58,8 @@ const normalizePost = (post: any) => ({
   isLiked: Boolean(post?.isLiked),
   isSaved: Boolean(post?.isSaved),
   isAnonymous: Boolean(post?.isAnonymous),
+  isOwnPost: Boolean(post?.isOwnPost),
+  isFollowing: Boolean(post?.isFollowing),
   timeAgo: getTimeAgo(post?.createdAt),
 });
 
@@ -124,6 +127,53 @@ export default function PostDetailScreen() {
     }
   };
 
+  const handlePostCardAction = async (id: string, action: FeedPostAction) => {
+    if (action !== "follow" && action !== "unfollow") return;
+    if (!post?.authorId || post.isAnonymous || post.isOwnPost) return;
+
+    const nextFollowing = action === "follow";
+    const previousPost = queryClient.getQueryData(["post", postId]);
+
+    queryClient.setQueryData(["post", postId], (current: any) =>
+      current?.success
+        ? {
+            ...current,
+            data: { ...current.data, isFollowing: nextFollowing },
+          }
+        : current,
+    );
+
+    try {
+      if (nextFollowing) {
+        await userService.followUser(post.authorId);
+      } else {
+        await userService.unfollowUser(post.authorId);
+      }
+
+      showToast(
+        nextFollowing
+          ? `Following ${post.author.username}`
+          : `Unfollowed ${post.author.username}`,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["post", postId] }),
+        queryClient.invalidateQueries({ queryKey: ["feed"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["user-profile", post.authorId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["user-stats", post.authorId],
+        }),
+      ]);
+    } catch (error: any) {
+      queryClient.setQueryData(["post", postId], previousPost);
+      showToast(
+        error?.response?.data?.message || "Unable to update follow.",
+        "Follow failed",
+      );
+    }
+  };
+
   const deletePost = () => {
     Alert.alert("Delete post?", "This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
@@ -169,7 +219,10 @@ export default function PostDetailScreen() {
             reason: "OTHER",
             description: "Reported from post details",
           });
-          showToast("Thank you for helping keep Datebl safe.", "Report received");
+          showToast(
+            "Thank you for helping keep Datebl safe.",
+            "Report received",
+          );
         },
       },
       { text: "Cancel", style: "cancel" },
@@ -243,6 +296,7 @@ export default function PostDetailScreen() {
             onLikePress={handleLikePost}
             onCommentPress={() => setCommentDrawerOpen(true)}
             onSavePress={handleSavePost}
+            onMoreAction={handlePostCardAction}
           />
         </ScrollView>
       )}

@@ -10,7 +10,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ProfilePostGrid } from "@/components/profile/ProfilePostGrid";
@@ -67,7 +70,9 @@ const calculateAge = (birthDateString?: string | null) => {
 
 const formatLabel = (str?: string | null) => {
   if (!str) return "";
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase().replace(/_/g, " ");
+  return (
+    str.charAt(0).toUpperCase() + str.slice(1).toLowerCase().replace(/_/g, " ")
+  );
 };
 
 export default function UserDetailScreen() {
@@ -172,7 +177,10 @@ export default function UserDetailScreen() {
       setActionLoading("connect");
       const existingChatId = await findExistingChat();
       if (existingChatId) {
-        showToast("You already have a chat with this user.", "Already connected");
+        showToast(
+          "You already have a chat with this user.",
+          "Already connected",
+        );
         return;
       }
 
@@ -250,11 +258,12 @@ export default function UserDetailScreen() {
       } else {
         await userService.followUser(userId);
       }
-      queryClient.setQueryData(
-        ["user-profile", userId],
-        { ...userProfile, isFollowing: !isFollowing },
-      );
+      queryClient.setQueryData(["user-profile", userId], {
+        ...userProfile,
+        isFollowing: !isFollowing,
+      });
       queryClient.invalidateQueries({ queryKey: ["user-stats", userId] });
+      queryClient.invalidateQueries({ queryKey: ["feed"] });
     } catch (error: any) {
       showToast(
         error?.response?.data?.message || "Please try again.",
@@ -278,7 +287,10 @@ export default function UserDetailScreen() {
             reason: "OTHER",
             description: "Reported from profile",
           });
-          showToast("Thank you for helping keep Datebl safe.", "Report received");
+          showToast(
+            "Thank you for helping keep Datebl safe.",
+            "Report received",
+          );
         },
       },
       {
@@ -296,7 +308,10 @@ export default function UserDetailScreen() {
 
   if (profileLoading && !refreshing) {
     return (
-      <SafeAreaView edges={["top", "right", "bottom", "left"]} style={[styles.screen, styles.centerContent]}>
+      <SafeAreaView
+        edges={["top", "right", "bottom", "left"]}
+        style={[styles.screen, styles.centerContent]}
+      >
         <ActivityIndicator color={Colors.primary} size="large" />
       </SafeAreaView>
     );
@@ -304,15 +319,25 @@ export default function UserDetailScreen() {
 
   if (!userProfile) {
     return (
-      <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.emptyState}>
+      <SafeAreaView
+        edges={["top", "right", "bottom", "left"]}
+        style={styles.emptyState}
+      >
         <View style={styles.emptyIcon}>
-          <Ionicons name="person-circle-outline" size={42} color={Colors.textMuted} />
+          <Ionicons
+            name="person-circle-outline"
+            size={42}
+            color={Colors.textMuted}
+          />
         </View>
         <Text style={styles.emptyTitle}>User not found</Text>
         <Text style={styles.emptySubtitle}>
           This profile may have moved or is no longer available.
         </Text>
-        <TouchableOpacity style={styles.emptyButton} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.emptyButton}
+          onPress={() => router.back()}
+        >
           <Text style={styles.emptyButtonText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -320,17 +345,22 @@ export default function UserDetailScreen() {
   }
 
   const profile = userProfile.profile;
-  const displayName = profile?.username || userProfile.username || "User Detail";
+  const displayName =
+    profile?.username || userProfile.username || "User Detail";
   const handle = userProfile.username || profile?.username || "username";
   const avatarUrl = profile?.avatarUrl;
   const age = calculateAge(profile?.birthDate);
   const city = profile?.location || "Not specified";
-  const gender = formatLabel(profile?.gender || userProfile.gender || "Add gender");
+  const gender = formatLabel(
+    profile?.gender || userProfile.gender || "Add gender",
+  );
   const sexuality = formatLabel(userProfile.sexuality || "Straight");
   const interests = profile?.interests || [];
   const bio = profile?.bio || "No bio provided.";
 
-  const getInterestIcon = (interest: string): keyof typeof Ionicons.glyphMap => {
+  const getInterestIcon = (
+    interest: string,
+  ): keyof typeof Ionicons.glyphMap => {
     const norm = interest.toLowerCase().trim();
     return interestIcons[norm] || "sparkles-outline";
   };
@@ -340,7 +370,10 @@ export default function UserDetailScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{
-          paddingBottom: Math.max(insets.bottom + (isOwnProfile ? 40 : 120), 140),
+          paddingBottom: Math.max(
+            insets.bottom + (isOwnProfile ? 40 : 120),
+            140,
+          ),
         }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -354,7 +387,12 @@ export default function UserDetailScreen() {
         {/* Profile navigation */}
         <View style={styles.bannerContainer}>
           {/* Floating nav controls */}
-          <View style={[styles.headerControls, { top: Math.max(insets.top + 8, 14) }]}>
+          <View
+            style={[
+              styles.headerControls,
+              { top: Math.max(insets.top + 8, 14) },
+            ]}
+          >
             <TouchableOpacity
               accessibilityLabel="Go back"
               accessibilityRole="button"
@@ -370,8 +408,12 @@ export default function UserDetailScreen() {
               style={[
                 styles.headerUsernameWrap,
                 {
-                  backgroundColor: isDark ? "rgba(15,14,13,0.58)" : "rgba(28,28,28,0.34)",
-                  borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.18)",
+                  backgroundColor: isDark
+                    ? "rgba(15,14,13,0.58)"
+                    : "rgba(28,28,28,0.34)",
+                  borderColor: isDark
+                    ? "rgba(255,255,255,0.12)"
+                    : "rgba(255,255,255,0.18)",
                 },
               ]}
             >
@@ -408,7 +450,10 @@ export default function UserDetailScreen() {
             <View style={styles.avatarBorderRing}>
               <View style={styles.avatarInnerBorder}>
                 {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    style={styles.avatarImage}
+                  />
                 ) : (
                   <View style={styles.avatarPlaceholder}>
                     <Text style={styles.avatarInitial}>
@@ -457,7 +502,9 @@ export default function UserDetailScreen() {
             style={styles.metaScroll}
             contentContainerStyle={styles.metaScrollContent}
           >
-            {age > 0 && <MetaPill icon="calendar-outline" label={`${age} years`} />}
+            {age > 0 && (
+              <MetaPill icon="calendar-outline" label={`${age} years`} />
+            )}
             <MetaPill icon="location-outline" label={city} />
             {gender && <MetaPill icon="male-female-outline" label={gender} />}
             {sexuality && <MetaPill icon="heart-outline" label={sexuality} />}
@@ -465,10 +512,7 @@ export default function UserDetailScreen() {
 
           {/* Stats section */}
           <View style={styles.statsPanel}>
-            <StatItem
-              label="Posts"
-              value={stats?.postsCount || 0}
-            />
+            <StatItem label="Posts" value={stats?.postsCount || 0} />
             <View style={styles.statsSeparator} />
             <StatItem
               label="Followers"
@@ -513,10 +557,22 @@ export default function UserDetailScreen() {
                   return (
                     <View
                       key={`${interest}-${idx}`}
-                      style={[styles.interestChip, { borderColor: tagColor + "3a", backgroundColor: tagColor + "0e" }]}
+                      style={[
+                        styles.interestChip,
+                        {
+                          borderColor: tagColor + "3a",
+                          backgroundColor: tagColor + "0e",
+                        },
+                      ]}
                     >
-                      <Ionicons name={getInterestIcon(interest)} size={14} color={tagColor} />
-                      <Text style={[styles.interestChipText, { color: tagColor }]}>
+                      <Ionicons
+                        name={getInterestIcon(interest)}
+                        size={14}
+                        color={tagColor}
+                      />
+                      <Text
+                        style={[styles.interestChipText, { color: tagColor }]}
+                      >
                         {interest}
                       </Text>
                     </View>
@@ -531,7 +587,9 @@ export default function UserDetailScreen() {
             <View style={styles.tabIndicatorBar}>
               <Text style={styles.tabIndicatorText}>Shared Posts</Text>
               <View style={styles.tabCountBadge}>
-                <Text style={styles.tabCountText}>{stats?.postsCount || 0}</Text>
+                <Text style={styles.tabCountText}>
+                  {stats?.postsCount || 0}
+                </Text>
               </View>
             </View>
           </View>
@@ -555,7 +613,9 @@ export default function UserDetailScreen() {
           style={[
             styles.floatingActionBar,
             {
-              backgroundColor: isDark ? "rgba(23,20,18,0.94)" : "rgba(255,255,255,0.94)",
+              backgroundColor: isDark
+                ? "rgba(23,20,18,0.94)"
+                : "rgba(255,255,255,0.94)",
               borderColor: isDark ? "rgba(255,255,255,0.10)" : theme.border,
               bottom: Math.max(insets.bottom + 12, 20),
               shadowColor: isDark ? "#000" : "rgba(28,28,28,0.28)",
@@ -563,7 +623,9 @@ export default function UserDetailScreen() {
           ]}
         >
           <TouchableOpacity
-            accessibilityLabel={userProfile.isFollowing ? "Unfollow user" : "Follow user"}
+            accessibilityLabel={
+              userProfile.isFollowing ? "Unfollow user" : "Follow user"
+            }
             accessibilityRole="button"
             accessibilityState={{ disabled: actionLoading !== null }}
             hitSlop={8}
@@ -577,7 +639,9 @@ export default function UserDetailScreen() {
                   : isDark
                     ? "rgba(255,255,255,0.06)"
                     : "rgba(28,28,28,0.04)",
-                borderColor: userProfile.isFollowing ? `${theme.accent}66` : theme.border,
+                borderColor: userProfile.isFollowing
+                  ? `${theme.accent}66`
+                  : theme.border,
               },
               actionLoading !== null && styles.actionDisabled,
             ]}
@@ -591,7 +655,9 @@ export default function UserDetailScreen() {
               <Ionicons
                 name={userProfile.isFollowing ? "person-remove" : "person-add"}
                 size={20}
-                color={userProfile.isFollowing ? theme.accent : theme.textPrimary}
+                color={
+                  userProfile.isFollowing ? theme.accent : theme.textPrimary
+                }
               />
             )}
           </TouchableOpacity>
@@ -617,7 +683,14 @@ export default function UserDetailScreen() {
             ) : (
               <>
                 <Ionicons name="heart" size={18} color={theme.textInverse} />
-                <Text style={[styles.actionConnectText, { color: theme.textInverse }]}>Connect</Text>
+                <Text
+                  style={[
+                    styles.actionConnectText,
+                    { color: theme.textInverse },
+                  ]}
+                >
+                  Connect
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -630,7 +703,9 @@ export default function UserDetailScreen() {
             style={[
               styles.actionRoundBtn,
               {
-                backgroundColor: isDark ? "rgba(200,184,170,0.14)" : "rgba(177,159,145,0.16)",
+                backgroundColor: isDark
+                  ? "rgba(200,184,170,0.14)"
+                  : "rgba(177,159,145,0.16)",
                 borderColor: `${theme.accent}55`,
               },
               actionLoading !== null && styles.actionDisabled,
@@ -642,7 +717,11 @@ export default function UserDetailScreen() {
             {actionLoading === "message" ? (
               <ActivityIndicator color={theme.accent} size="small" />
             ) : (
-              <Ionicons name="chatbubble-ellipses" size={20} color={theme.accent} />
+              <Ionicons
+                name="chatbubble-ellipses"
+                size={20}
+                color={theme.accent}
+              />
             )}
           </TouchableOpacity>
         </View>
@@ -653,14 +732,28 @@ export default function UserDetailScreen() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-const MetaPill = ({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) => (
+const MetaPill = ({
+  icon,
+  label,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+}) => (
   <View style={styles.metaPill}>
     <Ionicons name={icon} size={13} color={Colors.textSecondary} />
     <Text style={styles.metaPillLabel}>{label}</Text>
   </View>
 );
 
-const StatItem = ({ label, value, onPress }: { label: string; value: number; onPress?: () => void }) => (
+const StatItem = ({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: number;
+  onPress?: () => void;
+}) => (
   <TouchableOpacity
     disabled={!onPress}
     onPress={onPress}

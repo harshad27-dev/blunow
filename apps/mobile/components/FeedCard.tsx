@@ -12,6 +12,7 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  PanResponder,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
@@ -42,7 +43,9 @@ export type FeedPostAction =
   | "hide"
   | "block"
   | "copy"
-  | "share";
+  | "share"
+  | "follow"
+  | "unfollow";
 
 type FeedActionItem = {
   id: FeedPostAction;
@@ -52,8 +55,8 @@ type FeedActionItem = {
   destructive?: boolean;
 };
 
-const MIN_MEDIA_RATIO = 4 / 5;   // 0.8 (tallest portrait)
-const MAX_MEDIA_RATIO = 16 / 9;  // 1.77 (widest landscape)
+const MIN_MEDIA_RATIO = 4 / 5; // 0.8 (tallest portrait)
+const MAX_MEDIA_RATIO = 16 / 9; // 1.77 (widest landscape)
 
 const normalizeAspectRatio = (ratio: number) => {
   if (!Number.isFinite(ratio) || ratio <= 0) return 4 / 5;
@@ -67,7 +70,12 @@ interface ZoomableImageProps {
   onLoad?: (event: any) => void;
 }
 
-function ZoomableImage({ uri, width, aspectRatio, onLoad }: ZoomableImageProps) {
+function ZoomableImage({
+  uri,
+  width,
+  aspectRatio,
+  onLoad,
+}: ZoomableImageProps) {
   const scale = useSharedValue(1);
   const focalX = useSharedValue(0);
   const focalY = useSharedValue(0);
@@ -82,7 +90,8 @@ function ZoomableImage({ uri, width, aspectRatio, onLoad }: ZoomableImageProps) 
     .onUpdate((event) => {
       scale.value = Math.max(1, event.scale);
       translateX.value = (width / 2 - focalX.value) * (scale.value - 1);
-      translateY.value = ((width / aspectRatio) / 2 - focalY.value) * (scale.value - 1);
+      translateY.value =
+        (width / aspectRatio / 2 - focalY.value) * (scale.value - 1);
     })
     .onEnd(() => {
       scale.value = withSpring(1);
@@ -105,10 +114,7 @@ function ZoomableImage({ uri, width, aspectRatio, onLoad }: ZoomableImageProps) 
     <GestureDetector gesture={pinchGesture}>
       <Reanimated.Image
         source={{ uri }}
-        style={[
-          { width, aspectRatio },
-          animatedStyle,
-        ]}
+        style={[{ width, aspectRatio }, animatedStyle]}
         resizeMode="cover"
         onLoad={onLoad}
       />
@@ -124,9 +130,40 @@ const getStableImageNumber = (value: string, offset: number) => {
   return (total % 65) + 1;
 };
 
+const splitCaptionLocation = (caption?: string) => {
+  const normalizedCaption = (caption || "").replace(/\r\n/g, "\n");
+  const lines = normalizedCaption.split("\n");
+  const locationPrefix = "\uD83D\uDCCD";
+  const lastContentIndex = [...lines]
+    .map((line, index) => ({ line, index }))
+    .reverse()
+    .find(({ line }) => line.trim().length > 0)?.index;
+
+  if (lastContentIndex === undefined) {
+    return { captionText: "", taggedLocation: null as string | null };
+  }
+
+  const lastLine = lines[lastContentIndex].trim();
+  if (!lastLine.startsWith(locationPrefix)) {
+    return {
+      captionText: normalizedCaption.trim(),
+      taggedLocation: null as string | null,
+    };
+  }
+
+  const taggedLocation = lastLine.slice(locationPrefix.length).trim();
+  const captionLines = lines.slice(0, lastContentIndex);
+
+  return {
+    captionText: captionLines.join("\n").trim(),
+    taggedLocation: taggedLocation || null,
+  };
+};
+
 interface FeedCardProps {
   post: {
     id: string;
+    authorId?: string | null;
     author: {
       username: string;
       avatarUrl?: string;
@@ -157,7 +194,9 @@ export default function FeedCard({
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
-  const [selectedShareChatIds, setSelectedShareChatIds] = useState<string[]>([]);
+  const [selectedShareChatIds, setSelectedShareChatIds] = useState<string[]>(
+    [],
+  );
   const [shareSearch, setShareSearch] = useState("");
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
@@ -170,7 +209,9 @@ export default function FeedCard({
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const actionSheetProgress = useRef(new Animated.Value(0)).current;
+  const actionSheetDragY = useRef(new Animated.Value(0)).current;
   const shareSheetProgress = useRef(new Animated.Value(0)).current;
+  const shareSheetDragY = useRef(new Animated.Value(0)).current;
 
   const currentUserId = useAuthStore((state) => state.user?.id);
   const {
@@ -184,7 +225,13 @@ export default function FeedCard({
   const hasImage = Boolean(post.mediaUrls?.length);
 
   const displayName = post.isAnonymous ? "Anonymous" : post.author.username;
-  const isOwnPost = Boolean(post.isOwnPost);
+  const { captionText, taggedLocation } = splitCaptionLocation(post.caption);
+  const visibleCaption = captionText || "Shared a fresh moment from the city.";
+  const headerLocation = taggedLocation || "Nearby";
+  const isOwnPost = Boolean(
+    post.isOwnPost ||
+    (post.authorId && currentUserId && post.authorId === currentUserId),
+  );
 
   const avatarUrl = post.isAnonymous
     ? null
@@ -205,7 +252,9 @@ export default function FeedCard({
           ? conversation.user2
           : conversation.user1;
       const name =
-        participant?.profile?.username || participant?.username || "Datebl user";
+        participant?.profile?.username ||
+        participant?.username ||
+        "Datebl user";
 
       return {
         chatId: conversation.id,
@@ -228,7 +277,8 @@ export default function FeedCard({
   const activeMediaUrl = post.mediaUrls?.[activeMediaIndex];
   const postUrl = `https://datebl.app/posts/${post.id}`;
   const shareTitle = `${displayName} on Datebl`;
-  const shareMessage = `${displayName} shared a post on Datebl.` + "\n" + postUrl;
+  const shareMessage =
+    `${displayName} shared a post on Datebl.` + "\n" + postUrl;
 
   const activeAspectRatio = activeMediaUrl
     ? mediaAspectRatios[activeMediaUrl]
@@ -247,8 +297,6 @@ export default function FeedCard({
 
     setActiveMediaIndex(nextIndex);
   };
-
-
 
   const playDoubleTapHeart = () => {
     heartScale.setValue(0);
@@ -304,7 +352,9 @@ export default function FeedCard({
       playDoubleTapHeart();
 
       if (!post.isLiked) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        ).catch(() => {});
         onLikePress?.(post.id, post.isLiked);
       }
     }
@@ -345,6 +395,23 @@ export default function FeedCard({
         },
       ]
     : [
+        ...(!post.isAnonymous && post.authorId
+          ? [
+              {
+                id: post.isFollowing ? "unfollow" : "follow",
+                label: post.isFollowing
+                  ? `Unfollow ${displayName}`
+                  : `Follow ${displayName}`,
+                description: post.isFollowing
+                  ? "Stop seeing updates first"
+                  : "See more posts from this user",
+                icon: post.isFollowing
+                  ? "person-remove-outline"
+                  : "person-add-outline",
+                destructive: post.isFollowing,
+              } satisfies FeedActionItem,
+            ]
+          : []),
         {
           id: "report",
           label: "Report post",
@@ -388,6 +455,10 @@ export default function FeedCard({
     inputRange: [0, 1],
     outputRange: [380, 0],
   });
+  const actionSheetTranslateWithDrag = Animated.add(
+    actionSheetTranslateY,
+    actionSheetDragY,
+  );
 
   const shareSheetOpacity = shareSheetProgress.interpolate({
     inputRange: [0, 1],
@@ -398,10 +469,15 @@ export default function FeedCard({
     inputRange: [0, 1],
     outputRange: [420, 0],
   });
+  const shareSheetTranslateWithDrag = Animated.add(
+    shareSheetTranslateY,
+    shareSheetDragY,
+  );
 
   const handleOpenPostActions = () => {
     setActionSheetVisible(true);
     actionSheetProgress.setValue(0);
+    actionSheetDragY.setValue(0);
     Animated.timing(actionSheetProgress, {
       toValue: 1,
       duration: 250,
@@ -419,9 +495,47 @@ export default function FeedCard({
     }).start(({ finished }) => {
       if (finished) {
         setActionSheetVisible(false);
+        actionSheetDragY.setValue(0);
       }
     });
   };
+  const actionSheetPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        gestureState.dy > 8 &&
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+      onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+        gestureState.dy > 8 &&
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+      onPanResponderGrant: () => {
+        actionSheetDragY.stopAnimation();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        actionSheetDragY.setValue(Math.max(0, gestureState.dy));
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 90 || gestureState.vy > 1.15) {
+          handleClosePostActions();
+          return;
+        }
+
+        Animated.spring(actionSheetDragY, {
+          toValue: 0,
+          friction: 8,
+          tension: 120,
+          useNativeDriver: true,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(actionSheetDragY, {
+          toValue: 0,
+          friction: 8,
+          tension: 120,
+          useNativeDriver: true,
+        }).start();
+      },
+    }),
+  ).current;
 
   const handleOpenShareSheet = () => {
     setSelectedShareChatIds([]);
@@ -447,9 +561,48 @@ export default function FeedCard({
     }).start(({ finished }) => {
       if (finished) {
         setShareSheetVisible(false);
+        shareSheetDragY.setValue(0);
       }
     });
   };
+
+  const shareSheetPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        gestureState.dy > 8 &&
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+      onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+        gestureState.dy > 8 &&
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+      onPanResponderGrant: () => {
+        shareSheetDragY.stopAnimation();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        shareSheetDragY.setValue(Math.max(0, gestureState.dy));
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 90 || gestureState.vy > 1.15) {
+          handleCloseShareSheet();
+          return;
+        }
+
+        Animated.spring(shareSheetDragY, {
+          toValue: 0,
+          friction: 8,
+          tension: 120,
+          useNativeDriver: true,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(shareSheetDragY, {
+          toValue: 0,
+          friction: 8,
+          tension: 120,
+          useNativeDriver: true,
+        }).start();
+      },
+    }),
+  ).current;
 
   const handleNativeShare = async () => {
     try {
@@ -596,7 +749,7 @@ export default function FeedCard({
                 className="ml-1 text-xs font-medium text-text-secondary"
                 numberOfLines={1}
               >
-                Nearby
+                {headerLocation}
               </Text>
             </View>
           </View>
@@ -711,7 +864,7 @@ export default function FeedCard({
           />
 
           <Text className="mt-4 text-xl font-extrabold leading-7 text-text-primary">
-            {post.caption || "Shared a fresh moment from the city."}
+            {visibleCaption}
           </Text>
         </View>
       )}
@@ -722,7 +875,7 @@ export default function FeedCard({
             <Text className="font-extrabold text-text-primary">
               {displayName}{" "}
             </Text>
-            {post.caption || "Shared a fresh moment from the city."}
+            {visibleCaption}
           </Text>
         ) : null}
 
@@ -829,8 +982,6 @@ export default function FeedCard({
 
       <View className="mx-4 mb-4 h-px bg-border" />
 
-
-
       <Modal
         visible={actionSheetVisible}
         transparent
@@ -850,8 +1001,11 @@ export default function FeedCard({
           />
 
           <Animated.View
+            {...actionSheetPanResponder.panHandlers}
             className="rounded-t-[32px] border border-border bg-bg-card px-4 pb-8 pt-3"
-            style={{ transform: [{ translateY: actionSheetTranslateY }] }}
+            style={{
+              transform: [{ translateY: actionSheetTranslateWithDrag }],
+            }}
           >
             <View className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border" />
 
@@ -885,7 +1039,9 @@ export default function FeedCard({
                   className="mt-0.5 text-xs font-medium text-text-secondary"
                   numberOfLines={1}
                 >
-                  {isOwnPost ? "Manage this post" : "Choose what to do with this post"}
+                  {isOwnPost
+                    ? "Manage this post"
+                    : "Choose what to do with this post"}
                 </Text>
               </View>
 
@@ -905,7 +1061,9 @@ export default function FeedCard({
                   activeOpacity={0.78}
                   onPress={() => handlePostActionPress(item.id)}
                   className={`flex-row items-center px-4 py-3.5 ${
-                    index === actionItems.length - 1 ? "" : "border-b border-border"
+                    index === actionItems.length - 1
+                      ? ""
+                      : "border-b border-border"
                   }`}
                 >
                   <View
@@ -916,7 +1074,9 @@ export default function FeedCard({
                     <Ionicons
                       name={item.icon}
                       size={19}
-                      color={item.destructive ? Colors.error : Colors.textPrimary}
+                      color={
+                        item.destructive ? Colors.error : Colors.textPrimary
+                      }
                     />
                   </View>
 
@@ -967,8 +1127,9 @@ export default function FeedCard({
           />
 
           <Animated.View
+            {...shareSheetPanResponder.panHandlers}
             className="rounded-t-[32px] border border-border bg-bg-card px-4 pb-8 pt-3"
-            style={{ transform: [{ translateY: shareSheetTranslateY }] }}
+            style={{ transform: [{ translateY: shareSheetTranslateWithDrag }] }}
           >
             <View className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border" />
 
@@ -1074,7 +1235,9 @@ export default function FeedCard({
             ) : visibleShareRecipients.length === 0 ? (
               <View className="mb-5 h-[86px] items-center justify-center rounded-2xl border border-border bg-bg-elevated px-4">
                 <Text className="text-sm font-bold text-text-primary">
-                  {normalizedShareSearch ? "No chats found" : "No active chats yet"}
+                  {normalizedShareSearch
+                    ? "No chats found"
+                    : "No active chats yet"}
                 </Text>
                 <Text className="mt-1 text-center text-xs font-medium text-text-secondary">
                   {normalizedShareSearch

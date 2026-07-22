@@ -89,11 +89,14 @@ export class FeedRepository {
           1,
           (Date.now() - p.createdAt.getTime()) / (1000 * 60 * 60),
         );
-        const engagementScore =
-          Math.log1p(p._count.likes * 2 + p._count.comments * 3 + p._count.saves);
+        const engagementScore = Math.log1p(
+          p._count.likes * 2 + p._count.comments * 3 + p._count.saves,
+        );
         const followingBoost = p.author.followers.length > 0 ? 4 : 0;
         const unseenBoost =
-          p.likes.length === 0 && p.saves.length === 0 && p.comments.length === 0
+          p.likes.length === 0 &&
+          p.saves.length === 0 &&
+          p.comments.length === 0
             ? 1.5
             : 0;
         const recencyScore = 8 / Math.sqrt(ageHours);
@@ -116,11 +119,14 @@ export class FeedRepository {
           savesCount: p._count.saves,
           isLiked: p.likes.length > 0,
           isSaved: p.saves.length > 0,
-          rankingScore: recencyScore + engagementScore + followingBoost + unseenBoost,
+          isFollowing: p.author.followers.length > 0,
+          rankingScore:
+            recencyScore + engagementScore + followingBoost + unseenBoost,
         };
       })
       .sort((a, b) => {
-        if (b.rankingScore !== a.rankingScore) return b.rankingScore - a.rankingScore;
+        if (b.rankingScore !== a.rankingScore)
+          return b.rankingScore - a.rankingScore;
         return b.createdAt.getTime() - a.createdAt.getTime();
       })
       .slice(0, params.limit);
@@ -161,7 +167,14 @@ export class FeedRepository {
       ORDER BY distance ASC
       LIMIT $3 OFFSET $4
     `;
-    const users = await prisma.$queryRawUnsafe(query, lat, lng, limit, offset, userId);
+    const users = await prisma.$queryRawUnsafe(
+      query,
+      lat,
+      lng,
+      limit,
+      offset,
+      userId,
+    );
     return (users as any[]).filter((u) => u.distance <= maxDistance);
   }
 
@@ -226,9 +239,7 @@ const getAnonymousFlags = async (ids: string[]) => {
 const getAnonymousColumnName = async () => {
   if (anonymousColumnName !== undefined) return anonymousColumnName;
 
-  const rows = await prisma.$queryRaw<
-    { column_name: string }[]
-  >`
+  const rows = await prisma.$queryRaw<{ column_name: string }[]>`
     SELECT column_name
     FROM information_schema.columns
     WHERE table_name = 'posts'
@@ -241,15 +252,17 @@ const getAnonymousColumnName = async () => {
 };
 
 const encodeFeedCursor = (createdAt: Date, id: string) =>
-  Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id })).toString(
-    "base64url",
-  );
+  Buffer.from(
+    JSON.stringify({ createdAt: createdAt.toISOString(), id }),
+  ).toString("base64url");
 
 const decodeFeedCursor = (cursor?: string) => {
   if (!cursor) return null;
 
   try {
-    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    const parsed = JSON.parse(
+      Buffer.from(cursor, "base64url").toString("utf8"),
+    );
     if (!parsed?.createdAt || !parsed?.id) return null;
     return {
       createdAt: new Date(parsed.createdAt),
